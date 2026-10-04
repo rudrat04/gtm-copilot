@@ -19,4 +19,4 @@ B2B SaaS and tech companies, 20-200 employees, Seed to Series B, US/UK/EU, hirin
 
 ## Status
 
-Work in progress. See `docs/` as modules land.
+Module 1 (Account Research) is live: `web/index.html` calls the `research-account` Edge Function. Modules 2 and 3 are next.

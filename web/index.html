@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account Copilot</title>
+<style>
+  :root {
+    --bg: #fafaf9; --surface: #ffffff; --ink: #1c1917; --muted: #78716c;
+    --line: #e7e5e4; --accent: #4f46e5; --accent-ink: #ffffff;
+    --good: #15803d; --warn: #b45309; --bad: #b91c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0c0a09; --surface: #1c1917; --ink: #fafaf9; --muted: #a8a29e;
+      --line: #292524; --accent: #818cf8; --accent-ink: #0c0a09;
+      --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  form { display: flex; gap: 8px; }
+  input { flex: 1; min-width: 0; padding: 12px 14px; font: inherit; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { padding: 12px 18px; font: inherit; font-weight: 600; cursor: pointer;
+    color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 10px; }
+  button:disabled { opacity: .6; cursor: progress; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .hint a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+  #out { margin-top: 28px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px; margin-bottom: 14px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .name { font-size: 20px; font-weight: 700; margin: 0; }
+  .domain { color: var(--muted); font-size: 13px; }
+  .score { text-align: right; flex: none; }
+  .score b { font-size: 28px; line-height: 1; }
+  .score span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+  .whynow { border-left: 3px solid var(--accent); padding-left: 12px; margin-top: 14px; font-weight: 500; }
+  ul { margin: 0; padding-left: 18px; } li { margin: 4px 0; }
+  .track { margin-bottom: 10px; } .track b { display: block; font-size: 13px; }
+  .track q { color: var(--muted); }
+  .sig { display: flex; gap: 10px; align-items: baseline; margin: 6px 0; }
+  .tag { flex: none; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px;
+    border: 1px solid var(--line); color: var(--muted); text-transform: uppercase; }
+  .tag.hiring { color: var(--good); } .tag.news { color: var(--accent); }
+  a { color: inherit; }
+  .meta { color: var(--muted); font-size: 12px; margin-top: 18px; }
+  .err { color: var(--bad); }
+  .skeleton { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Account Copilot</h1>
+  <p class="sub">Type a company domain. Get a sales-ready dossier in seconds, built from live hiring, news and site signals.</p>
+
+  <form id="form">
+    <input id="domain" placeholder="linear.app" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Company domain">
+    <button id="go" type="submit">Research</button>
+  </form>
+  <p class="hint">Try <a data-d="linear.app">linear.app</a>, <a data-d="posthog.com">posthog.com</a> or <a data-d="attio.com">attio.com</a></p>
+
+  <div id="out" aria-live="polite"></div>
+</main>
+
+<script>
+const API = "https://tecgblsoylrshcqneevf.supabase.co/functions/v1/research-account";
+const KEY = "sb_publishable_V2QMkeCD8XuuoGkz_sVT5Q_4klZp394";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const list = (a) => (a?.length ? `<ul>${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "<p>None found.</p>");
+
+function render(d) {
+  const x = d.dossier, a = d.account;
+  const score = x.icp_fit?.score ?? "–";
+  const color = score >= 70 ? "var(--good)" : score >= 40 ? "var(--warn)" : "var(--bad)";
+  const sigs = (d.signals || []).slice(0, 12).map((s) =>
+    `<div class="sig"><span class="tag ${esc(s.kind)}">${esc(s.kind)}</span>` +
+    (s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a>` : esc(s.title)) + `</div>`).join("");
+  $("out").innerHTML = `
+    <div class="card">
+      <div class="head">
+        <div><p class="name">${esc(a.name)}</p><span class="domain">${esc(a.domain)}</span></div>
+        <div class="score"><b style="color:${color}">${esc(score)}</b><span>ICP fit</span></div>
+      </div>
+      <p>${esc(x.summary)}</p>
+      <div class="whynow">${esc(x.why_now)}</div>
+    </div>
+    <div class="card"><h2>Why this fit</h2>${list(x.icp_fit?.reasons)}</div>
+    <div class="card"><h2>Likely pains</h2>${list(x.pains)}</div>
+    <div class="card"><h2>Talk tracks</h2>${(x.talk_tracks || []).map((t) =>
+      `<div class="track"><b>${esc(t.angle)}</b><q>${esc(t.opener)}</q></div>`).join("")}</div>
+    <div class="card"><h2>Who to talk to</h2>${list((x.likely_buyers || []).map((b) => `${b.persona}: ${b.why}`))}</div>
+    <div class="card"><h2>Risks</h2>${list(x.risks)}</div>
+    <div class="card"><h2>Signals (${(d.signals || []).length})</h2>${sigs || "<p>No public signals found.</p>"}</div>
+    <p class="meta">${d.cached ? "Served from cache (no AI call)." : "Fresh research."} Only public data is used. Nothing is sent to anyone.</p>`;
+}
+
+async function run(domain, refresh = false) {
+  $("go").disabled = true;
+  $("out").innerHTML = `<p class="skeleton">Collecting signals and writing the dossier… about 10 seconds.</p>`;
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: KEY, Authorization: `Bearer ${KEY}` },
+      body: JSON.stringify({ domain, refresh }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`);
+    render(d);
+  } catch (e) {
+    $("out").innerHTML = `<p class="err">${esc(e.message)}</p>`;
+  } finally {
+    $("go").disabled = false;
+  }
+}
+
+$("form").addEventListener("submit", (e) => { e.preventDefault(); const v = $("domain").value.trim(); if (v) run(v); });
+document.querySelectorAll("[data-d]").forEach((el) => el.addEventListener("click", () => { $("domain").value = el.dataset.d; run(el.dataset.d); }));
+</script>
+</body>
+</html>

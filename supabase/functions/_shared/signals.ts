@@ -31,7 +31,7 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-export type SiteInfo = { title: string; description: string; text: string };
+export type SiteInfo = { title: string; description: string; text: string; html: string };
 
 export async function fetchSite(domain: string): Promise<SiteInfo | null> {
   const res = await get(`https://${domain}`);
@@ -41,7 +41,7 @@ export async function fetchSite(domain: string): Promise<SiteInfo | null> {
   const description =
     /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i.exec(html)?.[1] ??
       /<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i.exec(html)?.[1] ?? "";
-  return { title, description, text: htmlToText(html).slice(0, 3500) };
+  return { title, description, text: htmlToText(html).slice(0, 3500), html };
 }
 
 // Public job-board APIs: Greenhouse, Lever, Ashby. No keys needed.
@@ -79,9 +79,27 @@ function roleRegex(): RegExp {
   return new RegExp(`\\b(${alts.join("|")})\\b`, "i");
 }
 
-export async function hiringSignals(name: string, domain: string): Promise<Signal[]> {
+const BOARD_LINK =
+  /(?:jobs\.ashbyhq\.com|boards\.greenhouse\.io|job-boards\.greenhouse\.io|jobs\.lever\.co|apply\.workable\.com)\/([a-z0-9_-]+)/gi;
+
+async function discoverSlugs(domain: string, homeHtml: string): Promise<string[]> {
+  const found = new Set<string>();
+  const scan = (html: string) => {
+    for (const m of html.matchAll(BOARD_LINK)) found.add(m[1].toLowerCase());
+  };
+  scan(homeHtml);
+  const careers = await Promise.all(
+    ["careers", "jobs", "company/careers"].map((p) => get(`https://${domain}/${p}`, 5000)),
+  );
+  for (const r of careers) if (r) scan((await r.text()).slice(0, 400_000));
+  found.delete("embed");
+  return [...found];
+}
+
+export async function hiringSignals(name: string, domain: string, homeHtml = ""): Promise<Signal[]> {
   const label = domain.split(".")[0];
-  const slugs = [...new Set([label, name.toLowerCase().replace(/[^a-z0-9]/g, "")])];
+  const discovered = await discoverSlugs(domain, homeHtml);
+  const slugs = [...new Set([...discovered, label, name.toLowerCase().replace(/[^a-z0-9]/g, "")])];
   const all = (await Promise.all(slugs.map(jobsFor))).flat();
   if (!all.length) return [];
   const re = roleRegex();
@@ -100,12 +118,16 @@ export async function hiringSignals(name: string, domain: string): Promise<Signa
   return out;
 }
 
+// Generic company names ("Linear", "Default") attract unrelated finance/media headlines.
+const NOISE = /nasdaq|nyse|streaming|programming|channel|stock|shares|earnings|ticker/i;
+
 export async function newsSignals(name: string): Promise<Signal[]> {
-  const q = encodeURIComponent(`"${name}" when:30d`);
+  const q = encodeURIComponent(`"${name}" (SaaS OR startup OR software OR funding OR launch OR hiring) when:60d`);
   const res = await get(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`);
   if (!res) return [];
   const xml = await res.text();
-  const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 5);
+  const needle = name.toLowerCase();
+  const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
   return items.map((m) => {
     const title = /<title>([\s\S]*?)<\/title>/.exec(m[1])?.[1] ?? "";
     const link = /<link>([\s\S]*?)<\/link>/.exec(m[1])?.[1];
@@ -116,7 +138,10 @@ export async function newsSignals(name: string): Promise<Signal[]> {
       url: link,
       detail: { published: date },
     };
-  }).filter((s) => s.title);
+  }).filter((s) => {
+    const t = s.title.toLowerCase();
+    return t.includes(needle) && !NOISE.test(t);
+  }).slice(0, 5);
 }
 
 export async function hnSignals(domain: string): Promise<Signal[]> {
@@ -139,9 +164,9 @@ export async function hnSignals(domain: string): Promise<Signal[]> {
 }
 
 export async function collectSignals(name: string, domain: string) {
-  const [site, hiring, news, hn] = await Promise.all([
-    fetchSite(domain),
-    hiringSignals(name, domain),
+  const site = await fetchSite(domain);
+  const [hiring, news, hn] = await Promise.all([
+    hiringSignals(name, domain, site?.html ?? ""),
     newsSignals(name),
     hnSignals(domain),
   ]);

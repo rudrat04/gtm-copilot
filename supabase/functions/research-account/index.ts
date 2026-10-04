@@ -7,7 +7,10 @@ const CACHE_HOURS = 24;
 
 const SYSTEM = `You are a sales researcher writing a one-page account dossier for a rep at ${icp.seller.name}.
 ${icp.seller.pitch}
+The ICP describes who ${icp.seller.name} sells to. It is NOT a fact about the company being researched.
+Describe the company only from the website evidence and signals. Never attribute ICP traits to it.
 Use ONLY the evidence provided. If something is not in the evidence, write "unknown" rather than guessing.
+When there is no buying signal, keep talk tracks grounded in what the company actually sells and do not invent problems.
 Be specific and short. No filler, no hype. Return a single JSON object and nothing else.`;
 
 function prompt(name: string, domain: string, site: unknown, signals: unknown[]): string {
@@ -18,7 +21,7 @@ ${JSON.stringify(icp.company)}
 Buyer personas: ${icp.personas.map((p) => p.title).join("; ")}
 
 Website evidence:
-${JSON.stringify(site)}
+${JSON.stringify(site ? { title: site.title, description: site.description, text: site.text } : null)}
 
 Signals found (hiring, news, Hacker News):
 ${JSON.stringify(signals)}
