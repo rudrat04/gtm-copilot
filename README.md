@@ -13,7 +13,7 @@ A small, demo-able GTM system for B2B SaaS teams: find the right accounts, under
 
 Supabase (Postgres, Edge Functions, pg_cron), HubSpot Free, Apollo Free (cached, optional), Google Calendar and Gmail, Claude Haiku 4.5 with a hard daily spend cap. A fixture mode lets every module run with no credits spent.
 
-## ICP (configurable in one file)
+## ICP (configurable in `supabase/functions/_shared/icp.json`)
 
 B2B SaaS and tech companies, 20-200 employees, Seed to Series B, US/UK/EU, hiring sales roles. Personas: Head of Sales/VP Sales, Head of RevOps, Founder/CEO at companies under about 30 people.
 
