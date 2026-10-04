@@ -1,6 +1,7 @@
 import { cors, json, normalizeDomain, sb } from "../_shared/db.ts";
 import { askClaude, BudgetError, parseJson } from "../_shared/claude.ts";
 import { collectSignals } from "../_shared/signals.ts";
+import { priorityScore } from "../_shared/score.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
 const CACHE_HOURS = 24;
@@ -10,7 +11,10 @@ ${icp.seller.pitch}
 The ICP describes who ${icp.seller.name} sells to. It is NOT a fact about the company being researched.
 Describe the company only from the website evidence and signals. Never attribute ICP traits to it.
 Use ONLY the evidence provided. If something is not in the evidence, write "unknown" rather than guessing.
-When there is no buying signal, keep talk tracks grounded in what the company actually sells and do not invent problems.
+Website text (product demos, sample deals, customer quotes, pricing examples) is marketing copy about their product. It is NOT evidence of the company's own sales situation, stage, team size or deal sizes. Never cite it that way.
+Do not state funding stage or headcount unless the evidence says so.
+Talk-track openers must be questions about the prospect's situation. They must never claim customers, experience, research or relationships ("we work with", "teams we've seen", "we noticed"). Ground each one in a listed signal or in what the company sells.
+When there is no buying signal, say so and do not invent problems.
 Be specific and short. No filler, no hype. Return a single JSON object and nothing else.`;
 
 function prompt(name: string, domain: string, site: unknown, signals: unknown[]): string {
@@ -61,7 +65,7 @@ Deno.serve(async (req) => {
   }
 
   const guessName = account?.name ?? domain.split(".")[0].replace(/^./, (c) => c.toUpperCase());
-  const { site, signals } = await collectSignals(guessName, domain);
+  const { site, signals } = await collectSignals(guessName, domain, account?.segment ?? "");
 
   if (!account) {
     const name = site?.title ? site.title.split(/[|\-–:]/)[0].trim().slice(0, 60) || guessName : guessName;
@@ -102,6 +106,7 @@ Deno.serve(async (req) => {
   await sb.from("cp_accounts").update({
     icp_score: Math.round(Number(dossier.icp_fit?.score ?? 0)) || null,
     why_now: dossier.why_now ?? null,
+    priority_score: priorityScore(signals).score,
     last_scanned_at: new Date().toISOString(),
   }).eq("id", account.id);
 

@@ -55,13 +55,39 @@
   .meta { color: var(--muted); font-size: 12px; margin-top: 18px; }
   .err { color: var(--bad); }
   .skeleton { color: var(--muted); }
+  nav { display: flex; gap: 4px; margin: 0 0 24px; border-bottom: 1px solid var(--line); }
+  nav button { background: none; color: var(--muted); border-radius: 8px 8px 0 0; padding: 10px 14px; font-weight: 600; }
+  nav button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+  .qrow { display: flex; gap: 14px; }
+  .rank { flex: none; width: 46px; text-align: center; }
+  .rank b { font-size: 22px; display: block; line-height: 1.1; }
+  .rank span { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+  .qmain { flex: 1; min-width: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .chips .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  details summary { cursor: pointer; color: var(--accent); font-size: 13px; margin: 6px 0; }
+  .draft { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 13px; }
+  .actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+  .ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
+  .pill { font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); }
+  .pill.ok { color: var(--good); }
+  .toast { font-size: 13px; color: var(--muted); }
+  .qbar { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; margin-bottom: 14px; gap: 12px; }
+  .qbar a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
   <h1>Account Copilot</h1>
-  <p class="sub">Type a company domain. Get a sales-ready dossier in seconds, built from live hiring, news and site signals.</p>
+  <p class="sub">Research any company in seconds, and see which accounts are worth contacting this week.</p>
 
+  <nav role="tablist">
+    <button role="tab" id="t-research" aria-selected="true" data-tab="research">Research</button>
+    <button role="tab" id="t-queue" aria-selected="false" data-tab="queue">Queue</button>
+  </nav>
+
+  <section id="research">
   <form id="form">
     <input id="domain" placeholder="linear.app" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Company domain">
     <button id="go" type="submit">Research</button>
@@ -69,6 +95,12 @@
   <p class="hint">Try <a data-d="linear.app">linear.app</a>, <a data-d="posthog.com">posthog.com</a> or <a data-d="attio.com">attio.com</a></p>
 
   <div id="out" aria-live="polite"></div>
+  </section>
+
+  <section id="queue" hidden>
+    <div class="qbar"><span id="qinfo">Loading…</span><span id="qlock"></span></div>
+    <div id="qlist" aria-live="polite"></div>
+  </section>
 </main>
 
 <script>
@@ -126,6 +158,73 @@ async function run(domain, refresh = false) {
 
 $("form").addEventListener("submit", (e) => { e.preventDefault(); const v = $("domain").value.trim(); if (v) run(v); });
 document.querySelectorAll("[data-d]").forEach((el) => el.addEventListener("click", () => { $("domain").value = el.dataset.d; run(el.dataset.d); }));
+
+// ---- Queue ----
+const QAPI = API.replace("research-account", "queue");
+let adminKey = ""; try { adminKey = localStorage.getItem("cp_admin") || ""; } catch {}
+
+async function qcall(body) {
+  const res = await fetch(QAPI, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: KEY, Authorization: `Bearer ${KEY}`, ...(adminKey ? { "x-admin-key": adminKey } : {}) },
+    body: JSON.stringify(body),
+  });
+  const d = await res.json();
+  if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`);
+  return d;
+}
+
+function qCard(a) {
+  const chips = (a.signals || []).map((s) => `<span class="tag ${esc(s.kind)}" title="${esc(s.title)}">${esc(s.title)}</span>`).join("");
+  const d = a.draft;
+  const done = a.status !== "queued";
+  return `<div class="card" data-id="${esc(a.id)}"><div class="qrow">
+    <div class="rank"><b>${esc(a.priority_score)}</b><span>score</span></div>
+    <div class="qmain">
+      <div class="head"><div><p class="name">${esc(a.name)}</p><span class="domain">${esc(a.domain)} · ${esc(a.segment || "")}</span></div>
+        ${done ? `<span class="pill ok">${a.status === "pushed" ? "In HubSpot" : esc(a.status)}</span>` : ""}</div>
+      <div class="whynow">${esc(a.why_now)}</div>
+      <div class="chips">${chips}</div>
+      ${d ? `<details><summary>Draft email to ${esc(d.persona)}</summary><div class="draft"><b>${esc(d.subject)}</b>\n\n${esc(d.body)}</div></details>` : ""}
+      ${done ? "" : `<div class="actions"><button data-act="approve">Approve</button><button class="ghost" data-act="reject">Reject</button><span class="toast"></span></div>`}
+    </div></div></div>`;
+}
+
+async function loadQueue() {
+  $("qinfo").textContent = "Loading…";
+  try {
+    const d = await qcall({ action: "list" });
+    $("qinfo").textContent = `${d.accounts.length} accounts ranked by buying signals · ${d.scanned} companies scanned`;
+    $("qlock").innerHTML = d.admin ? "Unlocked: approvals write to HubSpot" : `Demo mode · <a id="unlock">unlock</a>`;
+    $("qlist").innerHTML = d.accounts.map(qCard).join("") || "<p>Nothing queued yet.</p>";
+    const u = $("unlock"); if (u) u.onclick = unlock;
+  } catch (e) { $("qlist").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+async function unlock() {
+  const k = prompt("Owner key (leave empty for demo mode)");
+  if (k === null) return;
+  adminKey = k.trim(); try { localStorage.setItem("cp_admin", adminKey); } catch {}
+  loadQueue();
+}
+
+$("qlist").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-act]"); if (!btn) return;
+  const card = btn.closest(".card"), toast = card.querySelector(".toast");
+  btn.disabled = true; toast.textContent = "Working…";
+  try {
+    const r = await qcall({ action: btn.dataset.act, account_id: card.dataset.id });
+    if (r.mode === "dry_run") { toast.textContent = r.message; btn.disabled = false; return; }
+    loadQueue();
+  } catch (err) { toast.textContent = err.message; btn.disabled = false; }
+});
+
+document.querySelectorAll("nav [data-tab]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("nav [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+  $("research").hidden = b.dataset.tab !== "research";
+  $("queue").hidden = b.dataset.tab !== "queue";
+  if (b.dataset.tab === "queue") loadQueue();
+}));
 </script>
 </body>
 </html>
