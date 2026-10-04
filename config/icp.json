@@ -1,0 +1,26 @@
+{
+  "seller": {
+    "name": "PipelineKit",
+    "pitch": "Pipeline hygiene and sales automation for RevOps and sales teams at B2B SaaS companies."
+  },
+  "company": {
+    "industries": ["B2B SaaS", "Developer tools", "Infrastructure software"],
+    "employeesMin": 20,
+    "employeesMax": 200,
+    "stages": ["Seed", "Series A", "Series B"],
+    "regions": ["US", "UK", "EU"]
+  },
+  "personas": [
+    { "title": "Head of Sales / VP Sales", "match": ["vp sales", "head of sales", "sales director", "cro", "vp revenue"] },
+    { "title": "Head of RevOps", "match": ["revops", "revenue operations", "sales operations", "sales ops"] },
+    { "title": "Founder / CEO", "match": ["founder", "ceo", "co-founder"], "onlyIfEmployeesBelow": 30 }
+  ],
+  "signals": {
+    "hiringRoles": ["sdr", "bdr", "account executive", "ae", "revops", "revenue operations", "sales operations", "head of sales", "vp sales"],
+    "weights": { "hiring": 40, "news": 25, "fit": 25, "tech": 10 }
+  },
+  "ai": {
+    "model": "claude-haiku-4-5-20251001",
+    "dailyBudgetUsd": 1.0
+  }
+}
