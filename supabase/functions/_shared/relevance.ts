@@ -1,4 +1,5 @@
 import { askClaude, parseJson } from "./claude.ts";
+import { log } from "./log.ts";
 import type { Signal } from "./signals.ts";
 
 /**
@@ -32,11 +33,20 @@ Return JSON: {"keep": [indices of headlines clearly about THIS company, not a na
     });
     const r = parseJson<{ keep?: number[]; jobs_ok?: boolean }>(raw);
     const keep = new Set((r.keep ?? []).filter((n) => Number.isInteger(n)));
+    await log("info", "relevance_checked", {
+      account: domain,
+      detail: { headlines: headlines.length, kept: keep.size, jobs_checked: !!jobSample?.length, jobs_ok: r.jobs_ok },
+    });
     return {
       headlines: headlines.filter((_, i) => keep.has(i)),
       jobsOk: jobSample?.length ? r.jobs_ok === true : true,
     };
-  } catch {
+  } catch (e) {
+    await log("warn", "relevance_fallback", {
+      account: domain,
+      message: (e as Error).message,
+      detail: { headlines_passed_through: headlines.length, jobs_dropped: !!jobSample?.length },
+    });
     return { headlines, jobsOk: !jobSample?.length };
   }
 }

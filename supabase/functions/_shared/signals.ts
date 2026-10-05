@@ -8,6 +8,7 @@ export type Signal = {
 };
 
 import { keepRelevant } from "./relevance.ts";
+import { log } from "./log.ts";
 
 const UA = "Mozilla/5.0 (compatible; AccountCopilot/0.1; +https://github.com/rudrat04/gtm-copilot)";
 
@@ -18,8 +19,14 @@ async function get(url: string, ms = 7000): Promise<Response | null> {
       signal: AbortSignal.timeout(ms),
       redirect: "follow",
     });
+    if (!res.ok && res.status !== 404 && res.status !== 410) {
+      await log("warn", "fetch_failed", { detail: { host: new URL(url).host, status: res.status } });
+    }
     return res.ok ? res : null;
-  } catch {
+  } catch (e) {
+    await log("warn", "fetch_failed", {
+      detail: { host: new URL(url).host, error: (e as Error).name === "TimeoutError" ? "timeout" : (e as Error).message.slice(0, 120) },
+    });
     return null;
   }
 }
@@ -72,7 +79,9 @@ async function jobsFor(slug: string): Promise<Job[]> {
         jobs.push({ title: j.title, url: j.jobUrl, source: "ashby" });
       }
     }
-  } catch { /* a malformed board is the same as no board */ }
+  } catch (e) {
+    await log("warn", "job_board_parse_failed", { detail: { slug, error: (e as Error).message.slice(0, 120) } });
+  }
   return jobs;
 }
 
@@ -198,5 +207,19 @@ export async function collectSignals(name: string, domain: string, segment = "")
   );
 
   const signals: Signal[] = [...(rel.jobsOk ? hiring.signals : []), ...rel.headlines];
+  await log("info", "signals_collected", {
+    account: domain,
+    detail: {
+      site: !!site,
+      hiring: hiring.signals.length,
+      hiring_verified: hiring.verified,
+      hiring_dropped: !rel.jobsOk && hiring.signals.length > 0,
+      news_found: news.length,
+      hn_found: hn.length,
+      headlines_kept: rel.headlines.length,
+      total: signals.length,
+    },
+  });
+  if (!site) await log("warn", "site_unreachable", { account: domain });
   return { site, signals };
 }

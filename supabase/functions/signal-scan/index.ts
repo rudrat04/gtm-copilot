@@ -1,8 +1,9 @@
-import { cors, json, sb } from "../_shared/db.ts";
+import { json, sb } from "../_shared/db.ts";
 import { BudgetError } from "../_shared/claude.ts";
 import { collectSignals } from "../_shared/signals.ts";
 import { priorityScore, QUEUE_THRESHOLD } from "../_shared/score.ts";
 import { writeDraft } from "../_shared/draft.ts";
+import { log, serve } from "../_shared/log.ts";
 
 // Called by pg_cron every few minutes. It only touches accounts whose last scan is stale,
 // so extra or public calls are harmless: once everything is fresh it does nothing.
@@ -49,16 +50,21 @@ async function scanOne(a: Account) {
       update.status = "queued";
     } catch (e) {
       if (e instanceof BudgetError) return { domain: a.domain, score, note: "budget" };
+      await log("error", "draft_failed", { account: a.domain, message: (e as Error).message, detail: { score } });
       throw e;
     }
   }
 
-  await sb.from("cp_accounts").update(update).eq("id", a.id);
+  const { error: upErr } = await sb.from("cp_accounts").update(update).eq("id", a.id);
+  if (upErr) await log("error", "account_update_failed", { account: a.domain, message: upErr.message });
+  await log("info", "account_scanned", {
+    account: a.domain,
+    detail: { score, signals: signals.length, queued: update.status === "queued" },
+  });
   return { domain: a.domain, score, queued: update.status === "queued" };
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+serve("signal-scan", async (req) => {
 
   const cutoff = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
   const { data: stale, error } = await sb.from("cp_accounts")
@@ -66,9 +72,29 @@ Deno.serve(async (req) => {
     .or(`last_scanned_at.is.null,last_scanned_at.lt.${cutoff}`)
     .order("last_scanned_at", { ascending: true, nullsFirst: true })
     .limit(BATCH);
-  if (error) return json({ error: error.message }, 500);
+  if (error) {
+    await log("error", "stale_query_failed", { message: error.message });
+    return json({ error: error.message }, 500);
+  }
+  // Idle run: nothing to do. Mark it so the 5-minute cron does not flood the logs.
+  if (!stale?.length) {
+    const idle = json({ scanned: [], idle: true });
+    idle.headers.set("x-noop", "1");
+    return idle;
+  }
 
   const results = await Promise.allSettled((stale ?? []).map(scanOne));
+  results.forEach((r, i) => {
+    if (r.status === "rejected") {
+      void log("error", "account_scan_failed", { account: stale![i].domain, message: String(r.reason).slice(0, 300) });
+    }
+  });
+  await log("info", "batch_done", {
+    detail: {
+      attempted: results.length,
+      failed: results.filter((r) => r.status === "rejected").length,
+    },
+  });
   return json({
     scanned: results.map((r, i) =>
       r.status === "fulfilled" ? r.value : { domain: stale![i].domain, error: String(r.reason).slice(0, 120) }

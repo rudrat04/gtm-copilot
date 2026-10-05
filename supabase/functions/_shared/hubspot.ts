@@ -1,3 +1,5 @@
+import { log } from "./log.ts";
+
 const BASE = "https://api.hubapi.com";
 
 async function hs(path: string, init: RequestInit = {}) {
@@ -10,7 +12,16 @@ async function hs(path: string, init: RequestInit = {}) {
     },
   });
   const text = await res.text();
-  return { ok: res.ok, status: res.status, body: text ? JSON.parse(text) : {} };
+  let body: any = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch { /* non-JSON error page */ }
+  if (!res.ok) {
+    await log("error", "hubspot_request_failed", {
+      detail: { method: init.method ?? "GET", path: path.split("?")[0], status: res.status, body: text.slice(0, 300) },
+    });
+  }
+  return { ok: res.ok, status: res.status, body };
 }
 
 export type PushInput = {
@@ -70,6 +81,10 @@ export async function pushAccount(i: PushInput) {
     }),
   });
   noted = note.ok;
+  if (!noted) {
+    await log("warn", "hubspot_note_skipped", { account: i.domain, message: "Company saved but the note could not be attached", detail: { status: note.status } });
+  }
+  await log("info", "hubspot_pushed", { account: i.domain, detail: { companyId: id, created, noted } });
 
   return { companyId: id, created, noted };
 }

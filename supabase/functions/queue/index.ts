@@ -1,5 +1,6 @@
-import { cors, json, sb } from "../_shared/db.ts";
+import { json, sb } from "../_shared/db.ts";
 import { pushAccount } from "../_shared/hubspot.ts";
+import { log, serve } from "../_shared/log.ts";
 
 function isAdmin(req: Request): boolean {
   const key = Deno.env.get("ADMIN_KEY");
@@ -48,6 +49,7 @@ async function act(action: "approve" | "reject", accountId: string, admin: boole
   if (action === "reject") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed. Unlock to persist decisions." });
     await sb.from("cp_accounts").update({ status: "rejected" }).eq("id", a.id);
+    await log("info", "decision", { account: a.domain, detail: { action: "reject", mode: "live" } });
     if (draft) await sb.from("cp_outreach_drafts").update({ status: "rejected" }).eq("id", draft.id);
     return json({ mode: "live", status: "rejected" });
   }
@@ -56,6 +58,7 @@ async function act(action: "approve" | "reject", accountId: string, admin: boole
 
   // Public visitors see exactly what would be sent, but nothing is written to the CRM.
   if (!admin) {
+    await log("info", "decision", { account: a.domain, detail: { action: "approve", mode: "dry_run" } });
     return json({
       mode: "dry_run",
       message: "Demo mode: this would create the company in HubSpot and attach the draft as a note.",
@@ -74,18 +77,22 @@ async function act(action: "approve" | "reject", accountId: string, admin: boole
     });
     await sb.from("cp_accounts").update({ status: "pushed", hubspot_company_id: r.companyId }).eq("id", a.id);
     await sb.from("cp_outreach_drafts").update({ status: "approved" }).eq("id", draft.id);
+    await log("info", "decision", { account: a.domain, detail: { action: "approve", mode: "live", hubspot_company_id: r.companyId } });
     return json({ mode: "live", status: "pushed", ...r });
   } catch (e) {
+    await log("error", "approve_failed", { account: a.domain, message: (e as Error).message });
     return json({ error: (e as Error).message }, 502);
   }
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+serve("queue", async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
-  const body = await req.json().catch(() => ({}));
+  const body = (await req.json().catch(() => null)) ?? {};
   const admin = isAdmin(req);
+  if (!admin && req.headers.get("x-admin-key")) {
+    await log("warn", "admin_key_rejected", { message: "An x-admin-key header was sent but did not match" });
+  }
 
   if (body.action === "list") return json({ ...(await list()), admin });
   if (body.action === "check") return json({ admin });

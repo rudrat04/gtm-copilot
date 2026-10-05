@@ -1,7 +1,8 @@
-import { cors, json, normalizeDomain, sb } from "../_shared/db.ts";
+import { json, normalizeDomain, sb } from "../_shared/db.ts";
 import { askClaude, BudgetError, parseJson } from "../_shared/claude.ts";
 import { collectSignals } from "../_shared/signals.ts";
 import { priorityScore } from "../_shared/score.ts";
+import { log, serve } from "../_shared/log.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
 const CACHE_HOURS = 24;
@@ -43,13 +44,15 @@ Return JSON with exactly these keys:
 Give exactly 3 talk_tracks.`;
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+serve("research-account", async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
-  const body = await req.json().catch(() => ({}));
+  const body = (await req.json().catch(() => null)) ?? {};
   const domain = normalizeDomain(String(body.domain ?? ""));
-  if (!domain) return json({ error: "Enter a valid company domain, e.g. linear.app" }, 400);
+  if (!domain) {
+    await log("warn", "invalid_domain", { message: "Rejected input", detail: { input: String(body.domain ?? "").slice(0, 80) } });
+    return json({ error: "Enter a valid company domain, e.g. linear.app" }, 400);
+  }
 
   let { data: account } = await sb.from("cp_accounts").select("*").eq("domain", domain).maybeSingle();
 
@@ -60,6 +63,7 @@ Deno.serve(async (req) => {
     if (cached && Date.now() - new Date(cached.created_at).getTime() < CACHE_HOURS * 3600_000) {
       const { data: signals } = await sb.from("cp_signals").select("kind,title,url,detail")
         .eq("account_id", account.id).order("detected_at", { ascending: false }).limit(30);
+      await log("info", "research_cache_hit", { account: domain, detail: { age_hours: +((Date.now() - new Date(cached.created_at).getTime()) / 3600_000).toFixed(1) } });
       return json({ account, signals, dossier: cached.content, cached: true });
     }
   }
@@ -71,7 +75,10 @@ Deno.serve(async (req) => {
     const name = site?.title ? site.title.split(/[|\-–:]/)[0].trim().slice(0, 60) || guessName : guessName;
     const { data, error } = await sb.from("cp_accounts")
       .insert({ domain, name, source: "research" }).select().single();
-    if (error) return json({ error: error.message }, 500);
+    if (error) {
+      await log("error", "account_insert_failed", { account: domain, message: error.message });
+      return json({ error: error.message }, 500);
+    }
     account = data;
   }
 
@@ -99,6 +106,7 @@ Deno.serve(async (req) => {
     dossier = parseJson<{ icp_fit?: { score?: number }; why_now?: string }>(raw);
   } catch (e) {
     if (e instanceof BudgetError) return json({ error: "Daily AI budget reached. Try again tomorrow." }, 429);
+    await log("error", "research_failed", { account: domain, message: (e as Error).message });
     return json({ error: `Research failed: ${(e as Error).message}` }, 502);
   }
 
@@ -110,5 +118,9 @@ Deno.serve(async (req) => {
     last_scanned_at: new Date().toISOString(),
   }).eq("id", account.id);
 
+  await log("info", "research_done", {
+    account: domain,
+    detail: { signals: signals.length, icp_score: dossier.icp_fit?.score ?? null, new_account: account.source === "research" },
+  });
   return json({ account, signals, dossier, cached: false });
 });
