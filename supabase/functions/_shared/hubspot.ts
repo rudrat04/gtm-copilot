@@ -27,40 +27,6 @@ async function hs(path: string, init: RequestInit = {}, quiet: number[] = []) {
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
-// ---- Custom company properties (created once; falls back to a note if the key lacks scope) ----
-
-const CP_PROPS = [
-  { name: "cp_icp_fit", label: "ICP fit score", type: "number", fieldType: "number" },
-  { name: "cp_priority_score", label: "Signal priority score", type: "number", fieldType: "number" },
-  { name: "cp_why_now", label: "Why now", type: "string", fieldType: "textarea" },
-  { name: "cp_researched_at", label: "Researched at", type: "datetime", fieldType: "date" },
-];
-
-let propsReady: boolean | null = null;
-
-export async function ensureProperties(): Promise<boolean> {
-  if (propsReady !== null) return propsReady;
-  const g = await hs("/crm/v3/properties/companies/groups", {
-    method: "POST",
-    body: JSON.stringify({ name: "account_copilot", label: "Account Copilot" }),
-  }, [409, 403, 401]);
-  if (!g.ok && g.status !== 409) {
-    await log("warn", "hubspot_properties_unavailable", {
-      message: "Could not create custom properties; dossier fields go into a note instead",
-      detail: { status: g.status, hint: "Add the crm.schemas.companies.write scope to the HubSpot key" },
-    });
-    return (propsReady = false);
-  }
-  for (const p of CP_PROPS) {
-    const r = await hs("/crm/v3/properties/companies", {
-      method: "POST",
-      body: JSON.stringify({ ...p, groupName: "account_copilot" }),
-    }, [409]);
-    if (!r.ok && r.status !== 409) return (propsReady = false);
-  }
-  return (propsReady = true);
-}
-
 // ---- Dossier JSON -> HubSpot. No AI is involved here. ----
 
 export type Dossier = {
@@ -103,15 +69,67 @@ async function addNote(html: string, toId: string, typeId: number): Promise<bool
   return r.ok;
 }
 
+// ---- Field mapping onto the existing HubSpot properties (gtm_* group + native ICP tier) ----
+
+export type CompanyScores = {
+  fit: number | null;       // from the dossier; blank until researched
+  priority: number | null;
+  signal: number | null;
+  intent: number | null;
+  tier: string;             // tier_1 | tier_2 | tier_3
+  whyNow: string;
+  whyFit: string;
+  scoredAt: string | null;
+};
+
 export type CompanyInput = {
   name: string;
   domain: string;
-  whyNow: string;
-  icpFit?: number | null;
-  priority?: number | null;
+  scores: CompanyScores;
   dossier: Dossier | null;
   signals: SignalRow[];
 };
+
+const TIER_LABEL: Record<string, string> = { tier_1: "Tier 1", tier_2: "Tier 2", tier_3: "Tier 3" };
+
+/** Properties written to HubSpot, each with the label shown in the preview. */
+export function companyFields(s: CompanyScores): { key: string; label: string; value: string }[] {
+  const f: { key: string; label: string; value: string | number | null }[] = [
+    { key: "gtm_fit_score", label: "Fit score", value: s.fit },
+    { key: "gtm_priority_score", label: "Priority score", value: s.priority },
+    { key: "gtm_signal_score", label: "Signal score", value: s.signal },
+    { key: "gtm_intent_score", label: "Intent score", value: s.intent },
+    { key: "hs_ideal_customer_profile", label: "ICP tier", value: s.tier },
+    { key: "gtm_industry", label: "Fit industry", value: "b2b_saas" },
+    { key: "gtm_why_now", label: "Why now", value: s.whyNow || null },
+    { key: "gtm_why_fit", label: "Why fit", value: s.whyFit || null },
+    { key: "gtm_last_scored_at", label: "Last scored at", value: s.scoredAt },
+  ];
+  return f.filter((x) => x.value !== null && x.value !== "" && x.value !== undefined)
+    .map((x) => ({ key: x.key, label: x.label, value: String(x.value) }));
+}
+
+export const tierLabel = (t: string) => TIER_LABEL[t] ?? t;
+
+/** Try the full property set; if HubSpot rejects it (for example an option it does not know), retry without the optional keys. */
+async function writeWithFallback(
+  call: (props: Record<string, string>) => ReturnType<typeof hs>,
+  props: Record<string, string>,
+  optional: string[],
+  account: string,
+) {
+  let r = await call(props);
+  if (!r.ok && r.status === 400) {
+    const stripped = Object.fromEntries(Object.entries(props).filter(([k]) => !optional.includes(k)));
+    await log("warn", "hubspot_property_fallback", {
+      account,
+      message: "HubSpot rejected some properties; retrying without optional ones",
+      detail: { optional, error: JSON.stringify(r.body).slice(0, 200) },
+    });
+    r = await call(stripped);
+  }
+  return r;
+}
 
 export async function pushCompany(i: CompanyInput) {
   const found = await hs("/crm/v3/objects/companies/search", {
@@ -120,37 +138,34 @@ export async function pushCompany(i: CompanyInput) {
   });
   if (!found.ok) throw new Error(`HubSpot search ${found.status}`);
 
-  const withProps = await ensureProperties();
-  const properties: Record<string, string> = { name: i.name, domain: i.domain };
-  if (i.dossier?.summary) properties.description = i.dossier.summary;
-  if (withProps) {
-    if (i.icpFit != null) properties.cp_icp_fit = String(i.icpFit);
-    if (i.priority != null) properties.cp_priority_score = String(i.priority);
-    if (i.whyNow) properties.cp_why_now = i.whyNow;
-    properties.cp_researched_at = new Date().toISOString();
-  } else if (!i.dossier && i.whyNow) {
-    properties.description = `Why now: ${i.whyNow}`;
-  }
+  const gtm = Object.fromEntries(companyFields(i.scores).map((f) => [f.key, f.value]));
+  const optional = ["hs_ideal_customer_profile", "gtm_industry", "gtm_last_scored_at"];
 
   let id: string = found.body.results?.[0]?.id;
   let created = false;
   if (id) {
-    const u = await hs(`/crm/v3/objects/companies/${id}`, { method: "PATCH", body: JSON.stringify({ properties }) });
+    // Existing company: refresh the scores only. Never touch lifecycle stage, owner or name.
+    const u = await writeWithFallback(
+      (props) => hs(`/crm/v3/objects/companies/${id}`, { method: "PATCH", body: JSON.stringify({ properties: props }) }),
+      gtm, optional, i.domain,
+    );
     if (!u.ok) throw new Error(`HubSpot update ${u.status}`);
   } else {
-    const c = await hs("/crm/v3/objects/companies", {
-      method: "POST",
-      body: JSON.stringify({ properties: { ...properties, lifecyclestage: "lead" } }),
-    });
+    const base: Record<string, string> = { name: i.name, domain: i.domain, lifecyclestage: "lead", ...gtm };
+    if (i.dossier?.summary) base.description = i.dossier.summary;
+    const c = await writeWithFallback(
+      (props) => hs("/crm/v3/objects/companies", { method: "POST", body: JSON.stringify({ properties: props }) }),
+      base, optional, i.domain,
+    );
     if (!c.ok) throw new Error(`HubSpot create ${c.status}: ${JSON.stringify(c.body).slice(0, 160)}`);
     id = c.body.id;
     created = true;
   }
 
-  const noted = await addNote(dossierNoteHtml(i.dossier, i.signals, i.whyNow), id, 190);
+  const noted = await addNote(dossierNoteHtml(i.dossier, i.signals, i.scores.whyNow), id, 190);
   if (!noted) await log("warn", "hubspot_note_skipped", { account: i.domain, message: "Company saved but the note could not be attached" });
-  await log("info", "hubspot_company_pushed", { account: i.domain, detail: { companyId: id, created, noted, custom_properties: withProps } });
-  return { companyId: id, created, noted, customProperties: withProps };
+  await log("info", "hubspot_company_pushed", { account: i.domain, detail: { companyId: id, created, noted, fields: Object.keys(gtm) } });
+  return { companyId: id, created, noted };
 }
 
 export type ContactInput = {
@@ -158,6 +173,8 @@ export type ContactInput = {
   lastName: string;
   title: string;
   email: string;
+  persona: string | null;   // HubSpot option value: sales_leader | revops | Founder
+  personaScore: number;
   draftHtml?: string;
 };
 
@@ -168,16 +185,26 @@ export async function pushContact(c: ContactInput, companyId: string, domain: st
   });
   if (!found.ok) throw new Error(`HubSpot contact search ${found.status}`);
 
-  const properties = { firstname: c.firstName, lastname: c.lastName, jobtitle: c.title, email: c.email };
+  const props: Record<string, string> = {
+    firstname: c.firstName,
+    lastname: c.lastName,
+    jobtitle: c.title,
+    email: c.email,
+    gtm_persona_score: String(Math.min(100, c.personaScore)),
+  };
+  if (c.persona) props.gtm_persona = c.persona;
+
   let id: string = found.body.results?.[0]?.id;
   let created = false;
   if (id) {
-    await hs(`/crm/v3/objects/contacts/${id}`, { method: "PATCH", body: JSON.stringify({ properties }) });
+    // Existing contact: update title and persona fields only.
+    const { email: _e, ...rest } = props;
+    await writeWithFallback((p) => hs(`/crm/v3/objects/contacts/${id}`, { method: "PATCH", body: JSON.stringify({ properties: p }) }), rest, ["gtm_persona"], domain);
   } else {
-    const r = await hs("/crm/v3/objects/contacts", {
-      method: "POST",
-      body: JSON.stringify({ properties: { ...properties, lifecyclestage: "lead", hs_lead_status: "NEW" } }),
-    });
+    const r = await writeWithFallback(
+      (p) => hs("/crm/v3/objects/contacts", { method: "POST", body: JSON.stringify({ properties: p }) }),
+      { ...props, lifecyclestage: "lead", hs_lead_status: "NEW" }, ["gtm_persona"], domain,
+    );
     if (!r.ok) throw new Error(`HubSpot contact create ${r.status}`);
     id = r.body.id;
     created = true;

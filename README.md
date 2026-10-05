@@ -58,4 +58,9 @@ On a dossier (or a Queue card), **Find relevant people** searches a contact data
 - Data sources sit behind one interface (`supabase/functions/_shared/people.ts`), so adding Apollo or another provider means adding one adapter.
 - Public visitors see names as "First L." with masked emails, and Enrich/Push run as dry runs. Only the owner key reveals emails or writes to HubSpot.
 - Hunter usage is capped by `HUNTER_MONTHLY_CAP` (default 40 of 50) and every call is recorded in `cp_provider_usage`.
-- Optional: give the HubSpot key the `crm.schemas.companies.write` scope and the push also fills custom fields (ICP fit, priority score, why now). Without it, those details go into the company note.
+- Pushes fill the existing HubSpot fields: company Fit, Priority, Signal and Intent scores, ICP tier, Fit industry, Why now, Why fit and Last scored at; contact Scored persona and Persona score. Re-pushing updates scores only and never changes lifecycle stage or owner.
+- A "What will go to HubSpot" preview shows these values before anything is written.
+
+## Weekly scan and signal freshness
+
+The scan runs every Monday 06:00-06:55 UTC (12 runs of 6 companies). Accounts count as stale after 6 days. Each Queue card shows when the company was last scanned and how old each signal is (published date for news, first-seen date otherwise), with a NEW badge for anything first seen in the last 7 days. Older evidence counts for less: news after 30 days counts half, after 60 days nothing.

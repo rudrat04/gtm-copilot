@@ -4,10 +4,11 @@ import { collectSignals } from "../_shared/signals.ts";
 import { priorityScore, QUEUE_THRESHOLD } from "../_shared/score.ts";
 import { writeDraft } from "../_shared/draft.ts";
 import { log, serve } from "../_shared/log.ts";
+import icp from "../_shared/icp.json" with { type: "json" };
 
 // Called by pg_cron every few minutes. It only touches accounts whose last scan is stale,
 // so extra or public calls are harmless: once everything is fresh it does nothing.
-const STALE_HOURS = 20;
+const STALE_HOURS = icp.schedule.staleDays * 24;
 const BATCH = 6;
 
 type Account = { id: string; name: string; domain: string; status: string; segment: string | null };

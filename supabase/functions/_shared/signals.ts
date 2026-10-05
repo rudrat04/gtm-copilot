@@ -177,11 +177,11 @@ export async function hnSignals(name: string, domain: string): Promise<Signal[]>
         (h.url ?? "").toLowerCase().includes(domain) ||
         new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(h.title ?? ""),
     );
-    return hits.map((h: { title: string; objectID: string; points: number }) => ({
+    return hits.map((h: { title: string; objectID: string; points: number; created_at?: string }) => ({
       kind: "hn" as const,
       title: `Hacker News: ${h.title}`,
       url: `https://news.ycombinator.com/item?id=${h.objectID}`,
-      detail: { points: h.points },
+      detail: { points: h.points, created: h.created_at },
     }));
   } catch {
     return [];

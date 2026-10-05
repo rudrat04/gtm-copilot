@@ -20,23 +20,26 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
     font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 80px; }
+  main { max-width: 780px; margin: 0 auto; padding: 36px 16px 80px; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
   h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); margin: 0 0 28px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .top > div:first-child { flex: 1 1 420px; min-width: 0; }
+  .mode { padding-top: 8px; font-size: 12px; color: var(--muted); text-align: right; }
+  .mode a { color: var(--accent); cursor: pointer; text-decoration: underline; }
   form { display: flex; gap: 8px; }
   input { flex: 1; min-width: 0; padding: 12px 14px; font: inherit; color: var(--ink);
     background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
-  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button { padding: 12px 18px; font: inherit; font-weight: 600; cursor: pointer;
+  input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { padding: 11px 16px; font: inherit; font-weight: 600; cursor: pointer;
     color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 10px; }
   button:disabled { opacity: .6; cursor: progress; }
+  .ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
   .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
   .hint a { color: var(--accent); cursor: pointer; text-decoration: underline; }
-  #out { margin-top: 28px; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
-    padding: 20px; margin-bottom: 14px; }
-  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
-    color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  #out { margin-top: 26px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 14px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
   .name { font-size: 20px; font-weight: 700; margin: 0; }
   .domain { color: var(--muted); font-size: 13px; }
@@ -45,95 +48,170 @@
   .score span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
   .whynow { border-left: 3px solid var(--accent); padding-left: 12px; margin-top: 14px; font-weight: 500; }
   ul { margin: 0; padding-left: 18px; } li { margin: 4px 0; }
-  .track { margin-bottom: 10px; } .track b { display: block; font-size: 13px; }
-  .track q { color: var(--muted); }
-  .sig { display: flex; gap: 10px; align-items: baseline; margin: 6px 0; }
+  .track { margin-bottom: 10px; } .track b { display: block; font-size: 13px; } .track q { color: var(--muted); }
+  .sig { display: flex; gap: 10px; align-items: baseline; margin: 6px 0; flex-wrap: wrap; }
   .tag { flex: none; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px;
     border: 1px solid var(--line); color: var(--muted); text-transform: uppercase; }
-  .tag.hiring { color: var(--good); } .tag.news { color: var(--accent); }
+  .tag.hiring, .tag.good { color: var(--good); } .tag.news, .tag.accent { color: var(--accent); } .tag.warn { color: var(--warn); }
+  .tag.new { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
   a { color: inherit; }
   .meta { color: var(--muted); font-size: 12px; margin-top: 18px; }
-  .err { color: var(--bad); }
-  .skeleton { color: var(--muted); }
-  nav { display: flex; gap: 4px; margin: 0 0 24px; border-bottom: 1px solid var(--line); }
-  nav button { background: none; color: var(--muted); border-radius: 8px 8px 0 0; padding: 10px 14px; font-weight: 600; }
+  .err { color: var(--bad); } .skeleton { color: var(--muted); }
+  nav { display: flex; gap: 4px; margin: 0 0 22px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  nav button { background: none; color: var(--muted); border-radius: 8px 8px 0 0; padding: 10px 14px; font-weight: 600; white-space: nowrap; }
   nav button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
   .qrow { display: flex; gap: 14px; }
-  .rank { flex: none; width: 46px; text-align: center; }
+  .rank { flex: none; width: 50px; text-align: center; }
   .rank b { font-size: 22px; display: block; line-height: 1.1; }
   .rank span { font-size: 10px; color: var(--muted); text-transform: uppercase; }
   .qmain { flex: 1; min-width: 0; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-  .chips .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chips .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; font-weight: 500; }
   details summary { cursor: pointer; color: var(--accent); font-size: 13px; margin: 6px 0; }
   .draft { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 13px; }
   .actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
-  .ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
   .pill { font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); }
   .pill.ok { color: var(--good); }
   .toast { font-size: 13px; color: var(--muted); }
-  .qbar { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; margin-bottom: 14px; gap: 12px; }
-  .qbar a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+  .banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; font-size: 13px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; }
+  .banner b { font-weight: 600; } .banner .paused { color: var(--warn); font-weight: 600; }
+  .strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 4px 0 12px; }
+  .strip div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; text-align: center; }
+  .strip b { display: block; font-size: 18px; line-height: 1.2; }
+  .strip span { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   .person { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
-  .person:first-of-type { border-top: 0; }
   .pinfo { min-width: 0; } .pact { flex: none; position: relative; }
   .mask { color: var(--muted); font-family: ui-monospace, monospace; font-size: 13px; }
   .menu { position: relative; }
-  .menu-list { position: absolute; right: 0; top: 100%; z-index: 5; margin-top: 4px; min-width: 210px; background: var(--surface);
+  .menu-list { position: absolute; right: 0; top: 100%; z-index: 5; margin-top: 4px; min-width: 220px; background: var(--surface);
     border: 1px solid var(--line); border-radius: 10px; padding: 4px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
   .menu-list button { display: block; width: 100%; text-align: left; background: none; color: var(--ink); font-weight: 500; padding: 8px 10px; }
   .menu-list button:hover:not(:disabled) { background: var(--bg); }
   .menu-list button:disabled { color: var(--muted); cursor: not-allowed; opacity: .7; }
-  .pbox { margin-top: 12px; }
+  .pbox, .dbox { margin-top: 12px; }
+  .pbox:empty, .dbox:empty { margin: 0; }
+  .pv table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
+  .pv td { padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+  .pv td:first-child { color: var(--muted); width: 38%; }
+  .pv h3 { font-size: 12px; margin: 10px 0 2px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  /* ICP & Signals tab */
+  .lead { font-size: 16px; margin: 0 0 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .grid > div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .grid b { display: block; margin-bottom: 2px; }
+  .kv { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .kv .tag { text-transform: none; font-weight: 500; font-size: 12px; padding: 3px 10px; }
+  .sigrow { padding: 10px 0; border-top: 1px solid var(--line); }
+  .sigrow:first-of-type { border-top: 0; }
+  .bar { height: 6px; border-radius: 99px; background: var(--line); margin: 6px 0; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .sigrow .why { color: var(--muted); font-size: 13px; }
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .tiers div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; text-align: center; }
+  .tiers b { font-size: 22px; display: block; }
+  @media (max-width: 560px) { .strip { grid-template-columns: repeat(3, 1fr); } .tiers { grid-template-columns: 1fr; } }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Account Copilot</h1>
-  <p class="sub">Research any company in seconds, and see which accounts are worth contacting this week.</p>
+  <div class="top">
+    <div>
+      <h1>Account Copilot</h1>
+      <p class="sub">Research any company, see which accounts are worth contacting this week, and push the best ones to your CRM.</p>
+    </div>
+    <div class="mode" id="mode">Demo mode · <a id="unlock">unlock</a></div>
+  </div>
 
   <nav role="tablist">
-    <button role="tab" id="t-research" aria-selected="true" data-tab="research">Research</button>
-    <button role="tab" id="t-queue" aria-selected="false" data-tab="queue">Queue</button>
+    <button role="tab" aria-selected="true" data-tab="research">Research</button>
+    <button role="tab" aria-selected="false" data-tab="queue">Queue</button>
+    <button role="tab" aria-selected="false" data-tab="icp">ICP &amp; Signals</button>
   </nav>
 
   <section id="research">
-  <form id="form">
-    <input id="domain" placeholder="linear.app" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Company domain">
-    <button id="go" type="submit">Research</button>
-  </form>
-  <p class="hint">Try <a data-d="linear.app">linear.app</a>, <a data-d="posthog.com">posthog.com</a> or <a data-d="attio.com">attio.com</a></p>
-
-  <div id="out" aria-live="polite"></div>
+    <form id="form">
+      <input id="domain" placeholder="linear.app" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Company domain">
+      <button id="go" type="submit">Research</button>
+    </form>
+    <p class="hint">Try <a data-d="linear.app">linear.app</a>, <a data-d="posthog.com">posthog.com</a> or <a data-d="attio.com">attio.com</a></p>
+    <div id="out" aria-live="polite"></div>
   </section>
 
   <section id="queue" hidden>
-    <div class="qbar"><span id="qinfo">Loading…</span><span id="qlock"></span></div>
+    <div id="qbanner"></div>
     <div id="qlist" aria-live="polite"></div>
   </section>
+
+  <section id="icp" hidden><div id="icpbody"><p class="skeleton">Loading…</p></div></section>
 </main>
 
 <script>
-const API = "https://tecgblsoylrshcqneevf.supabase.co/functions/v1/research-account";
+const BASE = "https://tecgblsoylrshcqneevf.supabase.co/functions/v1";
 const KEY = "sb_publishable_V2QMkeCD8XuuoGkz_sVT5Q_4klZp394";
+let adminKey = ""; try { adminKey = localStorage.getItem("cp_admin") || ""; } catch {}
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const list = (a) => (a?.length ? `<ul>${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "<p>None found.</p>");
 
-function render(d) {
+async function api(fn, body) {
+  const res = await fetch(`${BASE}/${fn}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: KEY, Authorization: `Bearer ${KEY}`, ...(adminKey ? { "x-admin-key": adminKey } : {}) },
+    body: JSON.stringify(body),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`);
+  return d;
+}
+
+function ago(iso) {
+  const t = Date.parse(iso); if (!t) return "";
+  const h = (Date.now() - t) / 3.6e6;
+  if (h < 1) return "just now";
+  if (h < 24) return `${Math.floor(h)}h ago`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "yesterday" : `${d} days ago`;
+}
+const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+const scoreColor = (n) => (n >= 70 ? "var(--good)" : n >= 40 ? "var(--warn)" : "var(--bad)");
+const TIER = { tier_1: ["Tier 1", "good"], tier_2: ["Tier 2", "warn"], tier_3: ["Tier 3", ""] };
+const tierTag = (t) => `<span class="tag ${TIER[t]?.[1] || ""}">${TIER[t]?.[0] || ""}</span>`;
+
+// ---------- owner mode ----------
+async function refreshMode() {
+  try {
+    const d = await api("people", { action: "status" });
+    $("mode").innerHTML = d.admin
+      ? `Owner mode${d.credits ? ` · People search credits: ${d.credits.remaining}/${d.credits.available}` : ""} · <a id="unlock">lock</a>`
+      : `Demo mode · <a id="unlock">unlock</a>`;
+    $("unlock").onclick = d.admin ? lock : unlock;
+  } catch { /* leave as is */ }
+}
+function unlock() {
+  const k = prompt("Owner key (leave empty to stay in demo mode)");
+  if (k === null) return;
+  adminKey = k.trim(); try { localStorage.setItem("cp_admin", adminKey); } catch {}
+  refreshMode(); if (!$("queue").hidden) loadQueue();
+}
+function lock() { adminKey = ""; try { localStorage.removeItem("cp_admin"); } catch {} refreshMode(); if (!$("queue").hidden) loadQueue(); }
+$("unlock").onclick = unlock;
+
+// ---------- research ----------
+function dossierHtml(d) {
   const x = d.dossier, a = d.account;
   const score = x.icp_fit?.score ?? "–";
-  const color = score >= 70 ? "var(--good)" : score >= 40 ? "var(--warn)" : "var(--bad)";
   const sigs = (d.signals || []).slice(0, 12).map((s) =>
     `<div class="sig"><span class="tag ${esc(s.kind)}">${esc(s.kind)}</span>` +
-    (s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a>` : esc(s.title)) + `</div>`).join("");
-  $("out").innerHTML = `
+    (s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a>` : esc(s.title)) +
+    (s.detail?.published ? ` <span class="toast">${esc(ago(s.detail.published))}</span>` : "") + `</div>`).join("");
+  return `
     <div class="card">
       <div class="head">
         <div><p class="name">${esc(a.name)}</p><span class="domain">${esc(a.domain)}</span></div>
-        <div class="score"><b style="color:${color}">${esc(score)}</b><span>ICP fit</span></div>
+        <div class="score"><b style="color:${scoreColor(score)}">${esc(score)}</b><span>ICP fit</span></div>
       </div>
       <p>${esc(x.summary)}</p>
       <div class="whynow">${esc(x.why_now)}</div>
@@ -145,119 +223,148 @@ function render(d) {
     <div class="card"><h2>Risks</h2>${list(x.risks)}</div>
     <div class="card"><h2>Signals (${(d.signals || []).length})</h2>${sigs || "<p>No public signals found.</p>"}</div>
     <div class="card" id="peoplebox"></div>
-    <p class="meta">${d.cached ? "Served from cache (no AI call)." : "Fresh research."} Only public data is used. Nothing is sent to anyone.</p>`;
-  mountPeople($("peoplebox"), a.name, a.domain);
+    <p class="meta">${d.cached ? "Served from saved research (no AI call)." : "Fresh research."} Only public data is used. Nothing is sent to anyone.</p>`;
 }
 
 async function run(domain, refresh = false) {
   $("go").disabled = true;
   $("out").innerHTML = `<p class="skeleton">Collecting signals and writing the dossier… about 10 seconds.</p>`;
   try {
-    const res = await fetch(API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: KEY, Authorization: `Bearer ${KEY}` },
-      body: JSON.stringify({ domain, refresh }),
-    });
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`);
-    render(d);
-  } catch (e) {
-    $("out").innerHTML = `<p class="err">${esc(e.message)}</p>`;
-  } finally {
-    $("go").disabled = false;
-  }
+    const d = await api("research-account", { domain, refresh });
+    $("out").innerHTML = dossierHtml(d);
+    mountPeople($("peoplebox"), d.account.name, d.account.domain);
+  } catch (e) { $("out").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  finally { $("go").disabled = false; }
 }
-
 $("form").addEventListener("submit", (e) => { e.preventDefault(); const v = $("domain").value.trim(); if (v) run(v); });
 document.querySelectorAll("[data-d]").forEach((el) => el.addEventListener("click", () => { $("domain").value = el.dataset.d; run(el.dataset.d); }));
 
-// ---- Queue ----
-const QAPI = API.replace("research-account", "queue");
-let adminKey = ""; try { adminKey = localStorage.getItem("cp_admin") || ""; } catch {}
+// ---------- queue ----------
+function banner(s) {
+  if (!s) return "";
+  return `<div class="banner">
+    <span><b>Signals refresh:</b> ${esc(s.label)} ${s.active ? "" : `<span class="paused">· scans paused</span>`}</span>
+    <span><b>Last scan:</b> ${s.last_scan ? `${esc(ago(s.last_scan))} (${esc(day(s.last_scan))})` : "never"} · <b>Next:</b> ${esc(day(s.next_scan))}</span></div>`;
+}
 
-async function qcall(body) {
-  const res = await fetch(QAPI, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: KEY, Authorization: `Bearer ${KEY}`, ...(adminKey ? { "x-admin-key": adminKey } : {}) },
-    body: JSON.stringify(body),
-  });
-  const d = await res.json();
-  if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`);
-  return d;
+function chip(s) {
+  const when = s.published ? `published ${ago(s.published)}` : `first seen ${ago(s.first_seen)}`;
+  const label = `${s.title} · ${s.published ? ago(s.published) : ago(s.first_seen)}`;
+  return `<span class="tag ${esc(s.kind)}" title="${esc(s.title)} (${esc(when)})">${s.is_new ? `<b class="tag new">new</b> ` : ""}${esc(label)}</span>`;
 }
 
 function qCard(a) {
-  const chips = (a.signals || []).map((s) => `<span class="tag ${esc(s.kind)}" title="${esc(s.title)}">${esc(s.title)}</span>`).join("");
-  const d = a.draft;
-  const done = a.status !== "queued";
+  const d = a.draft, done = a.status !== "queued";
+  const newest = (a.signals || []).map((s) => Date.parse(s.first_seen)).filter(Boolean).sort((x, y) => y - x)[0];
   return `<div class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}"><div class="qrow">
-    <div class="rank"><b>${esc(a.priority_score)}</b><span>score</span></div>
+    <div class="rank"><b style="color:${scoreColor(a.priority_score)}">${esc(a.priority_score)}</b><span>priority</span></div>
     <div class="qmain">
-      <div class="head"><div><p class="name">${esc(a.name)}</p><span class="domain">${esc(a.domain)} · ${esc(a.segment || "")}</span></div>
+      <div class="head"><div><p class="name">${esc(a.name)} ${tierTag(a.tier)}</p>
+        <span class="domain">${esc(a.domain)} · ${esc(a.segment || "")}${a.icp_score != null ? ` · ICP fit ${esc(a.icp_score)}` : ""}</span><br>
+        <span class="domain">Scanned ${esc(ago(a.last_scanned_at))}${newest ? ` · newest signal first seen ${esc(ago(new Date(newest).toISOString()))}` : ""}</span></div>
         ${done ? `<span class="pill ok">${a.status === "pushed" ? "In HubSpot" : esc(a.status)}</span>` : ""}</div>
       <div class="whynow">${esc(a.why_now)}</div>
-      <div class="chips">${chips}</div>
+      <div class="chips">${(a.signals || []).map(chip).join("")}</div>
       ${d ? `<details><summary>Draft email to ${esc(d.persona)}</summary><div class="draft"><b>${esc(d.subject)}</b>\n\n${esc(d.body)}</div></details>` : ""}
+      <div class="dbox"></div>
       <div class="pbox"></div>
-      ${done ? "" : `<div class="actions"><button data-act="people">Find people</button><button class="ghost" data-act="reject">Reject</button><span class="toast"></span></div>`}
+      <div class="actions qactions">
+        <button data-act="people">Find relevant people</button>
+        <button class="ghost" data-act="dossier">${a.has_dossier ? "View dossier" : "Generate dossier"}</button>
+        ${done ? "" : `<button class="ghost" data-act="reject">Reject</button>`}
+        <span class="toast"></span></div>
     </div></div></div>`;
 }
 
 async function loadQueue() {
-  $("qinfo").textContent = "Loading…";
+  $("qbanner").innerHTML = ""; $("qlist").innerHTML = `<p class="skeleton">Loading…</p>`;
   try {
-    const d = await qcall({ action: "list" });
-    $("qinfo").textContent = `${d.accounts.length} accounts ranked by buying signals · ${d.scanned} companies scanned`;
-    $("qlock").innerHTML = d.admin ? "Unlocked: approvals write to HubSpot" : `Demo mode · <a id="unlock">unlock</a>`;
+    const d = await api("queue", { action: "list" });
+    $("qbanner").innerHTML = banner(d.scan) + `<p class="toast" style="margin:0 0 12px">${d.accounts.length} accounts ranked by buying signals · ${d.scanned} companies scanned</p>`;
     $("qlist").innerHTML = d.accounts.map(qCard).join("") || "<p>Nothing queued yet.</p>";
-    const u = $("unlock"); if (u) u.onclick = unlock;
   } catch (e) { $("qlist").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
-}
-
-async function unlock() {
-  const k = prompt("Owner key (leave empty for demo mode)");
-  if (k === null) return;
-  adminKey = k.trim(); try { localStorage.setItem("cp_admin", adminKey); } catch {}
-  loadQueue();
 }
 
 $("qlist").addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-act]"); if (!btn) return;
-  const card = btn.closest(".card"), toast = card.querySelector(".qmain > .actions .toast");
-  if (btn.dataset.act === "people") { btn.hidden = true; mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain); return; }
-  btn.disabled = true; toast.textContent = "Working…";
+  const card = btn.closest(".card"), toast = card.querySelector(".qactions .toast");
+  const act = btn.dataset.act;
+  if (act === "people") { btn.hidden = true; mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain); return; }
+  btn.disabled = true;
   try {
-    const r = await qcall({ action: btn.dataset.act, account_id: card.dataset.id });
-    if (r.mode === "dry_run") { toast.textContent = r.message; btn.disabled = false; return; }
-    loadQueue();
+    if (act === "dossier") {
+      toast.textContent = "Loading dossier…";
+      const d = await api("research-account", { domain: card.dataset.domain });
+      const x = d.dossier;
+      card.querySelector(".dbox").innerHTML = `<div class="card" style="margin:0"><h2>Dossier${d.cached ? "" : " (just generated)"}</h2>
+        <p style="margin-top:0">${esc(x.summary)}</p><p><b>ICP fit ${esc(x.icp_fit?.score ?? "–")}</b></p>${list(x.icp_fit?.reasons)}
+        <h2 style="margin-top:12px">Likely pains</h2>${list(x.pains)}</div>`;
+      toast.textContent = ""; btn.textContent = "Refresh view"; btn.disabled = false;
+    } else {
+      toast.textContent = "Working…";
+      const r = await api("queue", { action: act, account_id: card.dataset.id });
+      if (r.mode === "dry_run") { toast.textContent = r.message; btn.disabled = false; return; }
+      loadQueue();
+    }
   } catch (err) { toast.textContent = err.message; btn.disabled = false; }
 });
 
-document.querySelectorAll("nav [data-tab]").forEach((b) => b.addEventListener("click", () => {
-  document.querySelectorAll("nav [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  $("research").hidden = b.dataset.tab !== "research";
-  $("queue").hidden = b.dataset.tab !== "queue";
-  if (b.dataset.tab === "queue") loadQueue();
-}));
-
-// ---- People: find, enrich, push ----
-const PAPI = API.replace("research-account", "people");
-async function pcall(body) {
-  const res = await fetch(PAPI, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: KEY, Authorization: `Bearer ${KEY}`, ...(adminKey ? { "x-admin-key": adminKey } : {}) },
-    body: JSON.stringify(body),
-  });
-  const d = await res.json();
-  if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`);
-  return d;
+// ---------- ICP & signals playbook ----------
+async function loadIcp() {
+  try {
+    const p = await api("queue", { action: "icp" });
+    const c = p.company, max = Math.max(...p.signals.map((s) => s.weight));
+    $("icpbody").innerHTML = `
+      <div class="card"><h2>What we sell</h2><p class="lead"><b>${esc(p.seller.name)}</b></p><p style="margin:0">${esc(p.seller.pitch)}</p></div>
+      <div class="card"><h2>Company ICP: who we target</h2>
+        <div class="grid">
+          <div><b>Industry</b><div class="kv">${c.industries.map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</div></div>
+          <div><b>Size</b>${esc(c.employeesMin)}–${esc(c.employeesMax)} employees</div>
+          <div><b>Stage</b><div class="kv">${c.stages.map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</div></div>
+          <div><b>Regions</b><div class="kv">${c.regions.map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</div></div>
+        </div></div>
+      <div class="card"><h2>Contact ICP: who we talk to</h2>
+        <div class="grid">${p.personas.map((x) => `<div><b>${esc(x.title)}</b><span class="domain">${esc(x.note || "Primary buyer")}</span></div>`).join("")}</div></div>
+      <div class="card"><h2>Intent signals we watch</h2>
+        ${p.signals.map((s) => `<div class="sigrow"><div class="head"><b>${esc(s.label)}</b><span class="tag accent">${esc(s.weight)} pts</span></div>
+          <div class="bar"><i style="width:${(s.weight / max) * 100}%"></i></div>
+          <div class="why">${esc(s.why)}</div><div class="why">Source: ${esc(s.source)}</div></div>`).join("")}
+        <p class="toast" style="margin-bottom:0">Older evidence counts for less: news after 30 days counts half, after 60 days nothing.</p></div>
+      <div class="card"><h2>How to read the scores</h2>
+        <div class="tiers"><div><b style="color:var(--good)">${esc(p.tiers.tier_1)}+</b>Tier 1<br><span class="domain">Contact this week</span></div>
+          <div><b style="color:var(--warn)">${esc(p.tiers.tier_2)}+</b>Tier 2<br><span class="domain">Worth a look</span></div>
+          <div><b>&lt; ${esc(p.tiers.tier_2)}</b>Tier 3<br><span class="domain">Keep watching</span></div></div>
+        <ul style="margin-top:12px"><li><b>Priority</b>: the total of the signals above (0–100). Accounts at ${esc(p.queue_threshold)}+ enter the Queue.</li>
+          <li><b>ICP fit</b>: how well the company matches the profile, from its dossier.</li>
+          <li><b>Persona score</b>: how closely a person's job title matches a target buyer.</li></ul></div>
+      <div class="card"><h2>Right now</h2>
+        <div class="grid"><div><b>${esc(p.stats.companies)}</b>companies tracked</div><div><b>${esc(p.stats.queued)}</b>in the Queue</div>
+          <div><b style="color:var(--good)">${esc(p.stats.tier_1)}</b>Tier 1</div><div><b style="color:var(--warn)">${esc(p.stats.tier_2)}</b>Tier 2</div></div>
+        <p class="toast" style="margin-bottom:0">Signals refresh ${esc(p.schedule.toLowerCase())}.</p></div>`;
+  } catch (e) { $("icpbody").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
 }
 
+document.querySelectorAll("nav [data-tab]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("nav [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+  for (const t of ["research", "queue", "icp"]) $(t).hidden = b.dataset.tab !== t;
+  if (b.dataset.tab === "queue") loadQueue();
+  if (b.dataset.tab === "icp") loadIcp();
+}));
+
+// ---------- people: find, enrich, preview, push ----------
 const SEN = { c_suite: "C-suite", vp: "VP", head: "Head", director: "Director", manager: "Manager", ic: "IC" };
 const STATUS = { valid: ["Verified", "ok"], accept_all: ["Accepts all", ""], unknown: ["Unverified", ""] };
 
+function strip(c) {
+  if (!c) return "";
+  const cell = (v, l, tip) => `<div title="${esc(tip)}"><b>${v ?? "–"}</b><span>${l}</span></div>`;
+  return `<div class="strip">${cell(esc(c.fit), "ICP fit", "From the dossier. Blank until the company is researched.")}${cell(esc(c.priority), "Priority", "Total of all signals, 0 to 100")}
+    ${cell(esc(c.signal), "Signals", "Strength of hiring, news and community signals")}${cell(esc(c.intent), "Intent", "Hiring and funding only")}
+    ${cell(esc(c.tier_label), "ICP tier", "Becomes the ICP tier in HubSpot")}</div>`;
+}
+
 function mountPeople(box, accountName, domain) {
-  let accountId = null, people = [], admin = false, msg = "";
+  let accountId = null, people = [], msg = "", company = null, dirty = true;
 
   const row = (p) => {
     const st = STATUS[p.email_status] || ["Unverified", ""];
@@ -276,6 +383,7 @@ function mountPeople(box, accountName, domain) {
       <div class="pinfo"><b>${esc(p.name)}</b>
         <span class="tag">${esc(SEN[p.seniority] || p.seniority)}</span>
         ${p.persona ? `<span class="tag hiring">${esc(p.persona)}</span>` : ""}
+        <span class="tag ${p.persona_score >= 70 ? "good" : ""}" title="How closely this job title matches a target buyer">Persona score ${esc(p.persona_score)}</span>
         <div class="domain">${esc(p.title)} · ${esc(accountName)}${p.department ? " · " + esc(p.department) : ""}</div>
         <div>${email}</div></div>
       <div class="pact">${action}</div></div>`;
@@ -283,41 +391,55 @@ function mountPeople(box, accountName, domain) {
 
   const draw = () => {
     const pushable = people.some((p) => p.email_revealed && !p.pushed);
-    box.innerHTML = `<h2>Relevant people</h2>
-      ${people.length ? people.map(row).join("") : ""}
+    box.innerHTML = `<h2>Relevant people</h2>${strip(company)}
+      ${people.map(row).join("")}
       ${msg ? `<p class="toast">${esc(msg)}</p>` : ""}
-      ${pushable ? `<div class="actions"><button data-push>Push to HubSpot</button><span class="toast">Company, enriched contacts and the dossier go to HubSpot. No AI credits used.</span></div>` : ""}`;
+      ${pushable ? `<details data-preview><summary>What will go to HubSpot</summary><div class="pv"><p class="toast">Loading…</p></div></details>
+        <div class="actions"><button data-push>Push to HubSpot</button><span class="toast">No AI credits are used for the push.</span></div>` : ""}`;
+    dirty = true;
   };
 
   box.innerHTML = `<h2>Relevant people</h2><div class="actions"><button data-find>Find relevant people</button><span class="toast">Searches a contact database by your target roles. Uses 1 search credit.</span></div>`;
+
+  box.addEventListener("toggle", async (e) => {
+    const det = e.target; if (!det.matches?.("details[data-preview]") || !det.open || !dirty) return;
+    dirty = false;
+    try {
+      const d = await api("people", { action: "preview", account_id: accountId });
+      const rows = (f) => `<table>${f.map((x) => `<tr><td>${esc(x.label)}</td><td>${esc(x.value)}</td></tr>`).join("")}</table>`;
+      det.querySelector(".pv").innerHTML = `<h3>Company: ${esc(d.company.name)}</h3>${rows(d.company.fields)}
+        ${d.contacts.map((c) => `<h3>Contact: ${esc(c.name)} · ${esc(c.title)}</h3>${rows(c.fields)}`).join("")}
+        <h3>Note on the company</h3><p class="toast" style="margin:0">${esc(d.note)}</p>`;
+    } catch (err) { det.querySelector(".pv").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
+  }, true);
 
   box.onclick = async (e) => {
     const t = e.target.closest("button"); if (!t) return;
     if (t.matches("[data-tog]")) { t.nextElementSibling.hidden = !t.nextElementSibling.hidden; return; }
     try {
       if (t.matches("[data-find]")) {
-        t.disabled = true; msg = "Searching…";
-        box.querySelector(".toast").textContent = msg;
-        const d = await pcall({ action: "find", domain });
-        accountId = d.account_id; people = d.people; admin = !!d.admin;
+        t.disabled = true; box.querySelector(".toast").textContent = "Searching…";
+        const d = await api("people", { action: "find", domain });
+        accountId = d.account_id; people = d.people; company = d.company;
         msg = d.locked ? d.message : people.length ? (d.cached ? "Saved results, no credit used." : "") : "No matching people found for this company.";
         draw();
       } else if (t.matches("[data-en]")) {
-        const pid = t.closest(".person").dataset.pid;
-        t.disabled = true;
-        const d = await pcall({ action: "enrich", person_id: pid, what: t.dataset.en });
+        const pid = t.closest(".person").dataset.pid; t.disabled = true;
+        const d = await api("people", { action: "enrich", person_id: pid, what: t.dataset.en });
         if (d.mode === "dry_run") { msg = d.message; draw(); return; }
         people = people.map((p) => (p.id === pid ? d.person : p)); msg = ""; draw();
       } else if (t.matches("[data-push]")) {
-        t.disabled = true; box.querySelector(".toast").textContent = "Pushing…";
-        const d = await pcall({ action: "push", account_id: accountId });
+        t.disabled = true; box.querySelector("[data-push]").nextElementSibling.textContent = "Pushing…";
+        const d = await api("people", { action: "push", account_id: accountId });
         if (d.mode === "dry_run") { msg = d.message; draw(); return; }
         people = people.map((p) => (p.email_revealed ? { ...p, pushed: true } : p));
-        msg = `Pushed ${d.contacts.length} contact(s) and the company to HubSpot${d.used_dossier ? ", with the dossier" : ""}.`; draw();
+        msg = `Pushed the company and ${d.contacts.length} contact(s) to HubSpot${d.used_dossier ? ", with the dossier" : ""}.`; draw();
       }
     } catch (err) { msg = err.message; draw(); }
   };
 }
+
+refreshMode();
 </script>
 </body>
 </html>

@@ -4,23 +4,117 @@
     "pitch": "Pipeline hygiene and sales automation for RevOps and sales teams at B2B SaaS companies."
   },
   "company": {
-    "industries": ["B2B SaaS", "Developer tools", "Infrastructure software"],
+    "industries": [
+      "B2B SaaS",
+      "Developer tools",
+      "Infrastructure software"
+    ],
     "employeesMin": 20,
     "employeesMax": 200,
-    "stages": ["Seed", "Series A", "Series B"],
-    "regions": ["US", "UK", "EU"]
+    "stages": [
+      "Seed",
+      "Series A",
+      "Series B"
+    ],
+    "regions": [
+      "US",
+      "UK",
+      "EU"
+    ]
   },
   "personas": [
-    { "title": "Head of Sales / VP Sales", "match": ["vp sales", "head of sales", "sales director", "cro", "vp revenue"] },
-    { "title": "Head of RevOps", "match": ["revops", "revenue operations", "sales operations", "sales ops"] },
-    { "title": "Founder / CEO", "match": ["founder", "ceo", "co-founder"], "onlyIfEmployeesBelow": 30 }
+    {
+      "title": "Head of Sales / VP Sales",
+      "match": [
+        "vp sales",
+        "head of sales",
+        "sales director",
+        "cro",
+        "vp revenue"
+      ],
+      "hubspot": "sales_leader"
+    },
+    {
+      "title": "Head of RevOps",
+      "match": [
+        "revops",
+        "revenue operations",
+        "sales operations",
+        "sales ops"
+      ],
+      "hubspot": "revops"
+    },
+    {
+      "title": "Founder / CEO",
+      "match": [
+        "founder",
+        "ceo",
+        "co-founder"
+      ],
+      "onlyIfEmployeesBelow": 30,
+      "hubspot": "Founder"
+    }
   ],
   "signals": {
-    "hiringRoles": ["sdr", "bdr", "account executive", "ae", "revops", "revenue operations", "sales operations", "head of sales", "vp sales"],
-    "weights": { "hiring": 40, "news": 25, "fit": 25, "tech": 10 }
+    "hiringRoles": [
+      "sdr",
+      "bdr",
+      "account executive",
+      "ae",
+      "revops",
+      "revenue operations",
+      "sales operations",
+      "head of sales",
+      "vp sales"
+    ],
+    "weights": {
+      "hiring": 40,
+      "news": 25,
+      "fit": 25,
+      "tech": 10
+    },
+    "catalog": [
+      {
+        "key": "hiring",
+        "label": "Sales and RevOps hiring",
+        "weight": 40,
+        "why": "Teams opening AE, SDR or RevOps roles are scaling pipeline, so process and data hygiene start to hurt.",
+        "source": "Public job boards (Greenhouse, Lever, Ashby)"
+      },
+      {
+        "key": "news",
+        "label": "Funding and company news",
+        "weight": 25,
+        "why": "A fresh raise or launch usually means new budget and a push to grow revenue.",
+        "source": "News, last 60 days (older news counts less)"
+      },
+      {
+        "key": "community",
+        "label": "Community buzz",
+        "weight": 10,
+        "why": "Hacker News mentions show developer attention and momentum.",
+        "source": "Hacker News, last 90 days"
+      },
+      {
+        "key": "fit",
+        "label": "Baseline fit",
+        "weight": 25,
+        "why": "Every company on the curated list already matches the target profile; the dossier refines this.",
+        "source": "Curated ICP list"
+      }
+    ]
   },
   "ai": {
     "model": "claude-haiku-4-5-20251001",
     "dailyBudgetUsd": 1.0
+  },
+  "tiers": {
+    "tier_1": 70,
+    "tier_2": 45
+  },
+  "schedule": {
+    "label": "Every Monday at 06:00 UTC",
+    "cron": "*/5 6 * * 1",
+    "staleDays": 6
   }
 }
