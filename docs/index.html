@@ -74,6 +74,17 @@
   .toast { font-size: 13px; color: var(--muted); }
   .qbar { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; margin-bottom: 14px; gap: 12px; }
   .qbar a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+  .person { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .person:first-of-type { border-top: 0; }
+  .pinfo { min-width: 0; } .pact { flex: none; position: relative; }
+  .mask { color: var(--muted); font-family: ui-monospace, monospace; font-size: 13px; }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: 100%; z-index: 5; margin-top: 4px; min-width: 210px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 10px; padding: 4px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+  .menu-list button { display: block; width: 100%; text-align: left; background: none; color: var(--ink); font-weight: 500; padding: 8px 10px; }
+  .menu-list button:hover:not(:disabled) { background: var(--bg); }
+  .menu-list button:disabled { color: var(--muted); cursor: not-allowed; opacity: .7; }
+  .pbox { margin-top: 12px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -131,10 +142,11 @@ function render(d) {
     <div class="card"><h2>Likely pains</h2>${list(x.pains)}</div>
     <div class="card"><h2>Talk tracks</h2>${(x.talk_tracks || []).map((t) =>
       `<div class="track"><b>${esc(t.angle)}</b><q>${esc(t.opener)}</q></div>`).join("")}</div>
-    <div class="card"><h2>Who to talk to</h2>${list((x.likely_buyers || []).map((b) => `${b.persona}: ${b.why}`))}</div>
     <div class="card"><h2>Risks</h2>${list(x.risks)}</div>
     <div class="card"><h2>Signals (${(d.signals || []).length})</h2>${sigs || "<p>No public signals found.</p>"}</div>
+    <div class="card" id="peoplebox"></div>
     <p class="meta">${d.cached ? "Served from cache (no AI call)." : "Fresh research."} Only public data is used. Nothing is sent to anyone.</p>`;
+  mountPeople($("peoplebox"), a.name, a.domain);
 }
 
 async function run(domain, refresh = false) {
@@ -178,7 +190,7 @@ function qCard(a) {
   const chips = (a.signals || []).map((s) => `<span class="tag ${esc(s.kind)}" title="${esc(s.title)}">${esc(s.title)}</span>`).join("");
   const d = a.draft;
   const done = a.status !== "queued";
-  return `<div class="card" data-id="${esc(a.id)}"><div class="qrow">
+  return `<div class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}"><div class="qrow">
     <div class="rank"><b>${esc(a.priority_score)}</b><span>score</span></div>
     <div class="qmain">
       <div class="head"><div><p class="name">${esc(a.name)}</p><span class="domain">${esc(a.domain)} · ${esc(a.segment || "")}</span></div>
@@ -186,7 +198,8 @@ function qCard(a) {
       <div class="whynow">${esc(a.why_now)}</div>
       <div class="chips">${chips}</div>
       ${d ? `<details><summary>Draft email to ${esc(d.persona)}</summary><div class="draft"><b>${esc(d.subject)}</b>\n\n${esc(d.body)}</div></details>` : ""}
-      ${done ? "" : `<div class="actions"><button data-act="approve">Approve</button><button class="ghost" data-act="reject">Reject</button><span class="toast"></span></div>`}
+      <div class="pbox"></div>
+      ${done ? "" : `<div class="actions"><button data-act="people">Find people</button><button class="ghost" data-act="reject">Reject</button><span class="toast"></span></div>`}
     </div></div></div>`;
 }
 
@@ -210,7 +223,8 @@ async function unlock() {
 
 $("qlist").addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-act]"); if (!btn) return;
-  const card = btn.closest(".card"), toast = card.querySelector(".toast");
+  const card = btn.closest(".card"), toast = card.querySelector(".qmain > .actions .toast");
+  if (btn.dataset.act === "people") { btn.hidden = true; mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain); return; }
   btn.disabled = true; toast.textContent = "Working…";
   try {
     const r = await qcall({ action: btn.dataset.act, account_id: card.dataset.id });
@@ -225,6 +239,85 @@ document.querySelectorAll("nav [data-tab]").forEach((b) => b.addEventListener("c
   $("queue").hidden = b.dataset.tab !== "queue";
   if (b.dataset.tab === "queue") loadQueue();
 }));
+
+// ---- People: find, enrich, push ----
+const PAPI = API.replace("research-account", "people");
+async function pcall(body) {
+  const res = await fetch(PAPI, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: KEY, Authorization: `Bearer ${KEY}`, ...(adminKey ? { "x-admin-key": adminKey } : {}) },
+    body: JSON.stringify(body),
+  });
+  const d = await res.json();
+  if (!res.ok) throw new Error(d.error || `Request failed (${res.status})`);
+  return d;
+}
+
+const SEN = { c_suite: "C-suite", vp: "VP", head: "Head", director: "Director", manager: "Manager", ic: "IC" };
+const STATUS = { valid: ["Verified", "ok"], accept_all: ["Accepts all", ""], unknown: ["Unverified", ""] };
+
+function mountPeople(box, accountName, domain) {
+  let accountId = null, people = [], admin = false, msg = "";
+
+  const row = (p) => {
+    const st = STATUS[p.email_status] || ["Unverified", ""];
+    const email = p.email_revealed
+      ? `<b>${esc(p.email)}</b> <span class="pill ${st[1]}">${st[0]}${p.email_confidence ? " · " + esc(p.email_confidence) + "%" : ""}</span>`
+      : `<span class="mask">${esc(p.email || "no email found")}</span>`;
+    const action = p.pushed ? `<span class="pill ok">In HubSpot</span>`
+      : p.email_revealed ? `<span class="pill ok">Enriched</span>`
+      : p.email ? `<div class="menu"><button class="ghost" data-tog>Enrich ▾</button>
+          <div class="menu-list" hidden>
+            <button data-en="email">Email</button>
+            <button disabled title="Needs a paid data provider">Phone (paid provider)</button>
+            <button disabled title="Needs a paid data provider">Email + phone (paid provider)</button>
+          </div></div>` : "";
+    return `<div class="person" data-pid="${esc(p.id)}">
+      <div class="pinfo"><b>${esc(p.name)}</b>
+        <span class="tag">${esc(SEN[p.seniority] || p.seniority)}</span>
+        ${p.persona ? `<span class="tag hiring">${esc(p.persona)}</span>` : ""}
+        <div class="domain">${esc(p.title)} · ${esc(accountName)}${p.department ? " · " + esc(p.department) : ""}</div>
+        <div>${email}</div></div>
+      <div class="pact">${action}</div></div>`;
+  };
+
+  const draw = () => {
+    const pushable = people.some((p) => p.email_revealed && !p.pushed);
+    box.innerHTML = `<h2>Relevant people</h2>
+      ${people.length ? people.map(row).join("") : ""}
+      ${msg ? `<p class="toast">${esc(msg)}</p>` : ""}
+      ${pushable ? `<div class="actions"><button data-push>Push to HubSpot</button><span class="toast">Company, enriched contacts and the dossier go to HubSpot. No AI credits used.</span></div>` : ""}`;
+  };
+
+  box.innerHTML = `<h2>Relevant people</h2><div class="actions"><button data-find>Find relevant people</button><span class="toast">Searches a contact database by your target roles. Uses 1 search credit.</span></div>`;
+
+  box.onclick = async (e) => {
+    const t = e.target.closest("button"); if (!t) return;
+    if (t.matches("[data-tog]")) { t.nextElementSibling.hidden = !t.nextElementSibling.hidden; return; }
+    try {
+      if (t.matches("[data-find]")) {
+        t.disabled = true; msg = "Searching…";
+        box.querySelector(".toast").textContent = msg;
+        const d = await pcall({ action: "find", domain });
+        accountId = d.account_id; people = d.people; admin = !!d.admin;
+        msg = d.locked ? d.message : people.length ? (d.cached ? "Saved results, no credit used." : "") : "No matching people found for this company.";
+        draw();
+      } else if (t.matches("[data-en]")) {
+        const pid = t.closest(".person").dataset.pid;
+        t.disabled = true;
+        const d = await pcall({ action: "enrich", person_id: pid, what: t.dataset.en });
+        if (d.mode === "dry_run") { msg = d.message; draw(); return; }
+        people = people.map((p) => (p.id === pid ? d.person : p)); msg = ""; draw();
+      } else if (t.matches("[data-push]")) {
+        t.disabled = true; box.querySelector(".toast").textContent = "Pushing…";
+        const d = await pcall({ action: "push", account_id: accountId });
+        if (d.mode === "dry_run") { msg = d.message; draw(); return; }
+        people = people.map((p) => (p.email_revealed ? { ...p, pushed: true } : p));
+        msg = `Pushed ${d.contacts.length} contact(s) and the company to HubSpot${d.used_dossier ? ", with the dossier" : ""}.`; draw();
+      }
+    } catch (err) { msg = err.message; draw(); }
+  };
+}
 </script>
 </body>
 </html>

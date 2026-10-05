@@ -50,3 +50,12 @@ The nightly scan is **paused** to avoid spending AI credits while building. Befo
 select cron.alter_job((select jobid from cron.job where jobname = 'signal-scan'), active := true);   -- resume
 select cron.alter_job((select jobid from cron.job where jobname = 'signal-scan'), active := false);  -- pause
 ```
+
+## People: find, enrich, push
+
+On a dossier (or a Queue card), **Find relevant people** searches a contact database (Hunter free plan, 1 credit per company) for the ICP personas, ranks them by job title, and stores the results. **Enrich** reveals the email of a chosen person (no extra credit, and phone is shown as unavailable on the free provider). **Push to HubSpot** appears only after enriching and creates the company, the enriched contacts (associated to it), and a note built from the stored dossier JSON. No AI credits are used for the push.
+
+- Data sources sit behind one interface (`supabase/functions/_shared/people.ts`), so adding Apollo or another provider means adding one adapter.
+- Public visitors see names as "First L." with masked emails, and Enrich/Push run as dry runs. Only the owner key reveals emails or writes to HubSpot.
+- Hunter usage is capped by `HUNTER_MONTHLY_CAP` (default 40 of 50) and every call is recorded in `cp_provider_usage`.
+- Optional: give the HubSpot key the `crm.schemas.companies.write` scope and the push also fills custom fields (ICP fit, priority score, why now). Without it, those details go into the company note.
