@@ -1,5 +1,6 @@
 import icp from "./icp.json" with { type: "json" };
 import type { Signal } from "./signals.ts";
+import { fitBreakdown } from "./firmo.ts";
 
 const FUNDING = /\b(raises?|raised|funding|series [a-d]|seed round|valuation|acquir|acquisition)\b/i;
 const REVOPS = /revops|revenue operations|sales operations|sales ops/i;
@@ -73,4 +74,40 @@ export function priorityScore(signals: Dated[], fit: number = BASELINE_FIT): Sco
 export function tierOf(priority: number | null | undefined): "tier_1" | "tier_2" | "tier_3" {
   const p = priority ?? 0;
   return p >= icp.tiers.tier_1 ? "tier_1" : p >= icp.tiers.tier_2 ? "tier_2" : "tier_3";
+}
+
+// ---- The two plain questions a rep asks, instead of one blended number ----
+
+export type FitState = "matches" | "close" | "unknown" | "outside";
+export type Heat = "hot" | "warm" | "watching";
+
+type FitRow = { employees?: number | null; stage?: string | null; country?: string | null; firmo_at?: string | null };
+
+/** Is this the right kind of company? Needs the company facts; "unknown" until they are looked up. */
+export function fitState(a: FitRow): FitState {
+  const f = fitBreakdown(a);
+  if (!f.known) return "unknown";
+  if (f.size === 0 || f.stage === 0) return "outside";
+  return f.matches ? "matches" : "close";
+}
+
+type Sig = { kind: string; title: string; detail?: Record<string, unknown> | null; detected_at: string };
+
+/** Is something happening now? Hot = a signal under a week old, recent funding, or 2+ sales roles open, warm = some signal, watching = nothing right now. Clearly out-of-range companies are never hot. */
+export function heatOf(sigs: Sig[], fit: FitState): Heat {
+  if (fit === "outside") return "watching";
+  const now = Date.now();
+  const age = (s: Sig) => {
+    const raw = (s.detail?.published as string | undefined) ?? s.detected_at;
+    const t = Date.parse(raw);
+    return Number.isNaN(t) ? Infinity : (now - t) / DAY;
+  };
+  const isSummary = (s: Sig) => s.kind === "hiring" && !!s.detail && "salesOpenings" in s.detail;
+  const sales = Number(sigs.find(isSummary)?.detail?.salesOpenings ?? 0);
+  const real = sigs.filter((s) => !isSummary(s) && (s.kind === "news" || s.kind === "hiring"));
+  const fresh = real.some((s) => age(s) < 7);
+  const funding = sigs.some((s) => s.kind === "news" && FUNDING.test(s.title) && age(s) < 30);
+  if (fresh || funding || sales >= 2) return "hot";
+  if (sales >= 1 || real.some((s) => age(s) < 60) || sigs.some((s) => s.kind === "hn" && age(s) < 30)) return "warm";
+  return "watching";
 }

@@ -92,6 +92,8 @@
   .needs { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border: 1px dashed var(--line); border-radius: 14px; color: var(--soft); font-size: 14px; }
   .sigs-more { margin-top: 4px; }
   .foot-links { text-align: center; font-size: 13px; margin-top: 28px; } .foot-links a { color: var(--muted); }
+  .badge.hot { --c: var(--bad); } .badge.warm { --c: var(--warn); }
+  .fit { margin-top: 3px; font-size: 13.5px; color: var(--muted); } .fit b.good { color: var(--good); } .fit b.warn { color: var(--warn); } .fit b.bad { color: var(--bad); }
   .contact { margin-top: 12px; font-size: 14px; color: var(--soft); } .contact b { color: var(--ink); } .contact a { color: var(--accent); text-decoration: none; }
   .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; } .toolbar .chips { margin: 0; flex: 1 1 auto; }
   .toolbar input { padding: 6px 12px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 99px; width: 150px; }
@@ -238,6 +240,9 @@ const money = (n) => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${Ma
 const firmoText = (a) => !a?.firmo_at ? "" : [a.employee_band ? `${a.employee_band} people` : a.employees ? `${a.employees} people` : null, a.stage && !/^(other|unknown|undisclosed)$/i.test(a.stage) ? a.stage : null, a.raised_usd ? `${money(a.raised_usd)} raised` : null, a.hq_city || a.country].filter(Boolean).join(" · ");
 const TIERS = { tier_1: ["Tier 1", "t1"], tier_2: ["Tier 2", "t2"], tier_3: ["Tier 3", "t3"] };
 const tierHtml = (t) => (TIERS[t] ? `<span class="tier ${TIERS[t][1]}">${TIERS[t][0]}</span>` : "");
+const FIT = { matches: ["Fits", "good"], close: ["Partly fits", "warn"], unknown: ["Fit unknown", ""], outside: ["Outside range", "bad"] };
+const fitLine = (state, firmo) => { const f = FIT[state] || FIT.unknown; return `<div class="fit"><b class="${f[1]}">${f[0]}</b>${firmo ? ` · ${esc(firmo)}` : state === "unknown" ? " · size and stage not checked yet" : ""}</div>`; };
+const HEAT = { hot: "Hot", warm: "Warm", watching: "Watching" }, HEAT_RANK = { hot: 0, warm: 1, watching: 2 };
 const skeleton = (n = 3) => `<div class="card"><div class="skel">${"<i></i>".repeat(n)}</div></div>`;
 const bullets = (a) => (a?.length ? `<ul class="plain">${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="meta">Nothing found.</p>`);
 
@@ -338,16 +343,16 @@ function tCard(i) {
   const [c, c2] = i.contacts || [];
   const fu = i.type === "follow_up";
   const title = c ? `${fu ? "Follow up with " : ""}${esc(c.name)}` : esc(a.name);
-  const sub = c ? `${esc(c.title)} at <b>${esc(a.name)}</b> · ${tierHtml(a.tier)}` : `${tierHtml(a.tier)}`;
+  const sub = c ? `${esc(c.title)} at <b>${esc(a.name)}</b>` : esc(a.name);
   const mail = c?.email ? (c.email.includes("***") ? `<span>${esc(c.email)}</span>` : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : "";
-  const facts = a.firmo ? `<div class="meta">${esc(a.firmo)}</div>` : "";
+  const facts = fitLine(a.fit_state, a.firmo);
   const note = fu ? `<div class="status-line due">${esc(i.headline)}</div>` : `<div class="why"><b>Why today.</b> ${esc(i.why || i.reason)}</div>`;
   return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
     <div class="card-head"><div>
       <div class="eyebrow"><span class="badge ${TODAY_BADGE[i.type] || ""}">${esc(i.label)}</span></div>
       <h3 class="title">${title}</h3><div class="sub">${sub}</div>
       ${mail ? `<div class="meta">${mail}</div>` : ""}${facts}
-    </div>${a.priority != null ? `<div class="score" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority)}">${esc(a.priority)}</b><span>priority</span></div>` : ""}</div>
+    </div></div>
     ${note}
     ${sigList(i.signals, 2)}
     ${c2 ? `<div class="meta" style="margin-top:12px">Also consider <b>${esc(c2.name)}</b>, ${esc(c2.title)}</div>` : ""}
@@ -393,7 +398,7 @@ function stageText(a) {
   if (s === "snoozed") return `Snoozed until ${day(a.snoozed_until)}`;
   if (s === "not_now") return "Parked";
   if (a.contacts.length) return "Contact found";
-  return (a.priority ?? 0) >= 30 ? "Ready" : "Watching";
+  return a.heat !== "watching" ? "Ready" : "Watching";
 }
 
 /** The one next step for this company, from what we already know about it. */
@@ -402,6 +407,7 @@ function nextStep(a) {
   if (parkedS(a)) return `<button class="btn primary sm" data-life="reopen">Reopen</button>`;
   if (s === "meeting") return "";
   if (s === "replied") return `<button class="btn primary sm" data-life="meeting">Meeting booked</button>`;
+  if (!c && a.fit === "unknown") return `<button class="btn primary sm" data-act="firmo" title="Looks up size and stage. Uses 0.2 search credit">Check size</button>`;
   if (!c) return `<button class="btn primary sm" data-act="people"${a.searched ? "" : ` title="Uses 1 search credit"`}>${a.searched ? "See people" : "Find people"}</button>`;
   if (!c.revealed && c.email) return `<button class="btn primary sm" data-act="enrich1" data-pid="${esc(c.id)}">Enrich ${esc(c.name.split(" ")[0])}</button>`;
   if (c.revealed && !c.pushed) return `<button class="btn primary sm" data-act="push">Add to HubSpot</button>`;
@@ -419,10 +425,10 @@ function aCard(a) {
   const reason = a.is_new && a.found_reason ? `<b>Found automatically</b> from a Hacker News hiring post.` : esc(a.why_now || "");
   return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
     <div class="card-head"><div>
-      <div class="eyebrow">${a.tier === "tier_3" ? "" : tierHtml(a.tier)}${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}${a.outside_icp ? `<span class="badge warn">Outside target size</span>` : ""}<span>${esc(stageText(a))}</span></div>
+      <div class="eyebrow"><span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}${a.outside_icp ? `<span class="badge warn">Outside target size</span>` : ""}<span>${esc(stageText(a))}</span></div>
       <h3 class="title">${esc(a.name)}</h3>
-      <div class="meta">${esc(a.firmo || a.segment || a.domain)}</div>
-    </div>${a.priority != null ? `<div class="score" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority)}">${esc(a.priority)}</b><span>priority</span></div>` : ""}</div>
+      <div class="meta">${esc(a.segment || a.domain)}</div>${fitLine(a.fit, a.firmo)}
+    </div></div>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
     ${reason ? `<div class="why">${reason}</div>` : ""}
     ${sigList(a.signals, 1)}
@@ -434,7 +440,7 @@ function drawAccounts() {
   const d = ACC, q = aq.trim().toLowerCase();
   const counts = Object.fromEntries(FILTERS.map(([k]) => [k, d.accounts.filter(FILTER_FN[k]).length]));
   const list = d.accounts.filter(FILTER_FN[aview]).filter((a) => !q || a.name.toLowerCase().includes(q) || a.domain.includes(q))
-    .sort((x, y) => (y.is_new - x.is_new) || ((y.priority ?? -1) - (x.priority ?? -1)));
+    .sort((x, y) => (HEAT_RANK[x.heat] - HEAT_RANK[y.heat]) || (y.is_new - x.is_new) || ((y.priority ?? -1) - (x.priority ?? -1)));
   const c = $("c-accounts"); const open = d.accounts.filter((a) => !a.low && a.outreach_status === "open").length; c.textContent = open; c.hidden = !open;
   $("ahead").innerHTML = `<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""}</span>
       <span>Signals refresh ${d.scan.active ? esc(d.scan.label) : "(paused)"} · next ${esc(day(d.scan.next_scan))}</span></div>
@@ -471,6 +477,15 @@ function wireCards(root, reload) {
     const btn = e.target.closest("button[data-act]"); if (!btn) return;
     const card = btn.closest(".card"), act = btn.dataset.act;
     if (act === "people") { mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain, true); return; }
+    if (act === "firmo") {
+      btn.disabled = true;
+      try {
+        const r = await api("queue", { action: "enrich_company", account_id: card.dataset.id });
+        if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
+        say(r.looked_up ? "Size and stage added." : "No company data found for this domain."); reload();
+      } catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
     if (act === "enrich1") {
       btn.disabled = true;
       try {
@@ -654,8 +669,7 @@ async function loadIcp() {
         <div class="tile"><b style="color:var(--accent)">${esc(p.discovery.added)}</b><span>new companies found this month</span></div>
         <div class="tile"><b>${esc(p.stats.matching)}</b><span>match size and stage (of ${esc(p.stats.enriched)})</span></div>
         <div class="tile"><b>${esc(p.stats.queued)}</b><span>ready to contact</span></div>
-        <div class="tile"><b style="color:var(--good)">${esc(p.stats.tier_1)}</b><span>Tier 1</span></div>
-        <div class="tile"><b style="color:var(--warn)">${esc(p.stats.tier_2)}</b><span>Tier 2</span></div></div>
+</div>
       <article class="card"><p class="label">Who we sell to</p><p style="margin:0 0 14px"><b>${esc(p.seller.name)}</b>: ${esc(p.seller.pitch)}</p>
         <div class="grid2">
           <div><b>Companies</b><div class="tags">${c.industries.map((x) => `<span>${esc(x)}</span>`).join("")}</div>
@@ -668,13 +682,11 @@ async function loadIcp() {
         ${p.signals.map((s) => `<div class="sigrow"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(s.label)}</b><span class="badge accent">${esc(s.weight)} pts</span></div>
           <div class="bar"><i style="width:${(s.weight / max) * 100}%"></i></div><div class="why-t">${esc(s.why)}</div><div class="why-t">Source: ${esc(s.source)}</div></div>`).join("")}
         <p class="meta" style="margin:6px 0 0">Older evidence counts for less: news after 30 days counts half, after 60 days nothing.</p></article>
-      <article class="card"><p class="label">How to read the scores</p>
-        <div class="tiers"><div><b style="color:var(--good)">${esc(p.tiers.tier_1)}+</b>Tier 1<br><span class="meta">Contact this week</span></div>
-          <div><b style="color:var(--warn)">${esc(p.tiers.tier_2)}+</b>Tier 2<br><span class="meta">Worth a look</span></div>
-          <div><b>&lt; ${esc(p.tiers.tier_2)}</b>Tier 3<br><span class="meta">Keep watching</span></div></div>
-        <ul class="plain" style="margin-top:14px"><li><b>Priority</b>: the total of the signals above (0–100). ${esc(p.queue_threshold)}+ is ready to contact.</li>
-          <li><b>ICP fit</b>: how well the company matches the profile, from its dossier.</li>
-          <li><b>Persona score</b>: how closely a person's title matches a target buyer.</li></ul></article>
+      <article class="card"><p class="label">How to read a company</p>
+        <ul class="plain"><li><b>Fit</b>: is it the right kind of company? Size, funding stage and region against your profile. "Fit unknown" means size and stage have not been looked up yet.</li>
+          <li><b>Hot</b>: it fits and something happened in the last week, or it just raised, or it has 2+ sales roles open. <b>Warm</b>: some signal. <b>Watching</b>: nothing right now.</li>
+          <li><b>Persona score</b>: how closely a person's title matches a target buyer.</li>
+          <li>Behind the scenes a 0 to 100 score (the signals above plus fit) sorts the lists and fills the HubSpot fields.</li></ul></article>
       <article class="card"><p class="label">The daily rhythm</p>
         <ul class="plain"><li><b>Hot now</b>: a new signal in the last ${esc(p.today.hot_hours)} hours.</li>
           <li><b>Follow-up due</b>: ${esc(p.follow_up.note)}</li>

@@ -1,7 +1,7 @@
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import { askClaude } from "./claude.ts";
-import { tierOf } from "./score.ts";
+import { fitState, type FitState, tierOf } from "./score.ts";
 import { firmoLine, fitBreakdown } from "./firmo.ts";
 import { autoFindContacts, type Contact, contactsFor } from "./contacts.ts";
 import icp from "./icp.json" with { type: "json" };
@@ -20,7 +20,7 @@ export type TodayItem = {
   type: TodayType;
   label: string;
   urgency: number;
-  account: { id: string; name: string; domain: string; tier: string; priority: number | null; fit: number | null; status: string; outreach: string; firmo: string } | null;
+  account: { id: string; name: string; domain: string; tier: string; priority: number | null; fit: number | null; fit_state: FitState; status: string; outreach: string; firmo: string } | null;
   headline: string;      // what to do, e.g. "Follow up: touch 2 of 4"
   reason: string;        // template line built from signals
   why: string | null;    // AI line, cached per signal set (owner generates it, everyone sees it)
@@ -128,7 +128,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     const last = lastOutcome.get(a.id);
     const lastAction = last && last.kind !== "reopened" ? `${last.kind.replace("_", " ")} ${ageLabel(last.created_at)}` : null;
     const base = {
-      account: { id: a.id, name: a.name, domain: a.domain, tier, priority: a.priority_score, fit: a.icp_score, status: a.status, outreach: a.outreach_status, firmo: firmoLine(a) },
+      account: { id: a.id, name: a.name, domain: a.domain, tier, priority: a.priority_score, fit: a.icp_score, fit_state: fitState(a), status: a.status, outreach: a.outreach_status, firmo: firmoLine(a) },
       signals: sigView(sigs), contacts: [] as Contact[], last_action: lastAction, meeting: null as TodayItem["meeting"],
       reason: reasonLine(sigs), why: null as string | null,
     };
@@ -162,7 +162,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     const acct = accounts.find((a) => a.id === m.account_id) ?? null;
     items.push({
       key: `mt-${m.id}`, type: "meeting", label: "Meeting", urgency: 1000 - (Date.parse(m.starts_at) - now) / HOUR,
-      account: acct ? { id: acct.id, name: acct.name, domain: acct.domain, tier: tierOf(acct.priority_score), priority: acct.priority_score, fit: acct.icp_score, status: acct.status, outreach: acct.outreach_status, firmo: firmoLine(acct) } : null,
+      account: acct ? { id: acct.id, name: acct.name, domain: acct.domain, tier: tierOf(acct.priority_score), priority: acct.priority_score, fit: acct.icp_score, fit_state: fitState(acct), status: acct.status, outreach: acct.outreach_status, firmo: firmoLine(acct) } : null,
       headline: `${m.title ?? "Meeting"} with ${admin ? m.attendee_name : (m.attendee_name ?? "").split(" ")[0]}${m.attendee_domain ? ` (${m.attendee_domain})` : ""}`,
       reason: "A private brief was emailed to you when it was booked", why: null, signals: [], contacts: [], last_action: null,
       due: m.starts_at, meeting: { title: m.title ?? "Meeting", starts_at: m.starts_at, briefed: true },

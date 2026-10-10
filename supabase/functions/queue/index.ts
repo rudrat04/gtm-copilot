@@ -5,7 +5,7 @@ import { applyOutcome, type OutcomeKind } from "../_shared/lifecycle.ts";
 import { buildToday, reasonLine } from "../_shared/today.ts";
 import { writeDraft } from "../_shared/draft.ts";
 import { fetchFirmo, firmoLine, fitBreakdown, fitPoints, saveFirmo } from "../_shared/firmo.ts";
-import { priorityScore } from "../_shared/score.ts";
+import { fitState, heatOf, priorityScore } from "../_shared/score.ts";
 import { contactsFor } from "../_shared/contacts.ts";
 import { fetchSite } from "../_shared/signals.ts";
 import { BudgetError } from "../_shared/claude.ts";
@@ -129,7 +129,9 @@ async function accountsView(admin: boolean) {
       return {
         id: a.id, name: a.name, domain: a.domain, segment: a.segment, source: a.source, created_at: a.created_at,
         tier: tierOf(a.priority_score), priority: a.priority_score, icp_score: a.icp_score, why_now: a.why_now,
-        firmo: firmoLine(a), outside_icp: outside, low, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
+        firmo: firmoLine(a), outside_icp: outside, fit: fitState(a),
+        heat: heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)),
+        firmo_known: !!a.firmo_at, low, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
         last_scanned_at: a.last_scanned_at, found_reason: why.get(a.domain) ?? null,
         searched: searched.has(a.id), contacts: contactMap.get(a.id) ?? [],
@@ -181,8 +183,9 @@ async function playbook() {
 }
 
 /** Owner only. Looks up company facts once per company (about 0.2 Hunter credit each), then re-scores them. */
-async function enrichCompanies(rescoreAll = false) {
-  const { data: todo } = await sb.from("cp_accounts").select("id,domain").is("firmo_at", null)
+async function enrichCompanies(rescoreAll = false, only?: string[]) {
+  const q = sb.from("cp_accounts").select("id,domain");
+  const { data: todo } = await (only ? q.in("id", only) : q.is("firmo_at", null))
     .order("priority_score", { ascending: false, nullsFirst: false }).limit(60);
   const out = { looked_up: 0, no_data: 0, failed: 0, rescored: 0 };
   const accounts = rescoreAll ? [] : (todo ?? []);
@@ -260,6 +263,10 @@ serve("queue", async (req) => {
   if (body.action === "list") return json({ ...(await list(String(body.view ?? "todo"), admin)), admin });
   if (body.action === "accounts") return json({ ...(await accountsView(admin)), admin });
   if (body.action === "draft" && typeof body.account_id === "string") return await draft(body.account_id, admin);
+  if (body.action === "enrich_company" && typeof body.account_id === "string") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can look up company size and stage (0.2 search credit)." });
+    return json({ mode: "live", ...(await enrichCompanies(false, [body.account_id])) });
+  }
   if (body.action === "enrich_companies") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
     return json({ mode: "live", ...(await enrichCompanies(body.rescore === true)) });
