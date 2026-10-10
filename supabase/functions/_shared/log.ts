@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { cors, sb } from "./db.ts";
+import { applyProfile } from "./profile.ts";
 
 type Level = "info" | "warn" | "error";
 
@@ -61,6 +62,7 @@ export function serve(fn: string, handler: (req: Request) => Promise<Response>) 
       const started = Date.now();
       const id = runId()!;
       try {
+        await applyProfile();
         const res = await handler(req);
         try {
           res.headers.set("x-run-id", id);

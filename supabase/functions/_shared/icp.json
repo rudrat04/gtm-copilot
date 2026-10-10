@@ -153,7 +153,7 @@
     "maxCandidates": 40,
     "maxAiPerRun": 15,
     "firmoPerRun": 4,
-    "salesRoles": "sdr|bdr|account executive|account manager|sales|revops|revenue operations|go-to-market|gtm|business development|demand gen",
-    "note": "Weekly: reads the latest Hacker News 'Who is hiring' threads for companies hiring sales or RevOps roles, keeps only B2B software companies that fit the ICP, and adds them for scoring."
+    "note": "Weekly: reads the latest Hacker News 'Who is hiring' threads for companies hiring sales or RevOps roles, keeps only B2B software companies that fit the ICP, and adds them for scoring.",
+    "enabled": true
   }
 }

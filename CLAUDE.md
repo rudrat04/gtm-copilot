@@ -25,7 +25,7 @@ Owner: Rudra (rudrat04 on GitHub). Public repo: https://github.com/rudrat04/gtm-
 
 ## Structure
 ```
-docs/index.html            The whole UI (static, GitHub Pages). Tabs: Today, Accounts, Research (+ a footer link "How scoring and discovery work" = the old ICP page)
+docs/index.html            The whole UI (static, GitHub Pages). Tabs: Today, Accounts, Research, Setup (Setup holds the editable profile; "How scoring and signals work" is a collapsible at its bottom)
 supabase/functions/
   research-account/        Domain in, dossier out (cached 24h)
   signal-scan/             Weekly scan: signals, score, AI draft for accounts scoring 30+
@@ -38,7 +38,7 @@ supabase/migrations/       Schema, logging, people, weekly schedule
 supabase/seed.sql          46 fixture companies
 backups/                   Local HubSpot backup (gitignored)
 ```
-`supabase/functions/_shared/icp.json` is the single place to re-point the ICP (company profile, personas, signal weights, tiers, schedule, AI budget).
+`supabase/functions/_shared/icp.json` holds the defaults (company profile, personas, signal weights, tiers, schedule, AI budget). The owner edits the ICP in the **Setup tab**: `_shared/profile.ts` stores the edits in `cp_state` key `profile` and `applyProfile()` (called at the start of every request from `serve()`, cached 20s) lays them over the shared `icp` object in place, so all modules keep reading `icp.*`. Editable: industries, size, stages, regions, hiring-role titles, which signals count (hiring/news/community), contact job-title keywords per persona, founder size limit, weekly discovery on/off. Saving (`queue` -> `profile_save`, owner only) recalculates every score, no credits. Setup also has Run discovery now (`run_discovery`) and Check size and stage for companies without facts (`enrich_companies`). Next planned: multiple profiles and territories/owners (see chat history: profiles per industry/region, accounts assigned to a rep, alerts and HubSpot owner by territory).
 
 ## How it works
 1. **Research**: collects site text, public job boards (Greenhouse/Lever/Ashby), news, Hacker News. One small AI call (`relevance.ts`) drops namesake noise. Haiku writes the dossier JSON, stored in `cp_dossiers`.
@@ -92,7 +92,7 @@ The `signal-scan` cron runs **weekly: Mondays 06:00-06:55 UTC** (every 5 minutes
 - Hunter credits: about 48 of 50 left this month (resets monthly).
 
 ## Next steps (agreed order, revised 13 Oct 2026)
-Vision: the system finds companies and prospects, hands the rep a ready pipeline, and enables them (brief, recap, drafts) so reps spend time on people. Order now: 1) auto-discovery (DONE, first version: HN hiring only), 2) DONE: Accounts tab replaces Queue (one list, one next step per company, New filter shows discovery, ICP tab folded into a footer page; still to do: Setup actions such as run discovery now, board view), 3) Meeting debrief + HubSpot status sync (lead status, deals, tasks, read-back) with a Meetings tab, 4) inbound speed to lead, 5) Insights tab, 6) Revival, lookalikes, competitor cards. More discovery sources (funding news, Launch HN) are possible.
+Vision: the system finds companies and prospects, hands the rep a ready pipeline, and enables them (brief, recap, drafts) so reps spend time on people. Order now: 1) auto-discovery (DONE, first version: HN hiring only), 2) DONE: Accounts tab replaces Queue (one list, one next step per company, New filter shows discovery, ICP tab folded into a footer page; Setup tab with editable profile and run-discovery button also DONE; still to do: board view, multiple profiles, territories/owners), 3) Meeting debrief + HubSpot status sync (lead status, deals, tasks, read-back) with a Meetings tab, 4) inbound speed to lead, 5) Insights tab, 6) Revival, lookalikes, competitor cards. More discovery sources (funding news, Launch HN) are possible.
 
 Older list:
 Philosophy: outreach stays manual and human; the system finds the right prospect at the right time (speed to lead). The prospect-facing draft email stays AI-written and is only a suggestion. Internal items use templates plus the one cached AI line.

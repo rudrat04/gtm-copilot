@@ -12,7 +12,8 @@ import icp from "./icp.json" with { type: "json" };
 export type Candidate = { name: string; domain: string; source: string; sourceUrl: string; snippet: string };
 
 const cfg = icp.discovery;
-const SALES = new RegExp(`\\b(${cfg.salesRoles})\\b`, "i");
+/** Sales or RevOps roles to look for: the profile's hiring roles plus the general words. */
+const salesRegex = () => new RegExp(`\\b(${[...icp.signals.hiringRoles, "sales", "go-to-market", "gtm", "business development"].map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`, "i");
 // Links that are not the company's own website.
 const NOT_COMPANY = /(^|\.)(greenhouse\.io|lever\.co|ashbyhq\.com|workable\.com|rippling\.com|linkedin\.com|github\.com|gitlab\.com|notion\.(site|so)|google\.com|docs\.google\.com|twitter\.com|x\.com|youtube\.com|medium\.com|ycombinator\.com|techcrunch\.com|venturebeat\.com|forbes\.com|bloomberg\.com|wsj\.com|reddit\.com|substack\.com|producthunt\.com|arxiv\.org|wikipedia\.org|workatastartup\.com|wellfound\.com|angel\.co|jobs\.|bamboohr\.com|smartrecruiters\.com|teamtailor\.com|recruitee\.com|breezy\.hr|jobvite\.com|myworkdayjobs\.com|hn\.algolia\.com|news\.ycombinator\.com|linktr\.ee|calendly\.com)$/i;
 
@@ -45,7 +46,7 @@ export function parsePost(html: string, id: string): Candidate | null {
   if ((first.match(/\|/g) ?? []).length < 2) return null; // company posts start "Company | Role | Place | ..."
   const name = first.split("|")[0].trim().replace(/\s*\(.*$/, "").slice(0, 60);
   if (!name || name.length < 2) return null;
-  if (!SALES.test(text.slice(0, 500))) return null; // keep only companies hiring sales / RevOps roles
+  if (!salesRegex().test(text.slice(0, 500))) return null; // keep only companies hiring sales / RevOps roles
   const domain = companyDomain(text, first.split("|")[0]);
   if (!domain) return null;
   return { name, domain, source: "hn_hiring", sourceUrl: `https://news.ycombinator.com/item?id=${id}`, snippet: first.slice(0, 220) };

@@ -1,6 +1,7 @@
 import { json } from "../_shared/db.ts";
 import { isAdmin, jobAllowed } from "../_shared/auth.ts";
 import { serve } from "../_shared/log.ts";
+import icp from "../_shared/icp.json" with { type: "json" };
 import { runDiscovery } from "../_shared/discover.ts";
 
 // Weekly (cron, Mondays 05:00 UTC): finds new companies from public sources and adds the ones that fit.
@@ -8,6 +9,7 @@ import { runDiscovery } from "../_shared/discover.ts";
 serve("discover", async (req) => {
   if (!(await jobAllowed(req))) return json({ error: "Not allowed" }, 401);
   const body = (await req.json().catch(() => null)) ?? {};
+  if ((icp.discovery as { enabled?: boolean }).enabled === false && body.force !== true) return json({ skipped: "Auto-discovery is switched off in Setup" });
   const owner = await isAdmin(req);
   return json(await runDiscovery({ dry: owner && body.dry === true, firmo: !(owner && body.firmo === false) }));
 });

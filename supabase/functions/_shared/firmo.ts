@@ -5,6 +5,8 @@ import icp from "./icp.json" with { type: "json" };
 // Company facts from Hunter's Company Enrichment (about 0.2 credit per company). Saved once, refreshed rarely.
 
 const EU = new Set(["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "NO", "CH"]);
+const REGION_COUNTRIES: Record<string, string[]> = { US: ["US"], UK: ["GB"], EU: [...EU], Canada: ["CA"], "Australia / NZ": ["AU", "NZ"], India: ["IN"] };
+const inRegions = (cc: string) => icp.company.regions.some((r) => REGION_COUNTRIES[r]?.includes(cc));
 const CREDIT_PER_COMPANY = 0.2;
 
 export type Firmo = {
@@ -76,6 +78,12 @@ export async function saveFirmo(accountId: string, f: Firmo) {
 
 type Row = { employees?: number | null; stage?: string | null; country?: string | null; firmo_at?: string | null };
 
+/** Is this funding stage one of the stages we target? "Seed" also covers pre-seed and angel rounds. */
+const stageWanted = (s: string) => icp.company.stages.some((w) => {
+  const k = w.toLowerCase();
+  return k === "seed" ? /pre-?seed|angel|seed/.test(s) : k === "pre-seed" ? /pre-?seed|angel/.test(s) : s.includes(k);
+});
+
 export function fitBreakdown(a: Row): { points: number; known: boolean; size: number; stage: number; region: number; matches: boolean } {
   if (!a.firmo_at) return { points: icp.signals.weights.fit * 0.6, known: false, size: 0, stage: 0, region: 0, matches: false }; // neutral baseline, 15
   const c = icp.company;
@@ -86,12 +94,12 @@ export function fitBreakdown(a: Row): { points: number; known: boolean; size: nu
 
   const s = (a.stage ?? "").toLowerCase();
   const stage = !s || /^(other|debt|grant|unknown|undisclosed)/.test(s) ? 5 // unclear round type: neutral, not a mismatch
-    : /pre-?seed|angel|seed|series a|series b/.test(s) ? 10
+    : stageWanted(s) ? 10
     : /series c/.test(s) ? 4
     : 0; // series d+, IPO, acquired
 
   const cc = (a.country ?? "").toUpperCase();
-  const region = !cc ? 3 : cc === "US" || cc === "GB" || EU.has(cc) ? 5 : 0;
+  const region = !cc ? 3 : inRegions(cc) ? 5 : 0;
 
   return { points: size + stage + region, known: true, size, stage, region, matches: size === 10 && stage === 10 };
 }

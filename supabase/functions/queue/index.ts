@@ -10,6 +10,8 @@ import { contactsFor } from "../_shared/contacts.ts";
 import { fetchSite } from "../_shared/signals.ts";
 import { BudgetError } from "../_shared/claude.ts";
 import { tierOf } from "../_shared/score.ts";
+import { clean, loadProfile, REGIONS, saveProfile, STAGES } from "../_shared/profile.ts";
+import { runDiscovery } from "../_shared/discover.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
 const DAY = 86_400_000;
@@ -145,6 +147,28 @@ async function accountsView(admin: boolean) {
   };
 }
 
+/** Everything the Setup tab needs: the editable profile, discovery status and a few counts. */
+async function setupView() {
+  const [profile, { data: disc }, { count: unknown }, { data: ai }] = await Promise.all([
+    loadProfile(),
+    sb.from("cp_discovered").select("status,found_at").order("found_at", { ascending: false }).limit(60),
+    sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("firmo_at", null),
+    sb.from("cp_ai_spend_today").select("usd").single(),
+  ]);
+  const month = Date.now() - 30 * DAY;
+  return {
+    profile,
+    options: { stages: STAGES, regions: REGIONS },
+    discovery: {
+      schedule: "Mondays at 05:00 UTC, an hour before the signal scan",
+      last: disc?.[0]?.found_at ?? null,
+      added_30d: (disc ?? []).filter((d) => d.status === "added" && Date.parse(d.found_at) > month).length,
+    },
+    unknown_fit: unknown ?? 0,
+    ai: { today_usd: Number(ai?.usd ?? 0), cap_usd: icp.ai.dailyBudgetUsd },
+  };
+}
+
 /** The ICP playbook for the sales team, straight from the live config plus a few counts. */
 async function playbook() {
   const { data: accts } = await sb.from("cp_accounts").select("priority_score,status,last_scanned_at,employees,stage,country,firmo_at");
@@ -262,6 +286,18 @@ serve("queue", async (req) => {
 
   if (body.action === "list") return json({ ...(await list(String(body.view ?? "todo"), admin)), admin });
   if (body.action === "accounts") return json({ ...(await accountsView(admin)), admin });
+  if (body.action === "setup") return json({ ...(await setupView()), admin });
+  if (body.action === "profile_save") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to save changes." });
+    await saveProfile(clean(body.profile));
+    const rescored = await enrichCompanies(true); // fit and weights changed: recompute every score (no credits)
+    await log("info", "profile_saved", { detail: { rescored: rescored.rescored } });
+    return json({ mode: "live", ...(await setupView()), rescored: rescored.rescored });
+  }
+  if (body.action === "run_discovery") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can run discovery." });
+    return json({ mode: "live", ...(await runDiscovery({ dry: body.dry === true, firmo: body.firmo !== false })) });
+  }
   if (body.action === "draft" && typeof body.account_id === "string") return await draft(body.account_id, admin);
   if (body.action === "enrich_company" && typeof body.account_id === "string") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can look up company size and stage (0.2 search credit)." });

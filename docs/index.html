@@ -91,7 +91,18 @@
   .status-line.due { color: var(--ink); font-weight: 600; }
   .needs { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border: 1px dashed var(--line); border-radius: 14px; color: var(--soft); font-size: 14px; }
   .sigs-more { margin-top: 4px; }
-  .foot-links { text-align: center; font-size: 13px; margin-top: 28px; } .foot-links a { color: var(--muted); }
+  .field { margin: 0 0 16px; } .field > label, .field > .lbl { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .field .help { color: var(--muted); font-size: 12.5px; margin: 5px 0 0; }
+  .tagbox { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 7px 9px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+  .tagbox:focus-within { border-color: var(--accent); }
+  .tag { display: inline-flex; align-items: center; gap: 4px; background: var(--raised); border: 1px solid var(--line); border-radius: 99px; padding: 2px 4px 2px 10px; font-size: 13px; }
+  .tag button { background: none; border: 0; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; padding: 0 5px; border-radius: 99px; } .tag button:hover { color: var(--bad); }
+  .tagbox input { flex: 1 1 120px; min-width: 90px; border: 0; outline: 0; background: transparent; font: inherit; font-size: 13.5px; color: var(--ink); padding: 3px 2px; }
+  .numrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; } .numrow input { width: 96px; padding: 8px 10px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; }
+  .toggles { display: grid; gap: 8px; } .toggle { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer; } .toggle input { margin-top: 4px; accent-color: var(--accent); } .toggle span small { display: block; color: var(--muted); font-size: 12.5px; }
+  .chip.sel { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  details.how { margin-top: 6px; } details.how > summary { font-size: 14px; font-weight: 600; color: var(--soft); cursor: pointer; margin: 10px 0 14px; }
+  .hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
   .badge.hot { --c: var(--bad); } .badge.warm { --c: var(--warn); }
   .fit { margin-top: 3px; font-size: 13.5px; color: var(--muted); } .fit b.good { color: var(--good); } .fit b.warn { color: var(--warn); } .fit b.bad { color: var(--bad); }
   .contact { margin-top: 12px; font-size: 14px; color: var(--soft); } .contact b { color: var(--ink); } .contact a { color: var(--accent); text-decoration: none; }
@@ -184,6 +195,7 @@
     <button role="tab" aria-selected="true" data-tab="today">Today<span class="count" id="c-today" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="accounts">Accounts<span class="count" id="c-accounts" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="research">Research</button>
+    <button role="tab" aria-selected="false" data-tab="setup">Setup</button>
   </nav>
 
   <section id="today"><div id="thead"></div><div id="tlist" aria-live="polite"></div></section>
@@ -199,8 +211,7 @@
     <div id="out" aria-live="polite"></div>
   </section>
 
-  <section id="icp" hidden><div id="icpbody"></div></section>
-  <p class="foot-links"><a href="#" id="howlink">How scoring and discovery work</a></p>
+  <section id="setup" hidden><div id="setupbody"></div></section>
 </main>
 <div class="toast" id="toast" hidden role="status"></div>
 
@@ -695,22 +706,132 @@ async function loadIcp() {
   } catch (e) { $("icpbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 
+/* ============ Setup: the profile, discovery and costs ============ */
+let P = null, SETUP = null;
+const getPath = (o, path) => path.split(".").reduce((x, k) => x?.[k], o);
+function setPath(o, path, v) { const ks = path.split("."), last = ks.pop(); ks.reduce((x, k) => x[k], o)[last] = v; }
+
+function tagField(path, label, help) {
+  const vals = getPath(P, path) || [];
+  return `<div class="field"><label>${esc(label)}</label><div class="tagbox" data-tags="${esc(path)}">${vals.map((t) => `<span class="tag">${esc(t)}<button type="button" data-rm="${esc(t)}" aria-label="Remove ${esc(t)}">×</button></span>`).join("")}<input data-add placeholder="Add and press Enter" aria-label="${esc(label)}"></div>${help ? `<p class="help">${esc(help)}</p>` : ""}</div>`;
+}
+const chipField = (key, label, options, help) => `<div class="field"><span class="lbl">${esc(label)}</span><div class="chips" style="margin:0">${options.map((o) => `<button type="button" class="chip${P[key].includes(o) ? " sel" : ""}" data-toggle="${key}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div>${help ? `<p class="help">${esc(help)}</p>` : ""}</div>`;
+
+function drawSetup() {
+  const d = SETUP, own = !!d.admin;
+  $("setupbody").innerHTML = `
+    <article class="card"><p class="label">Who we look for</p>
+      ${tagField("industries", "Industries", "Used when the system decides whether a newly found company fits. For example: B2B SaaS, Fintech, Developer tools.")}
+      <div class="field"><span class="lbl">Company size (people)</span><div class="numrow"><input type="number" min="1" data-num="employeesMin" value="${esc(P.employeesMin)}" aria-label="Minimum people"> to <input type="number" min="1" data-num="employeesMax" value="${esc(P.employeesMax)}" aria-label="Maximum people"></div></div>
+      ${chipField("stages", "Funding stage", d.options.stages)}
+      ${chipField("regions", "Where they are based", d.options.regions, "Companies outside these show as Outside range and are hidden under Low fit.")}
+    </article>
+    <article class="card"><p class="label">Who we contact</p>
+      <p class="help" style="margin:0 0 12px">A person whose job title contains one of these words is a good contact. Add your own, such as "chief revenue officer".</p>
+      ${P.personas.map((x, i) => tagField(`personas.${i}.match`, x.title)).join("")}
+      <div class="field"><span class="lbl">Founders count as the buyer only under</span><div class="numrow"><input type="number" min="2" data-num="founderBelow" value="${esc(P.founderBelow)}" aria-label="Founder size limit"> people</div></div>
+    </article>
+    <article class="card"><p class="label">What counts as a buying signal</p>
+      <div class="toggles">
+        <label class="toggle"><input type="checkbox" data-sig="hiring" ${P.signals.hiring ? "checked" : ""}><span>Hiring sales or RevOps roles<small>Public job boards and Hacker News hiring posts</small></span></label>
+        <label class="toggle"><input type="checkbox" data-sig="news" ${P.signals.news ? "checked" : ""}><span>Funding and company news<small>Last 60 days; older news counts less</small></span></label>
+        <label class="toggle"><input type="checkbox" data-sig="community" ${P.signals.community ? "checked" : ""}><span>Community buzz<small>Hacker News mentions</small></span></label>
+      </div>
+      <hr class="hr">
+      ${tagField("hiringRoles", "Job titles that count as a hiring signal", "A company hiring for any of these is treated as scaling its sales team.")}
+    </article>
+    <div class="actions" style="margin:0 0 18px"><button class="btn primary" data-save>Save changes</button><span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : "Demo mode: unlock to save changes."}</span></div>
+
+    <article class="card"><p class="label">Finding new companies</p>
+      <label class="toggle" style="margin-bottom:12px"><input type="checkbox" data-disc ${P.discovery ? "checked" : ""}><span>Search for new companies every week<small>${esc(d.discovery.schedule)}. Reads Hacker News hiring posts and keeps companies that match the profile above.</small></span></label>
+      <p class="meta" style="margin:0 0 12px">${d.discovery.last ? `Last run ${esc(ago(d.discovery.last))} · ` : ""}${esc(d.discovery.added_30d)} added in the last 30 days. Results appear in Accounts under <b>New</b>.</p>
+      <div class="actions" style="margin:0"><button class="btn ghost" data-run="preview">Preview what it would check</button><button class="btn ghost" data-run="live">Run discovery now</button></div>
+      <p class="help" style="margin-top:8px">A run costs about 1 cent of AI and up to 0.8 search credit for company size and stage.</p>
+      <div id="runout"></div>
+    </article>
+
+    <article class="card"><p class="label">Credits and costs</p>
+      <div class="tiles" style="margin:0 0 10px"><div class="tile"><b>${esc(d.ai.today_usd.toFixed(2))}</b><span>AI spend today (limit $${esc(d.ai.cap_usd.toFixed(2))})</span></div>
+        <div class="tile"><b>${esc(d.unknown_fit)}</b><span>companies with size and stage not checked</span></div></div>
+      ${d.unknown_fit ? `<div class="actions" style="margin:0"><button class="btn ghost" data-facts>Check size and stage for ${esc(d.unknown_fit)} companies</button><span class="meta">0.2 search credit each</span></div>` : `<p class="meta" style="margin:0">All companies have their size and stage.</p>`}
+      <div id="factsout"></div>
+    </article>
+
+    <details class="how"><summary>How scoring and signals work</summary><div id="icpbody"></div></details>`;
+}
+
+async function loadSetup() {
+  $("setupbody").innerHTML = skeleton(5);
+  try { SETUP = await api("queue", { action: "setup" }); P = JSON.parse(JSON.stringify(SETUP.profile)); drawSetup(); }
+  catch (e) { $("setupbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+}
+
+(() => {
+  const box = $("setupbody");
+  const addTag = (inp) => {
+    const v = inp.value.trim().replace(/,$/, "").trim(); if (!v) return;
+    const path = inp.closest("[data-tags]").dataset.tags, list = getPath(P, path);
+    if (!list.some((x) => x.toLowerCase() === v.toLowerCase())) list.push(v.slice(0, 40));
+    const had = path; drawSetup(); box.querySelector(`[data-tags="${had}"] input`)?.focus();
+  };
+  box.addEventListener("keydown", (e) => { if (e.target.matches?.("[data-add]") && (e.key === "Enter" || e.key === ",")) { e.preventDefault(); addTag(e.target); } });
+  box.addEventListener("focusout", (e) => { if (e.target.matches?.("[data-add]") && e.target.value.trim()) addTag(e.target); });
+  box.addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.dataset.num) setPath(P, t.dataset.num, Number(t.value));
+    if (t.dataset.sig) setPath(P, `signals.${t.dataset.sig}`, t.checked);
+    if (t.matches("[data-disc]")) P.discovery = t.checked;
+  });
+  box.addEventListener("click", async (e) => {
+    const rm = e.target.closest("[data-rm]");
+    if (rm) { const path = rm.closest("[data-tags]").dataset.tags, list = getPath(P, path); setPath(P, path, list.filter((x) => x !== rm.dataset.rm)); drawSetup(); return; }
+    const tg = e.target.closest("[data-toggle]");
+    if (tg) { const l = P[tg.dataset.toggle], v = tg.dataset.val; P[tg.dataset.toggle] = l.includes(v) ? l.filter((x) => x !== v) : [...l, v]; drawSetup(); return; }
+    const btn = e.target.closest("button"); if (!btn) return;
+    if (btn.matches("[data-save]")) {
+      btn.disabled = true; say("Saving…");
+      try {
+        const r = await api("queue", { action: "profile_save", profile: P });
+        if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
+        SETUP = { ...r, admin: true }; P = JSON.parse(JSON.stringify(r.profile)); drawSetup(); say(`Saved. Recalculated ${r.rescored} companies.`); ACC = null;
+      } catch (err) { say(err.message); btn.disabled = false; }
+    }
+    if (btn.matches("[data-run]")) {
+      const dry = btn.dataset.run === "preview";
+      if (!dry && !confirm("Run discovery now? About 1 cent of AI and up to 0.8 search credit.")) return;
+      btn.disabled = true; $("runout").innerHTML = `<p class="meta">${dry ? "Checking sources…" : "Running. This takes about a minute."}</p>`;
+      try {
+        const r = await api("queue", { action: "run_discovery", dry });
+        if (r.mode === "dry_run") { say(r.message); $("runout").innerHTML = ""; }
+        else $("runout").innerHTML = dry
+          ? `<p class="meta">${esc(r.collected)} candidates found, ${esc(r.already_known)} already known. Would check: ${esc((r.would_check || []).join(", ") || "nothing new")}.</p>`
+          : `<p class="meta">Checked ${esc(r.checked)}. Added ${esc(r.added.length)}${r.added.length ? `: ${esc(r.added.join(", "))}` : ""}. ${esc(r.rejected)} did not fit.</p>`;
+      } catch (err) { $("runout").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
+      btn.disabled = false;
+    }
+    if (btn.matches("[data-facts]")) {
+      if (!confirm("Look up size and stage for the companies that have none? 0.2 search credit each.")) return;
+      btn.disabled = true; $("factsout").innerHTML = `<p class="meta">Looking up…</p>`;
+      try {
+        const r = await api("queue", { action: "enrich_companies" });
+        if (r.mode === "dry_run") { say(r.message); $("factsout").innerHTML = ""; btn.disabled = false; return; }
+        say(`Looked up ${r.looked_up} companies.`); ACC = null; loadSetup();
+      } catch (err) { $("factsout").innerHTML = `<p class="err">${esc(err.message)}</p>`; btn.disabled = false; }
+    }
+  });
+  box.addEventListener("toggle", (e) => { if (e.target.matches?.("details.how") && e.target.open && !$("icpbody").dataset.done) { $("icpbody").dataset.done = "1"; loadIcp(); } }, true);
+})();
+
 /* ============ tabs and start ============ */
 document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll("nav.tabs [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  for (const t of ["today", "research", "accounts", "icp"]) $(t).hidden = b.dataset.tab !== t;
-  ({ today: loadToday, accounts: loadAccounts }[b.dataset.tab] || (() => {}))();
+  for (const t of ["today", "research", "accounts", "setup"]) $(t).hidden = b.dataset.tab !== t;
+  ({ today: loadToday, accounts: loadAccounts, setup: loadSetup }[b.dataset.tab] || (() => {}))();
 }));
 
 drawMode(false);
 refreshMode();
 loadToday();
-$("howlink").addEventListener("click", (e) => {
-  e.preventDefault();
-  document.querySelectorAll("nav.tabs [data-tab]").forEach((x) => x.setAttribute("aria-selected", "false"));
-  for (const t of ["today", "research", "accounts"]) $(t).hidden = true;
-  $("icp").hidden = false; loadIcp(); window.scrollTo(0, 0);
-});
 api("queue", { action: "accounts" }).then((d) => { ACC = d; const c = $("c-accounts"), n = d.accounts.filter((a) => !a.low && a.outreach_status === "open").length; c.textContent = n; c.hidden = !n; }).catch(() => {});
 </script>
 </body>
