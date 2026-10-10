@@ -2,6 +2,7 @@ import { json, sb } from "../_shared/db.ts";
 import { collectSignals } from "../_shared/signals.ts";
 import { priorityScore, QUEUE_THRESHOLD } from "../_shared/score.ts";
 import { reasonLine } from "../_shared/today.ts";
+import { fitPoints } from "../_shared/firmo.ts";
 import { log, serve } from "../_shared/log.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 import { isAdmin } from "../_shared/auth.ts";
@@ -12,7 +13,7 @@ import { lightCheck } from "../_shared/watch.ts";
 const STALE_HOURS = icp.schedule.staleDays * 24;
 const BATCH = 6;
 
-type Account = { id: string; name: string; domain: string; status: string; segment: string | null };
+type Account = { id: string; name: string; domain: string; status: string; segment: string | null; employees: number | null; stage: string | null; country: string | null; firmo_at: string | null };
 
 async function scanOne(a: Account) {
   const { signals } = await collectSignals(a.name, a.domain, a.segment ?? "");
@@ -30,7 +31,7 @@ async function scanOne(a: Account) {
     );
   }
 
-  const { score } = priorityScore(signals);
+  const { score } = priorityScore(signals, fitPoints(a));
   const update: Record<string, unknown> = {
     priority_score: score,
     last_scanned_at: new Date().toISOString(),
@@ -60,7 +61,7 @@ serve("signal-scan", async (req) => {
 
   const cutoff = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
   const { data: stale, error } = await sb.from("cp_accounts")
-    .select("id,name,domain,status,segment")
+    .select("id,name,domain,status,segment,employees,stage,country,firmo_at")
     .or(`last_scanned_at.is.null,last_scanned_at.lt.${cutoff}`)
     .order("last_scanned_at", { ascending: true, nullsFirst: true })
     .limit(BATCH);

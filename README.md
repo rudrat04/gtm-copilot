@@ -6,9 +6,9 @@ A small, demo-able GTM system for B2B SaaS teams. It finds the right accounts at
 
 | Tab / flow | What happens |
 |---|---|
-| **Today** | A capped daily list (8): meetings, follow-ups due (day 3/7/14), hot new signals, accounts worth a second look. Each item has a one-line "Why today". |
+| **Today** | A capped daily list (8) that leads with **the person to contact** (name, title, email) and shows the company as context: meetings, follow-ups due (day 3/7/14), hot new signals, accounts worth a second look. Each item has a one-line "Why today". |
 | **Research** | Type any company domain, get a dossier in about 10 seconds (what they do, hiring, news, pains, talk tracks, risks, ICP fit). |
-| **Queue** | Accounts ranked 0-100 by buying signals with tiers, signal ages, a draft-email button, and lifecycle buttons (contacted, replied, meeting, snooze, not now). |
+| **Queue** | Companies ranked 0-100 by buying signals with tiers, real size and funding (headcount, stage, money raised, HQ), signal ages, a draft-email button, and lifecycle buttons (contacted, replied, meeting, snooze, not now). |
 | **People** | On any account: Find relevant people, Enrich the email, preview what will go to HubSpot, Push. No AI is used for the push. |
 | **ICP & Signals** | The playbook for the sales team: target profile, personas, signals and weights, how to read the scores. |
 | **Meeting briefs** | When a meeting with an outside guest is booked in Google Calendar, a private brief is emailed to the owner within about a minute. It is never written into the invite, because guests can read it. |
@@ -29,6 +29,14 @@ Everything emails the owner only. Public visitors can browse; changing anything 
 ## Stack and cost
 
 Supabase (Postgres, Edge Functions, pg_cron), HubSpot Free, Hunter free plan (people search and emails), Google Calendar and Gmail (owner-only), Claude Haiku 4.5. AI is used only for the dossier (about $0.006), the relevance check (about $0.0004 per company), the one "Why today" sentence, and draft emails when you click for one. A $0.25 daily cap is enforced in the database. Total spend so far is well under $1; expect roughly $1-2 a month.
+
+## Company facts and the ICP
+
+Headcount, funding stage, funds raised and HQ come from Hunter's company data (about 0.2 credit per company, saved once). They make up the fit part of the priority score: size inside the target range, stage Seed to Series B, and region. Companies clearly outside the size range are left out of Today and of automatic contact lookups, but stay visible in the Queue.
+
+## Who to contact
+
+Today, hot alerts and the morning email lead with a person. Contacts come from the stored people search (best match first, then the best from a different persona; individual contributors are never suggested, and a founder only counts as the buyer at a small company). For strong, in-profile accounts with no contact yet, the daily jobs look one up automatically, at most 2 a day, to protect the 50 free monthly search credits.
 
 ## Configuration
 

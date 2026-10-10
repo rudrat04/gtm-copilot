@@ -42,7 +42,7 @@ export function seniorityOf(title: string): string {
 const norm = (s: string) =>
   s.toLowerCase().replace(/[,&/|\-]/g, " ").replace(/\b(of|the|and|for)\b/g, " ").replace(/\s+/g, " ").trim();
 
-export function rank(title: string): { persona: string | null; relevance: number; seniority: string } {
+export function rank(title: string, employees?: number | null): { persona: string | null; relevance: number; seniority: string } {
   const t = norm(title);
   const seniority = seniorityOf(title);
   const matched = icp.personas.find((p) => p.match.some((m) => t.includes(norm(m))));
@@ -51,6 +51,9 @@ export function rank(title: string): { persona: string | null; relevance: number
     // Sales and RevOps leaders are the buyers; founders only count when they are the buyer.
     relevance = /sales|revenue|revops|cro/.test(matched.match.join(" ")) ? 100 : 70;
     if (matched.title.startsWith("Head of RevOps")) relevance = 95;
+    // A founder is only the buyer at a small company; at a bigger one a sales leader should be found first.
+    const cap = (matched as { onlyIfEmployeesBelow?: number }).onlyIfEmployeesBelow;
+    if (cap && employees != null && employees >= cap) relevance = 50;
   } else if (seniority !== "ic" && /sales|revenue|growth|business development|partnerships/.test(t)) {
     relevance = 60;
   } else if (/sales|revenue|account executive|sdr|bdr/.test(t)) {
@@ -139,4 +142,34 @@ export async function hunterBalance(): Promise<{ remaining: number; available: n
   } catch {
     return null;
   }
+}
+
+
+/** Searches the active provider for an account and stores what it finds. Returns how many people were stored. */
+export async function searchAndStore(account: { id: string; domain: string }): Promise<{ stored: number; credits: number }> {
+  const found = await provider().search(account.domain);
+  const { data: acc } = await sb.from("cp_accounts").select("employees").eq("id", account.id).maybeSingle();
+  const rows = found.people.map((p) => {
+    const r = rank(p.title, acc?.employees);
+    return {
+      account_id: account.id,
+      provider: provider().name,
+      first_name: p.firstName,
+      last_name: p.lastName,
+      title: p.title,
+      seniority: r.seniority,
+      department: p.department ?? null,
+      persona: r.persona,
+      relevance: r.relevance,
+      linkedin_url: p.linkedinUrl ?? null,
+      email: p.email?.toLowerCase() ?? null,
+      email_status: p.emailStatus ?? null,
+      email_confidence: p.emailConfidence ?? null,
+    };
+  });
+  if (rows.length) {
+    const { error } = await sb.from("cp_people").upsert(rows, { onConflict: "account_id,email", ignoreDuplicates: true });
+    if (error) await log("error", "people_store_failed", { account: account.domain, message: error.message });
+  }
+  return { stored: rows.length, credits: found.credits };
 }

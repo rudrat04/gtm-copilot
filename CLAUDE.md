@@ -48,7 +48,9 @@ backups/                   Local HubSpot backup (gitignored)
 6. **Meeting Brief**: `meeting-brief` polls Google Calendar (cursor in `cp_state`); for a new future event with an outside attendee it reuses the cached dossier (researches a new company once), checks HubSpot (read-only), builds a plain template brief (no AI beyond the dossier) and emails it to the owner. Briefs are **never written into the calendar event** because guests can read the description. Personal-email attendees get a short note. Failed briefs retry up to 3 times.
 7. **Lifecycle and Today**: accounts have `outreach_status` (open, contacted, replied, meeting, snoozed, not_now), `touches`, `contacted_at` (first contact), `next_followup_at` (day 3/7/14 after first contact, then stop) and `snoozed_until`. Actions go through `queue` -> `outcome` (`_shared/lifecycle.ts`) and are logged in `cp_outcomes`. `queue` -> `today` (`_shared/today.ts`) builds the capped Today list by rules; the one AI line ("Why today") is cached in `cp_why_today` per signal set and only generated in owner mode. The Today tab is the landing tab.
 8. **Daily rhythm**: cron `signal-watch` (01:00 UTC) calls `signal-scan` with `{"mode":"light"}` (`_shared/watch.ts`): re-reads sources for queued accounts, stores only new signals, refreshes scores, sends up to 3 instant hot-alert emails/day (`cp_alerts` dedupes). Cron `daily-digest` (02:30 UTC) emails the Today list to the owner and creates HubSpot to-dos (`_shared/templates.ts`, `createTask` in `hubspot.ts`): a daily summary task plus per-prospect tasks only for accounts already in HubSpot (`cp_tasks` dedupes). Both throttle to once per 20h unless called with the owner key. They only email the owner.
-9. **Public vs owner**: public visitors see "First L." names, masked emails, and dry runs. The owner key (`ADMIN_KEY` in `.env`, sent as the `x-admin-key` header, entered via "unlock" on the page) reveals emails and writes to HubSpot.
+9. **Company facts**: `_shared/firmo.ts` fetches Hunter company data once per company (0.2 credit; owner-only bulk action `queue` -> `enrich_companies`, or when the owner researches a new domain) into `cp_accounts` (employees, employee_band, stage, raised_usd, last_round_date, founded_year, hq_city, country, firmo_at). `fitBreakdown` turns it into the 25-point fit slice of the priority score (size 10, stage 10, region 5; unknown = neutral baseline 15). `queue` -> `enrich_companies` with `rescore: true` recomputes all priorities.
+10. **Prospect-based Today/alerts**: Today items carry `contacts` (`_shared/contacts.ts`): best person first, then best of another persona, relevance >= 50 only. `autoFindContacts` runs a Hunter people search for strong, in-profile accounts with no people yet, max `icp.contacts.autoPerDay` (2) a day; used by `daily-digest` and the hot alerts. Freshness uses a news item's publish date, ignores Hacker News and open-role COUNT changes (those rows are shown as "Currently: ..."), and Today skips accounts clearly outside the size range. `daily-digest` accepts `{"dry":true}` with the owner key to preview the email without sending or spending credits.
+11. **Public vs owner**: public visitors see "First L." names, masked emails, and dry runs. The owner key (`ADMIN_KEY` in `.env`, sent as the `x-admin-key` header, entered via "unlock" on the page) reveals emails and writes to HubSpot.
 
 ## Commands
 ```bash
@@ -74,14 +76,15 @@ The `signal-scan` cron runs **weekly: Mondays 06:00-06:55 UTC** (every 5 minutes
 ## Next steps (agreed order)
 Philosophy: outreach stays manual and human; the system finds the right prospect at the right time (speed to lead). The prospect-facing draft email stays AI-written and is only a suggestion. Internal items use templates plus the one cached AI line.
 1. DONE: lifecycle, Today list and tab, daily light check and hot alerts, morning email, HubSpot to-dos, clean-up pass (README rewritten, dossier no longer asks for likely_buyers, drafts on demand, AI cap lowered, statuses tightened).
-2. **Sync outcomes to HubSpot** (contacted, replied, meeting as notes or lifecycle changes) and detect completed HubSpot tasks; also optionally detect replies from HubSpot activity.
-3. **Inbound speed to lead**: a form submit is enriched, scored and routed to the owner (email plus HubSpot task) in about a minute.
-4. **Outcome feedback page**: which signals convert, from `cp_outcomes`; tune weights from real results.
-5. **Revival**: closed-lost deals plus fresh signals as another Today source.
+2. DONE: firmographics (Hunter) feeding the ICP fit, and prospect-first Today/alerts/digest.
+3. **Sync outcomes to HubSpot** (contacted, replied, meeting as notes or lifecycle changes) and detect completed HubSpot tasks; also optionally detect replies from HubSpot activity.
+4. **Inbound speed to lead**: a form submit is enriched, scored and routed to the owner (email plus HubSpot task) in about a minute.
+5. **Outcome feedback page**: which signals convert, from `cp_outcomes`; tune weights from real results.
+6. **Revival**: closed-lost deals plus fresh signals as another Today source.
 Also optional: team-page fallback for people search, Apollo adapter when the plan allows.
 
 ## Known gaps
-- **The ICP size and stage are not enforced anywhere.** icp.json states 20-200 employees and Seed to Series B, but fit is judged by the AI from website text only; there is no headcount or funding data source on the free plans. Ideas: a manual column on the fixture list, or a free enrichment source.
+- (Resolved) Size and stage ARE now enforced via Hunter company data; remaining caveat: Hunter's headcount can be off (it said 30 for Clay), so treat it as an estimate. The old note follows: **The ICP size and stage were not enforced.** icp.json states 20-200 employees and Seed to Series B, but fit is judged by the AI from website text only; there is no headcount or funding data source on the free plans. Ideas: a manual column on the fixture list, or a free enrichment source.
 - Priority uses a fixed baseline fit; the dossier's ICP fit is not fed back into it.
 - Each push adds a new dossier note to the company (history builds up).
 - Namesake companies (Orb, Linear, Default) can still leak wrong news despite the relevance check; it was tightened once, watch for more.

@@ -141,5 +141,10 @@
   },
   "alerts": {
     "maxPerDay": 3
+  },
+  "contacts": {
+    "autoPerDay": 2,
+    "perItem": 2,
+    "note": "Automatic contact lookups only for Tier 1 and Tier 2 accounts, at most this many a day, to protect the free search credits."
   }
 }

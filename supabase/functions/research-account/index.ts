@@ -3,6 +3,8 @@ import { askClaude, BudgetError, parseJson } from "../_shared/claude.ts";
 import { collectSignals } from "../_shared/signals.ts";
 import { priorityScore } from "../_shared/score.ts";
 import { log, serve } from "../_shared/log.ts";
+import { isAdmin } from "../_shared/auth.ts";
+import { fetchFirmo, firmoLine, fitPoints, saveFirmo } from "../_shared/firmo.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
 const CACHE_HOURS = 24;
@@ -13,13 +15,14 @@ The ICP describes who ${icp.seller.name} sells to. It is NOT a fact about the co
 Describe the company only from the website evidence and signals. Never attribute ICP traits to it.
 Use ONLY the evidence provided. If something is not in the evidence, write "unknown" rather than guessing.
 Website text (product demos, sample deals, customer quotes, pricing examples) is marketing copy about their product. It is NOT evidence of the company's own sales situation, stage, team size or deal sizes. Never cite it that way.
-Do not state funding stage or headcount unless the evidence says so.
+Verified facts (headcount, funding stage, funds raised, HQ) come from a company database. Trust them over anything on the website, and quote them when judging ICP fit. Do not state funding stage or headcount unless the verified facts or the evidence say so.
 Talk-track openers must be questions about the prospect's situation. They must never claim customers, experience, research or relationships ("we work with", "teams we've seen", "we noticed"), and must never say or imply the prospect said something ("you mentioned", "you said", "I saw", "I noticed", "as you know"). Ground each one in a listed signal or in what the company sells.
 When there is no buying signal, say so and do not invent problems.
 Be specific and short. No filler, no hype. Return a single JSON object and nothing else.`;
 
-function prompt(name: string, domain: string, site: unknown, signals: unknown[]): string {
+function prompt(name: string, domain: string, site: unknown, signals: unknown[], facts: string): string {
   return `Company: ${name} (${domain})
+Verified facts: ${facts || "none available"}
 
 ICP:
 ${JSON.stringify(icp.company)}
@@ -83,6 +86,15 @@ serve("research-account", async (req) => {
     account = data;
   }
 
+  // Company facts cost a little Hunter credit, so only the owner triggers the lookup, and only once per company.
+  if (!account.firmo_at && (await isAdmin(req))) {
+    const f = await fetchFirmo(domain);
+    if (f) {
+      await saveFirmo(account.id, f);
+      account = (await sb.from("cp_accounts").select("*").eq("id", account.id).single()).data;
+    }
+  }
+
   if (signals.length) {
     await sb.from("cp_signals").upsert(
       signals.map((s) => ({
@@ -101,7 +113,7 @@ serve("research-account", async (req) => {
     const raw = await askClaude({
       feature: "research-account",
       system: SYSTEM,
-      user: prompt(account.name, domain, site, signals),
+      user: prompt(account.name, domain, site, signals, firmoLine(account)),
       maxTokens: 1400,
     });
     dossier = parseJson<{ icp_fit?: { score?: number }; why_now?: string }>(raw);
@@ -115,7 +127,7 @@ serve("research-account", async (req) => {
   await sb.from("cp_accounts").update({
     icp_score: Math.round(Number(dossier.icp_fit?.score ?? 0)) || null,
     why_now: dossier.why_now ?? null,
-    priority_score: priorityScore(signals).score,
+    priority_score: priorityScore(signals, fitPoints(account)).score,
     last_scanned_at: new Date().toISOString(),
   }).eq("id", account.id);
 

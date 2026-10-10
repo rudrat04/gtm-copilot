@@ -2,7 +2,8 @@ import { json, sb } from "../_shared/db.ts";
 import { isAdmin } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
 import { googleConfigured, ownerEmail, sendMail } from "../_shared/google.ts";
-import { buildToday, hash } from "../_shared/today.ts";
+import { attachContacts, buildToday, hash } from "../_shared/today.ts";
+import { autoFindContacts } from "../_shared/contacts.ts";
 import { digestEmail, summaryTask, taskFor } from "../_shared/templates.ts";
 import { createTask } from "../_shared/hubspot.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
@@ -17,6 +18,7 @@ async function state(key: string) {
 
 serve("daily-digest", async (req) => {
   const admin = await isAdmin(req);
+  const opts = (await req.json().catch(() => null)) ?? {};
   const idle = (extra: Record<string, unknown> = {}) => {
     const r = json({ sent: false, ...extra });
     r.headers.set("x-noop", "1");
@@ -28,7 +30,17 @@ serve("daily-digest", async (req) => {
   if (!googleConfigured()) return idle({ error: "Google is not connected" });
 
   const today = await buildToday(true); // owner view: full names, and writes any missing "Why today" lines
-  await sb.from("cp_state").upsert({ key: "digest_last", value: new Date().toISOString(), updated_at: new Date().toISOString() });
+  // The list leads with people, so find one for any strong account that has none (limited per day).
+  const preview = admin && opts.dry === true; // a preview spends no credits and sends nothing
+  let looked = 0;
+  for (const it of preview ? [] : today.items) {
+    if (!it.account || it.type === "meeting" || it.contacts.length) continue;
+    const { data: a } = await sb.from("cp_accounts").select("id,domain,priority_score").eq("id", it.account.id).single();
+    if (a && (await autoFindContacts(a))) looked++;
+  }
+  if (looked) await attachContacts(today.items, true);
+
+  if (!preview) await sb.from("cp_state").upsert({ key: "digest_last", value: new Date().toISOString(), updated_at: new Date().toISOString() });
   if (!today.items.length) {
     await log("info", "digest_skipped_empty", {});
     return json({ sent: false, reason: "Nothing on today's list" });
@@ -46,6 +58,7 @@ serve("daily-digest", async (req) => {
 
   // 1) The email.
   const mail = digestEmail(today.items, today.hidden, links);
+  if (admin && opts.dry === true) return json({ dry: true, subject: mail.subject, body: mail.body }); // preview only: nothing is sent or created
   let emailed = false;
   try {
     await sendMail(ownerEmail(), mail.subject, mail.body);

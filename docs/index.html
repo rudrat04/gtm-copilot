@@ -184,6 +184,12 @@ function ago(iso) {
   return d === 1 ? "yesterday" : `${d} days ago`;
 }
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+const money = (n) => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${Math.round(n / 1e6)}M` : `$${Math.round(n / 1e3)}K`);
+function firmoText(a) {
+  if (!a?.firmo_at) return "";
+  return [a.employee_band ? `${a.employee_band} people` : a.employees ? `${a.employees} people` : null, a.stage,
+    a.raised_usd ? `${money(a.raised_usd)} raised` : null, a.hq_city || a.country].filter(Boolean).join(" · ");
+}
 const scoreColor = (n) => (n >= 70 ? "var(--good)" : n >= 40 ? "var(--warn)" : "var(--bad)");
 const TIER = { tier_1: ["Tier 1", "good"], tier_2: ["Tier 2", "warn"], tier_3: ["Tier 3", ""] };
 const tierTag = (t) => `<span class="tag ${TIER[t]?.[1] || ""}">${TIER[t]?.[0] || ""}</span>`;
@@ -218,7 +224,7 @@ function dossierHtml(d) {
   return `
     <div class="card">
       <div class="head">
-        <div><p class="name">${esc(a.name)}</p><span class="domain">${esc(a.domain)}</span></div>
+        <div><p class="name">${esc(a.name)}</p><span class="domain">${esc(a.domain)}</span>${firmoText(a) ? `<br><span class="domain">${esc(firmoText(a))}</span>` : ""}</div>
         <div class="score" title="ICP fit: how well this company matches your target profile, from its dossier"><b style="color:${scoreColor(score)}">${esc(score)}</b><span>ICP fit</span></div>
       </div>
       <p>${esc(x.summary)}</p>
@@ -257,7 +263,7 @@ function banner(s) {
 
 function chip(s) {
   const when = s.published ? `published ${ago(s.published)}` : `first seen ${ago(s.first_seen)}`;
-  const label = `${s.title} · ${s.published ? ago(s.published) : ago(s.first_seen)}`;
+  const label = /\d+ open roles/.test(s.title) ? `Currently: ${s.title}` : `${s.title} · ${s.published ? ago(s.published) : ago(s.first_seen)}`;
   return `<span class="tag ${esc(s.kind)}" title="${esc(s.title)} (${esc(when)})">${s.is_new ? `<b class="tag new">new</b> ` : ""}${esc(label)}</span>`;
 }
 
@@ -269,6 +275,7 @@ function qCard(a) {
     <div class="qmain">
       <div class="head"><div><p class="name">${esc(a.name)} ${tierTag(a.tier)}</p>
         <span class="domain">${esc(a.domain)} · ${esc(a.segment || "")}${a.icp_score != null ? ` · ICP fit ${esc(a.icp_score)}` : ""}</span><br>
+        ${a.firmo ? `<span class="domain">${esc(a.firmo)}</span><br>` : ""}
         <span class="domain">Scanned ${esc(ago(a.last_scanned_at))}${newest ? ` · newest signal first seen ${esc(ago(new Date(newest).toISOString()))}` : ""}</span></div>
         ${a.status === "pushed" ? `<span class="pill ok">In HubSpot</span>` : ""}</div>
       ${lifeLine(a) ? `<p class="toast" style="margin:6px 0 0"><b>${esc(lifeLine(a))}</b></p>` : ""}
@@ -386,18 +393,28 @@ function tCard(i) {
   const right = i.meeting
     ? `<div class="score"><b style="font-size:18px">${esc(new Date(i.meeting.starts_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }))}</b><span>${esc(day(i.meeting.starts_at))}</span></div>`
     : a?.priority != null ? `<div class="score" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority)}">${esc(a.priority)}</b><span>priority</span></div>` : "";
+  if (i.type === "meeting") {
+    return `<div class="card"><div class="head"><div><span class="tag accent">${esc(i.label)}</span>
+      <p class="name" style="font-size:18px;margin-top:6px">${esc(i.headline)}</p></div>${right}</div><div class="whynow">${esc(i.reason)}</div></div>`;
+  }
+  const [c, c2] = i.contacts || [];
+  const verb = i.type === "follow_up" ? "Follow up with " : "";
+  // The person is the headline; the company is the context. With no contact yet, the company leads.
+  const title = c ? `${verb}${esc(c.name)}` : esc(a.name);
+  const sub = c
+    ? `${esc(c.title)} at <b>${esc(a.name)}</b> ${tierTag(a.tier)}`
+    : `${tierTag(a.tier)} No contact yet. Use "Find relevant people"`;
   const head = `<div class="head"><div><span class="tag ${TODAY_CLS[i.type] || ""}">${esc(i.label)}</span>
-    <p class="name" style="font-size:18px;margin-top:6px">${a && i.type !== "meeting" ? esc(a.name) + " " + tierTag(a.tier) : esc(i.headline)}</p>
-    ${a && i.type !== "meeting" ? `<span class="domain">${esc(i.headline)}</span>` : ""}</div>${right}</div>`;
-  if (i.type === "meeting") return `<div class="card">${head}<div class="whynow">${esc(i.reason)}</div></div>`;
-
-  const contact = i.contact
-    ? `<p class="domain" style="margin:8px 0 0">Suggested contact: <b>${esc(i.contact.name)}</b>, ${esc(i.contact.title)}</p>`
-    : `<p class="domain" style="margin:8px 0 0">No contact yet. Use "Find relevant people".</p>`;
-  return `<div class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">${head}
+    <p class="name" style="font-size:18px;margin-top:6px">${title}</p>
+    <span class="domain">${sub}</span></div>${right}</div>`;
+  const email = c?.email ? `<p class="domain" style="margin:6px 0 0">${c.email.includes("***") ? esc(c.email) : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`}${c.persona ? ` · ${esc(c.persona)}` : ""}</p>` : "";
+  const also = c2 ? `<p class="domain" style="margin:4px 0 0">Also consider: <b>${esc(c2.name)}</b>, ${esc(c2.title)}</p>` : "";
+  return `<div class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">${head}${email}
+    ${a.firmo ? `<p class="domain" style="margin:4px 0 0">${esc(a.name)}: ${esc(a.firmo)}</p>` : ""}
     <div class="whynow">${esc(i.why || i.reason)}</div>
     <div class="chips">${(i.signals || []).map(chip).join("")}</div>
-    ${contact}${i.last_action ? `<p class="domain" style="margin:4px 0 0">Last action: ${esc(i.last_action)}</p>` : ""}
+    ${i.type === "follow_up" ? `<p class="domain" style="margin:0 0 4px">${esc(i.headline)}</p>` : ""}${also}
+    ${i.last_action ? `<p class="domain" style="margin:4px 0 0">Last action: ${esc(i.last_action)}</p>` : ""}
     <div class="draftbox"></div>
     <div class="pbox"></div>
     <div class="actions qactions"><button data-act="people">Find relevant people</button><button class="ghost" data-act="draft">Draft email</button>${lifeButtons({ outreach_status: a.outreach })}<span class="toast"></span></div></div>`;
@@ -452,7 +469,7 @@ async function loadIcp() {
           <li><b>Snooze ended</b> or <b>worth another look</b>: parked accounts that are ready again</li></ul>
         <p class="toast" style="margin-bottom:0">The list is capped at ${esc(p.today.cap)} items so the focus stays on quality.</p></div>
       <div class="card"><h2>Right now</h2>
-        <div class="grid"><div><b>${esc(p.stats.companies)}</b>companies tracked</div><div><b>${esc(p.stats.queued)}</b>in the Queue</div>
+        <div class="grid"><div><b>${esc(p.stats.companies)}</b>companies tracked</div><div><b>${esc(p.stats.matching)}</b>match your size and stage (of ${esc(p.stats.enriched)} with data)</div><div><b>${esc(p.stats.queued)}</b>in the Queue</div>
           <div><b style="color:var(--good)">${esc(p.stats.tier_1)}</b>Tier 1</div><div><b style="color:var(--warn)">${esc(p.stats.tier_2)}</b>Tier 2</div></div>
         <p class="toast" style="margin-bottom:0">Signals refresh ${esc(p.schedule.toLowerCase())}.</p></div>`;
   } catch (e) { $("icpbody").innerHTML = `<p class="err">${esc(e.message)}</p>`; }

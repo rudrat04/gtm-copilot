@@ -1,7 +1,7 @@
 import { json, normalizeDomain, sb } from "../_shared/db.ts";
 import { isAdmin } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
-import { hunterBalance, provider, rank } from "../_shared/people.ts";
+import { hunterBalance, rank, searchAndStore } from "../_shared/people.ts";
 import {
   type CompanyScores,
   companyFields,
@@ -11,6 +11,7 @@ import {
   tierLabel,
 } from "../_shared/hubspot.ts";
 import { priorityScore, tierOf } from "../_shared/score.ts";
+import { fitPoints } from "../_shared/firmo.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
 type Row = {
@@ -62,7 +63,7 @@ async function companyContext(accountId: string) {
   ]);
   const dossier = (d?.content ?? null) as Dossier | null;
   const signals = (sigs ?? []).map((s) => ({ ...s, detail: { ...(s.detail ?? {}), detected_at: s.detected_at } }));
-  const sc = priorityScore(signals);
+  const sc = priorityScore(signals, fitPoints(a));
   const scores: CompanyScores = {
     fit: dossier?.icp_fit?.score ?? a.icp_score ?? null,
     priority: sc.score,
@@ -102,34 +103,12 @@ async function find(domainInput: string, admin: boolean, refresh: boolean) {
 
   let found;
   try {
-    found = await provider().search(domain);
+    found = await searchAndStore({ id: account.id, domain });
   } catch (e) {
     await log("error", "find_people_failed", { account: domain, message: (e as Error).message });
     return json({ error: (e as Error).message }, 502);
   }
 
-  const rows = found.people.map((p) => {
-    const r = rank(p.title);
-    return {
-      account_id: account.id,
-      provider: provider().name,
-      first_name: p.firstName,
-      last_name: p.lastName,
-      title: p.title,
-      seniority: r.seniority,
-      department: p.department ?? null,
-      persona: r.persona,
-      relevance: r.relevance,
-      linkedin_url: p.linkedinUrl ?? null,
-      email: p.email?.toLowerCase() ?? null,
-      email_status: p.emailStatus ?? null,
-      email_confidence: p.emailConfidence ?? null,
-    };
-  });
-  if (rows.length) {
-    const { error } = await sb.from("cp_people").upsert(rows, { onConflict: "account_id,email", ignoreDuplicates: true });
-    if (error) await log("error", "people_store_failed", { account: domain, message: error.message });
-  }
   const people = await list(account.id, admin);
   return json({ account_id: account.id, people, cached: false, admin, credits_spent: found.credits, company });
 }
@@ -241,9 +220,11 @@ serve("people", async (req) => {
     case "rerank": {
       // Recompute persona/relevance from stored titles after an ICP change. Costs no credits.
       if (!admin) return json({ error: "Owner only" }, 403);
-      const { data } = await sb.from("cp_people").select("id,title");
+      const { data } = await sb.from("cp_people").select("id,title,account_id");
+      const { data: accts } = await sb.from("cp_accounts").select("id,employees");
+      const size = new Map((accts ?? []).map((a) => [a.id, a.employees as number | null]));
       for (const p of data ?? []) {
-        const r = rank(p.title ?? "");
+        const r = rank(p.title ?? "", size.get(p.account_id));
         await sb.from("cp_people").update({ persona: r.persona, relevance: r.relevance, seniority: r.seniority }).eq("id", p.id);
       }
       return json({ reranked: data?.length ?? 0 });

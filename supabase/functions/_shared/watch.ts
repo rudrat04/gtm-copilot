@@ -5,6 +5,8 @@ import { priorityScore, tierOf } from "./score.ts";
 import { generateWhy, hash } from "./today.ts";
 import { alertEmail } from "./templates.ts";
 import { googleConfigured, ownerEmail, sendMail } from "./google.ts";
+import { firmoLine, fitPoints } from "./firmo.ts";
+import { autoFindContacts, contactsFor } from "./contacts.ts";
 import icp from "./icp.json" with { type: "json" };
 
 const BATCH = 5;
@@ -16,7 +18,7 @@ async function state(key: string) {
 }
 const setState = (key: string, value: string) => sb.from("cp_state").upsert({ key, value, updated_at: new Date().toISOString() });
 
-type Acct = { id: string; name: string; domain: string; segment: string | null; priority_score: number | null; outreach_status: string; hubspot_company_id: string | null };
+type Acct = { id: string; name: string; domain: string; segment: string | null; priority_score: number | null; outreach_status: string; hubspot_company_id: string | null; employees: number | null; stage: string | null; country: string | null; firmo_at: string | null };
 
 /**
  * Daily light check. Re-reads public sources for accounts already in the Queue, stores only what is new
@@ -33,7 +35,7 @@ export async function lightCheck(admin: boolean) {
   await setState("watch_last", new Date().toISOString());
 
   const { data } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id")
+    .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id,employees,stage,country,firmo_at")
     .in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted", "snoozed"])
     .order("priority_score", { ascending: false }).limit(MAX_ACCOUNTS);
   const accounts = (data ?? []) as Acct[];
@@ -54,7 +56,7 @@ export async function lightCheck(admin: boolean) {
       );
       newSignals += fresh.length;
     }
-    const score = priorityScore(signals).score;
+    const score = priorityScore(signals, fitPoints(a)).score;
     if (score !== a.priority_score) await sb.from("cp_accounts").update({ priority_score: score }).eq("id", a.id);
 
     // Alert-worthy: new news, or a newly posted individual role. Hacker News alone and role-count changes are not.
@@ -90,12 +92,13 @@ export async function lightCheck(admin: boolean) {
         name: c.a.name, tier: tierOf(c.score), type: "hot", touches: 0, lastAction: null,
         sigs: (sigs ?? []).map((s) => ({ ...s, account_id: c.a.id, url: null })) as never,
       })) ?? `New signal: ${c.top.title.slice(0, 100)}`;
-      const { data: p } = await sb.from("cp_people").select("first_name,last_name,title").eq("account_id", c.a.id).gt("relevance", 0)
-        .order("relevance", { ascending: false }).limit(1).maybeSingle();
+      await autoFindContacts({ id: c.a.id, domain: c.a.domain, priority_score: c.score });
+      const contacts = (await contactsFor([c.a.id], true)).get(c.a.id) ?? [];
+      const { data: firm } = await sb.from("cp_accounts").select("employees,employee_band,stage,raised_usd,hq_city,country,firmo_at").eq("id", c.a.id).single();
       const mail = alertEmail(
-        { name: c.a.name, tier: tierOf(c.score), domain: c.a.domain },
+        { name: c.a.name, tier: tierOf(c.score), domain: c.a.domain, firmo: firm ? firmoLine(firm) : "" },
         { title: c.top.title, published: (c.top.detail as { published?: string } | undefined)?.published },
-        why, p ? { name: `${p.first_name} ${p.last_name}`.trim(), title: p.title } : null, c.a.hubspot_company_id ?? undefined,
+        why, contacts, c.a.hubspot_company_id ?? undefined,
       );
       try {
         await sendMail(ownerEmail(), mail.subject, mail.body);

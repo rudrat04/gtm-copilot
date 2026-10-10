@@ -34,7 +34,7 @@ function decay(days: number | null, full: number, half: number): number {
 }
 
 /** Deterministic priority score. No AI involved, so ranking is cheap and explainable. */
-export function priorityScore(signals: Dated[]): Score {
+export function priorityScore(signals: Dated[], fit: number = BASELINE_FIT): Score {
   const w = icp.signals.weights;
 
   const summary = signals.find((s) => s.kind === "hiring" && s.detail && "salesOpenings" in s.detail);
@@ -55,7 +55,7 @@ export function priorityScore(signals: Dated[]): Score {
   const hn = signals.filter((s) => s.kind === "hn").reduce((a, s) => a + decay(ageDays(s), 30, 90), 0);
   const community = Math.min(w.tech, hn * 4);
 
-  const parts = { hiring, news: Math.round(newsPts), community: Math.round(community), fit: BASELINE_FIT };
+  const parts = { hiring, news: Math.round(newsPts), community: Math.round(community), fit: Math.round(fit) };
   const score = Math.min(100, Object.values(parts).reduce((a, b) => a + b, 0));
   const signalMax = w.hiring + w.news + w.tech;
   const intentMax = w.hiring + w.news;

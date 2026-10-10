@@ -1,8 +1,10 @@
 import icp from "./icp.json" with { type: "json" };
 import type { TodayItem } from "./today.ts";
+import type { Contact } from "./contacts.ts";
 
 // Internal messages (the owner's morning email, hot alerts, HubSpot task bodies) are fixed templates
-// filled from stored data. The only AI in them is the cached "Why today" sentence.
+// filled from stored data. They lead with the PERSON to contact and show the company as context.
+// The only AI in them is the cached "Why today" sentence.
 
 const TZ = icp.owner.timezone;
 const page = icp.owner.pageUrl;
@@ -19,7 +21,8 @@ function age(iso?: string | null): string {
 }
 
 export const sigText = (s: { title: string; published?: string | null; first_seen?: string }) =>
-  `${s.title.slice(0, 90)} (${s.published ? `published ${age(s.published)}` : `first seen ${age(s.first_seen)}`})`;
+  /\d+ open roles/.test(s.title) ? `Currently: ${s.title}` // a count, not an event, so no age
+    : `${s.title.slice(0, 90)} (${s.published ? `published ${age(s.published)}` : `first seen ${age(s.first_seen)}`})`;
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: TZ });
@@ -30,18 +33,31 @@ export function longDate(d = new Date()) {
 
 type Links = Map<string, string>; // account id -> HubSpot company id
 
+const person = (c: Contact) => `${c.name}, ${c.title}`;
+
+/** The headline of an item: a person when we know one, otherwise the company with a next step. */
+function headline(n: number, it: TodayItem): string {
+  const a = it.account!;
+  const c = it.contacts[0];
+  const verb = it.type === "follow_up" ? "Follow up with " : it.type === "revive" ? "Revisit " : "";
+  return c ? `${n}. ${verb}${c.name} · ${c.title} at ${a.name}` : `${n}. ${verb}${a.name} (no contact found yet)`;
+}
+
 function itemBlock(n: number, it: TodayItem, links: Links): string {
   const a = it.account;
+  if (it.type === "meeting") return `${n}. ${when(it.meeting!.starts_at)} · ${it.headline}\n   Brief: emailed to you when it was booked`;
+
   const open = a && links.get(a.id) ? hubspotCompanyUrl(links.get(a.id)!) : page;
-  if (it.type === "meeting") {
-    return `${n}. ${when(it.meeting!.starts_at)} · ${it.headline}\n   Brief: emailed to you when it was booked`;
-  }
-  const lines = [`${n}. ${a!.name} · ${TIER[a!.tier] ?? ""} · priority ${a!.priority ?? "n/a"}`];
-  if (it.type === "follow_up") lines[0] = `${n}. ${a!.name} · ${it.headline}`;
+  const [c, c2] = it.contacts;
+  const lines = [headline(n, it)];
+  if (c?.email) lines.push(`   Email: ${c.email}`);
+  lines.push(`   ${a!.name} · ${TIER[a!.tier] ?? ""} · priority ${a!.priority ?? "n/a"}${a!.firmo ? ` · ${a!.firmo}` : ""}`);
+  if (it.type === "follow_up") lines.push(`   ${it.headline}`);
   lines.push(`   Why today: ${it.why || it.reason}`);
   if (it.signals.length) lines.push(`   Signals: ${it.signals.slice(0, 2).map(sigText).join(" · ")}`);
   if (it.last_action) lines.push(`   Last action: ${it.last_action}`);
-  lines.push(it.contact ? `   Contact: ${it.contact.name}, ${it.contact.title}${it.contact.persona ? ` (${it.contact.persona})` : ""}` : `   Contact: none yet, use "Find relevant people"`);
+  if (c2) lines.push(`   Also consider: ${person(c2)}${c2.email ? ` (${c2.email})` : ""}`);
+  if (!c) lines.push(`   Next: open the page and use "Find relevant people"`);
   lines.push(`   Open: ${open}`);
   return lines.join("\n");
 }
@@ -57,7 +73,7 @@ export function digestEmail(items: TodayItem[], hidden: number, links: Links) {
   const parts = [`${fresh.length} new`, `${fu.length} follow-ups`, mt.length ? `${mt.length} meetings` : ""].filter(Boolean).join(", ");
   const body = [
     `Good morning ${icp.owner.name},`,
-    `Here is your focus for ${longDate()}.\n`,
+    `Here is who to contact for ${longDate()}.\n`,
     section("NEW AND HOT", fresh),
     section("FOLLOW-UPS DUE", fu),
     section("MEETINGS", mt),
@@ -69,28 +85,43 @@ export function digestEmail(items: TodayItem[], hidden: number, links: Links) {
 }
 
 /** An instant alert when a new signal appears on an account you have not contacted yet. */
-export function alertEmail(a: { name: string; tier: string; domain: string }, top: { title: string; published?: string | null }, why: string, contact: { name: string; title: string } | null, hubspotId?: string) {
+export function alertEmail(
+  a: { name: string; tier: string; domain: string; firmo?: string },
+  top: { title: string; published?: string | null },
+  why: string,
+  contacts: Contact[],
+  hubspotId?: string,
+) {
   const topShort = top.title.replace(/^Hiring:\s*/, "hiring ").slice(0, 70);
+  const [c, c2] = contacts;
+  const who = c ? `${c.name} at ${a.name}` : a.name;
   return {
-    subject: `Hot: ${a.name} (${TIER[a.tier]}), ${topShort}`,
+    subject: `Hot: ${who} (${TIER[a.tier]}), ${topShort}`,
     body: [
-      `${a.name} just showed a new signal: ${top.title.slice(0, 120)} (${top.published ? `published ${age(top.published)}` : "found today"}).`,
+      c ? `Contact: ${person(c)}${c.email ? `\nEmail: ${c.email}` : ""}` : `Contact: none found yet, use "Find relevant people"`,
+      c2 ? `Also consider: ${person(c2)}${c2.email ? ` (${c2.email})` : ""}` : "",
+      `\n${a.name} just showed a new signal: ${top.title.slice(0, 120)} (${top.published ? `published ${age(top.published)}` : "found today"}).`,
+      a.firmo ? `Company: ${a.firmo}` : "",
       `Why today: ${why}`,
-      contact ? `Contact: ${contact.name}, ${contact.title}` : `Contact: none yet, use "Find relevant people"`,
       `Open: ${hubspotId ? hubspotCompanyUrl(hubspotId) : page}`,
       `\n— Account Copilot · you get at most ${icp.alerts.maxPerDay} of these a day`,
-    ].join("\n"),
+    ].filter(Boolean).join("\n"),
   };
 }
 
 /** HubSpot task title and body (HTML) for one prospect. */
 export function taskFor(it: TodayItem, contactName?: string | null) {
   const a = it.account!;
+  const c = it.contacts[0];
+  const who = c?.name ?? contactName ?? "the team";
   const verb = it.type === "follow_up" ? "Follow up with" : it.type === "revive" ? "Revisit" : "Contact";
   const reason = (it.why || it.reason).replace(/\s+/g, " ");
-  const subject = `${verb} ${contactName || "the team"} at ${a.name}: ${reason.slice(0, 80)}${reason.length > 80 ? "…" : ""}`;
+  const subject = `${verb} ${who} at ${a.name}: ${reason.slice(0, 80)}${reason.length > 80 ? "…" : ""}`;
   const li = (arr: string[]) => (arr.length ? `<ul>${arr.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
   const html = [
+    c ? `<p><b>Contact:</b> ${esc(person(c))}${c.email ? ` · ${esc(c.email)}` : ""}</p>` : "",
+    it.contacts[1] ? `<p><b>Also consider:</b> ${esc(person(it.contacts[1]))}</p>` : "",
+    a.firmo ? `<p><b>Company:</b> ${esc(a.name)} · ${esc(a.firmo)}</p>` : "",
     `<p><b>Why today:</b> ${esc(it.why || it.reason)}</p>`,
     it.signals.length ? `<p><b>Signals (${it.signals.length}, newest first):</b></p>${li(it.signals.map(sigText))}` : "",
     it.last_action ? `<p><b>Last action:</b> ${esc(it.last_action)}</p>` : "",
@@ -101,9 +132,11 @@ export function taskFor(it: TodayItem, contactName?: string | null) {
 
 /** One task per day that lists everything, so it works even for accounts not yet in HubSpot. */
 export function summaryTask(items: TodayItem[], hidden: number) {
-  const rows = items.map((i) => i.type === "meeting"
-    ? `${when(i.meeting!.starts_at)}: ${i.headline}`
-    : `${i.account!.name} (${TIER[i.account!.tier]}): ${i.label.toLowerCase()}, ${(i.why || i.reason).slice(0, 110)}`);
+  const rows = items.map((i) => {
+    if (i.type === "meeting") return `${when(i.meeting!.starts_at)}: ${i.headline}`;
+    const c = i.contacts[0];
+    return `${c ? `${c.name} (${c.title}) at ` : ""}${i.account!.name} · ${TIER[i.account!.tier]}: ${i.label.toLowerCase()}, ${(i.why || i.reason).slice(0, 100)}`;
+  });
   return {
     subject: `Account Copilot: today's focus (${items.length})`,
     html: `<p>${esc(longDate())}</p><ol>${rows.map((r) => `<li>${esc(r)}</li>`).join("")}</ol>${hidden ? `<p>${hidden} lower-priority accounts not shown.</p>` : ""}<p><a href="${esc(page)}">Open Account Copilot</a></p>`,
