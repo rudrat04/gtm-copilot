@@ -96,7 +96,7 @@ The `signal-scan` cron runs **weekly: Mondays 06:00-06:55 UTC** (every 5 minutes
 - Test data in HubSpot: companies Clay and Attio, and one real contact (Drew Peterson, VP Sales at Attio). Delete if not wanted.
 - Hunter credits: about 48 of 50 left this month (resets monthly).
 
-## Next steps (as of 16 Oct 2026)
+## Next steps (as of 10 Oct 2026)
 Vision: the system finds companies and prospects, hands the rep a ready pipeline, and enables them (brief, recap, drafts) so reps spend time on people. Outreach stays manual; the prospect-facing draft stays AI-written and only a suggestion.
 DONE: research, signal scan, people/enrich/push, meeting brief, lifecycle + Today, hot alerts + digest + HubSpot to-dos, firmographics, auto-discovery (HN hiring), Accounts tab, Fit + Hot/Warm/Watching, Setup tab (editable profile), Meetings tab + debrief, HubSpot status sync and read-back (incl. closed-lost Revival), calendar cancel/move, inbound speed to lead.
 TODO, in suggested order: 1) packaging (README with diagram, 2-minute demo script, one-page case study with cost per lead); 2) multiple search profiles + territories/owners (accounts assigned to a rep; alerts and HubSpot owner by territory); 3) Insights tab (which signals convert, from `cp_outcomes` and `cp_leads`; needs real data); 4) more discovery sources (funding news, Launch HN); 5) board view in Accounts; 6) after a meeting, suggest more people at the company; 7) lookalike accounts; 8) competitor radar and objection cards. Blocked on data: champion job-change tracker, phone numbers. Test records to clean up in HubSpot (ask first): Attio deal/notes/to-do, the Rootly company/contact/to-do from the inbound test.
