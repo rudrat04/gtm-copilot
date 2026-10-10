@@ -11,6 +11,7 @@ Owner: Rudra (rudrat04 on GitHub). Public repo: https://github.com/rudrat04/gtm-
 - Python's `urllib` has an SSL problem on this Mac. Use `curl` for HTTP calls from the shell.
 - Commits end with: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 - The user prefers short, plain-English answers and wants to be asked before big decisions.
+- **Keep this file current.** When a module is finished, a decision changes, or a key, command or ID changes, update "Current state", "Next steps" and any affected section in the same commit. Keep it short: a briefing note, not a log.
 
 ## Stack and IDs
 - **Supabase** project `gtm-copilot`, ref `tecgblsoylrshcqneevf` (Mumbai, free). Tables are prefixed `cp_`. Edge Functions, `pg_cron`, `pg_net`.
