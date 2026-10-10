@@ -12,7 +12,7 @@ const DAY = 86_400_000;
  * fall on fixed days after it (3, 7, 14), then stop. Every action is logged with a snapshot of the
  * scores and signals at that moment, which is the raw material for "which signals convert".
  */
-export async function applyOutcome(accountId: string, kind: OutcomeKind, opts: { days?: number; note?: string } = {}) {
+export async function applyOutcome(accountId: string, kind: OutcomeKind, opts: { days?: number; note?: string; skipSync?: boolean } = {}) {
   const { data: a } = await sb.from("cp_accounts").select("*").eq("id", accountId).maybeSingle();
   if (!a) return { error: "Account not found" as const };
 
@@ -71,6 +71,6 @@ export async function applyOutcome(accountId: string, kind: OutcomeKind, opts: {
   });
   await log("info", "outcome", { account: a.domain, detail: { kind, touches: update.touches ?? a.touches, next: update.next_followup_at ?? null } });
   let crm: SyncResult = { synced: false, actions: [] };
-  if (kind !== "reopen") crm = await syncOutcome(accountId, kind).catch(() => crm); // HubSpot trouble never blocks the action
+  if (kind !== "reopen" && !opts.skipSync) crm = await syncOutcome(accountId, kind).catch(() => crm); // HubSpot trouble never blocks the action
   return { ok: true as const, update, crm };
 }

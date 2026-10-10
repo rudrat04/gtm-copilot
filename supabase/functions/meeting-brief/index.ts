@@ -1,5 +1,6 @@
 import { json, sb } from "../_shared/db.ts";
-import { jobAllowed } from "../_shared/auth.ts";
+import { isAdmin, jobAllowed } from "../_shared/auth.ts";
+import { handleCancelled, handleMoved } from "../_shared/calwatch.ts";
 import { log, serve } from "../_shared/log.ts";
 import { type CalEvent, getEvent, googleConfigured, listChangedEvents, ownerEmail, sendMail } from "../_shared/google.ts";
 import { lookupForBrief, tierLabel } from "../_shared/hubspot.ts";
@@ -63,17 +64,23 @@ async function research(domain: string) {
   return await res.json();
 }
 
-async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry"> {
-  if (ev.status === "cancelled") return "skipped";
+async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry" | "cancelled" | "moved"> {
+  if (ev.status === "cancelled") return (await handleCancelled(ev.id)) ? "cancelled" : "skipped";
   const startIso = ev.start?.dateTime ?? ev.start?.date;
-  if (!startIso || Date.parse(startIso) < Date.now()) return "skipped";
+  if (!startIso) return "skipped";
 
   const ext = externalAttendees(ev);
-  if (!ext.length) return "skipped";
+  const { data: existing } = await sb.from("cp_meetings").select("id,calendar_event_id,title,starts_at,ends_at,attendee_name,attendee_email,attendee_domain,account_id,status,outcome,reschedule_count,attempts").eq("calendar_event_id", ev.id).maybeSingle();
 
-  const { data: existing } = await sb.from("cp_meetings").select("id,status,attempts").eq("calendar_event_id", ev.id).maybeSingle();
-  if (existing?.status === "briefed") return "skipped";
-  const attempts = (existing?.attempts ?? 0) + 1;
+  if (existing?.status === "briefed") {
+    // Already briefed: the only things that matter now are the outside guests leaving, or the time changing.
+    if (!ext.length) return (await handleCancelled(ev.id)) ? "cancelled" : "skipped";
+    if (!existing.outcome && Date.parse(startIso) > Date.now()) return (await handleMoved(existing, startIso, ev.end?.dateTime ?? null)) ? "moved" : "skipped";
+    return "skipped";
+  }
+  if (Date.parse(startIso) < Date.now()) return "skipped";
+  if (!ext.length) return "skipped";
+  const attempts = (existing?.attempts ?? 0) + 1; // a restored (previously cancelled) meeting is briefed again
 
   const primary = ext[0];
   const email = primary.email.toLowerCase();
@@ -169,8 +176,10 @@ serve("meeting-brief", async (req) => {
   const cursor = parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : new Date(Date.now() - 86_400_000).toISOString();
 
   let events: CalEvent[] = [];
+  const replay = (await req.clone().json().catch(() => null))?.events;
   try {
-    events = await listChangedEvents(cursor);
+    // Owner only: {"events": [...]} replays calendar events through the same code, for testing and demos.
+    events = Array.isArray(replay) && (await isAdmin(req)) ? replay as CalEvent[] : await listChangedEvents(cursor);
   } catch (e) {
     await log("error", "calendar_poll_failed", { message: (e as Error).message });
     return json({ error: "Calendar poll failed" }, 502);
@@ -195,8 +204,8 @@ serve("meeting-brief", async (req) => {
     }
   }
 
-  // Keep a one-minute overlap so an event updated during this poll is never missed.
-  await setState("calendar_cursor", new Date(Date.parse(polledAt) - 60_000).toISOString());
+  // Keep a one-minute overlap so an event updated during this poll is never missed. (Replays do not move the cursor.)
+  if (!Array.isArray(replay)) await setState("calendar_cursor", new Date(Date.parse(polledAt) - 60_000).toISOString());
 
   // After a meeting ends, ask the owner how it went (once per meeting).
   const debriefs = await sendDueDebriefs().catch(async (e) => {
@@ -205,7 +214,8 @@ serve("meeting-brief", async (req) => {
   });
 
   const briefed = results.filter((r) => r === "briefed").length;
-  if (!debriefs && !briefed && !results.includes("failed") && !results.includes("retry")) return idle({ checked: events.length });
-  await log("info", "calendar_poll", { detail: { events: events.length, briefed, debriefs, results } });
-  return json({ processed: events.length, briefed, debriefs });
+  const changes = results.filter((r) => r === "cancelled" || r === "moved").length;
+  if (!debriefs && !briefed && !changes && !results.includes("failed") && !results.includes("retry")) return idle({ checked: events.length });
+  await log("info", "calendar_poll", { detail: { events: events.length, briefed, changes, debriefs, results } });
+  return json({ processed: events.length, briefed, changes, debriefs });
 });

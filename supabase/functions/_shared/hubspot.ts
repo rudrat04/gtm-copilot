@@ -323,3 +323,51 @@ export async function moveDeal(dealId: string, stage: DealStage): Promise<boolea
   const r = await hs(`/crm/v3/objects/deals/${dealId}`, { method: "PATCH", body: JSON.stringify({ properties: { dealstage: stage } }) });
   return r.ok;
 }
+
+// ---- Reading HubSpot back ----
+
+/** Status of our to-dos: id -> NOT_STARTED, IN_PROGRESS, COMPLETED... Deleted tasks are simply missing. */
+export async function readTaskStatuses(ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const r = await hs("/crm/v3/objects/tasks/batch/read", { method: "POST", body: JSON.stringify({ properties: ["hs_task_status"], inputs: ids.slice(i, i + 100).map((id) => ({ id })) }) }, [207]);
+    for (const t of r.body.results ?? []) out.set(t.id, t.properties?.hs_task_status ?? "");
+  }
+  return out;
+}
+
+export type DealRead = { id: string; stage: string; lostReason: string | null; closedAt: string | null };
+
+export async function readDeals(ids: string[]): Promise<Map<string, DealRead>> {
+  const out = new Map<string, DealRead>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const r = await hs("/crm/v3/objects/deals/batch/read", { method: "POST", body: JSON.stringify({ properties: ["dealstage", "closed_lost_reason", "closedate"], inputs: ids.slice(i, i + 100).map((id) => ({ id })) }) }, [207]);
+    for (const d of r.body.results ?? []) out.set(d.id, { id: d.id, stage: d.properties?.dealstage ?? "", lostReason: d.properties?.closed_lost_reason || null, closedAt: d.properties?.closedate || null });
+  }
+  return out;
+}
+
+export type LostDeal = { dealId: string; name: string; reason: string | null; closedAt: string | null; companyId: string | null; companyName: string | null; domain: string | null };
+
+/** Deals closed as lost (any pipeline), newest first, with their company. */
+export async function searchLostDeals(limit = 50): Promise<LostDeal[]> {
+  const r = await hs("/crm/v3/objects/deals/search", {
+    method: "POST",
+    body: JSON.stringify({ filterGroups: [{ filters: [{ propertyName: "hs_is_closed_lost", operator: "EQ", value: "true" }] }], properties: ["dealname", "closed_lost_reason", "closedate"], sorts: [{ propertyName: "closedate", direction: "DESCENDING" }], limit }),
+  });
+  const deals = (r.body.results ?? []) as { id: string; properties: Record<string, string> }[];
+  if (!deals.length) return [];
+  const assoc = await hs("/crm/v4/associations/deals/companies/batch/read", { method: "POST", body: JSON.stringify({ inputs: deals.map((d) => ({ id: d.id })) }) }, [207]);
+  const companyOf = new Map<string, string>();
+  for (const a of assoc.body.results ?? []) if (a.to?.[0]) companyOf.set(a.from.id, String(a.to[0].toObjectId));
+  const ids = [...new Set(companyOf.values())];
+  const companies = new Map<string, { name: string | null; domain: string | null }>();
+  if (ids.length) {
+    const c = await hs("/crm/v3/objects/companies/batch/read", { method: "POST", body: JSON.stringify({ properties: ["name", "domain"], inputs: ids.map((id) => ({ id })) }) }, [207]);
+    for (const x of c.body.results ?? []) companies.set(x.id, { name: x.properties?.name ?? null, domain: x.properties?.domain ?? null });
+  }
+  return deals.map((d) => {
+    const cid = companyOf.get(d.id) ?? null;
+    return { dealId: d.id, name: d.properties.dealname ?? "", reason: d.properties.closed_lost_reason || null, closedAt: d.properties.closedate || null, companyId: cid, companyName: cid ? companies.get(cid)?.name ?? null : null, domain: cid ? companies.get(cid)?.domain ?? null : null };
+  });
+}

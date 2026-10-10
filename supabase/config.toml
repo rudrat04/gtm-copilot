@@ -425,3 +425,6 @@ verify_jwt = false
 
 [functions.discover]
 verify_jwt = false
+
+[functions.crm-sync]
+verify_jwt = false

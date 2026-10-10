@@ -83,7 +83,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
   const cfg = icp.today;
 
   const { data: accts } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,priority_score,icp_score,why_now,status,outreach_status,touches,contacted_at,last_touch_at,next_followup_at,snoozed_until,employee_band,employees,stage,raised_usd,hq_city,country,firmo_at")
+    .select("id,name,domain,segment,lost_at,lost_reason,priority_score,icp_score,why_now,status,outreach_status,touches,contacted_at,last_touch_at,next_followup_at,snoozed_until,employee_band,employees,stage,raised_usd,hq_city,country,firmo_at")
     .or("status.in.(queued,pushed),outreach_status.neq.open").limit(300);
   const accounts = accts ?? [];
   const ids = accounts.map((a) => a.id);
@@ -149,6 +149,9 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     } else if (a.outreach_status === "not_now" && tier === "tier_1" && !clearMiss && last && newest > Date.parse(last.created_at)) {
       it = { ...base, key: `rv-${a.id}`, type: "revive", label: "Worth another look", urgency: 250 + (a.priority_score ?? 0) / 10,
         headline: "Marked not now, but a stronger signal appeared since", due: null };
+    } else if (a.lost_at && !clearMiss && ["open", "not_now"].includes(a.outreach_status) && newest > Date.parse(a.lost_at) && now - newest < 30 * DAY) {
+      it = { ...base, key: `lost-${a.id}`, type: "revive", label: "Closed-lost, new signal", urgency: 280 + (a.priority_score ?? 0) / 10,
+        headline: `Lost ${ageLabel(a.lost_at)}${a.lost_reason ? ` (${a.lost_reason})` : ""}, but something new happened`, due: null };
     } else if (a.outreach_status === "open" && a.status === "queued" && tier !== "tier_3" && !clearMiss && newest && now - newest < cfg.newDays * DAY) {
       const hot = now - newest < cfg.hotHours * HOUR;
       it = { ...base, key: `hot-${a.id}`, type: hot ? "hot" : "new", label: hot ? "Hot now" : "New this week",

@@ -17,7 +17,7 @@ echo "Security"
 c=$(curl -s -i -X OPTIONS "$BASE/queue" -H "Origin: https://copilot.f1rstword.com" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: x-admin-key,content-type,apikey,authorization" | grep -ci "access-control-allow-headers:.*x-admin-key")
 expect "browser may send the owner key (CORS)" "$c" "1"
 for f in research-account queue people; do expect "$f rejects calls with no credentials" "$(curl -s -o /dev/null -w '%{http_code}' -X POST $BASE/$f -d '{}')" "401"; done
-for f in signal-scan meeting-brief daily-digest discover; do expect "$f rejects strangers" "$(curl -s -o /dev/null -w '%{http_code}' -X POST $BASE/$f -H 'Content-Type: application/json' -d '{}')" "401"; done
+for f in signal-scan meeting-brief daily-digest discover crm-sync; do expect "$f rejects strangers" "$(curl -s -o /dev/null -w '%{http_code}' -X POST $BASE/$f -H 'Content-Type: application/json' -d '{}')" "401"; done
 expect "wrong owner key is treated as public" "$(post queue '{"action":"outcome","kind":"contacted","account_id":"00000000-0000-0000-0000-000000000000"}' -H 'x-admin-key: wrong')" "200"
 expect "  ...and only gets a dry run" "$(field "d.get('mode')")" "dry_run"
 expect "public cannot enrich companies" "$(post queue '{"action":"enrich_companies"}')" "403"

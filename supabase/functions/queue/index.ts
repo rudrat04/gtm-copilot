@@ -100,12 +100,12 @@ async function list(view = "todo", admin = false) {
  */
 async function accountsView(admin: boolean) {
   const { data: all } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at")
+    .select("id,name,domain,segment,source,created_at,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at")
     .order("priority_score", { ascending: false, nullsFirst: false }).limit(400);
   const rows = (all ?? []).map((a) => {
     const f = fitBreakdown(a);
     const outside = f.known && (f.size === 0 || f.stage === 0);
-    const deliberate = a.source === "research" || a.source === "discovered"; // someone chose or the system found it
+    const deliberate = a.source === "research" || a.source === "discovered" || a.source === "hubspot" || !!a.lost_at; // someone chose or the system found it
     const low = !deliberate && (outside || (a.priority_score ?? 0) < 30) && a.outreach_status === "open";
     const isNew = a.source === "discovered" && a.outreach_status === "open" && Date.now() - Date.parse(a.created_at) < 14 * DAY;
     return { a, low: low || (a.source === "discovered" && outside && a.outreach_status === "open"), outside, isNew };
@@ -136,6 +136,7 @@ async function accountsView(admin: boolean) {
         heat: heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)),
         firmo_known: !!a.firmo_at, low, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
+        lost_at: a.lost_at, lost_reason: a.lost_reason,
         last_scanned_at: a.last_scanned_at, found_reason: why.get(a.domain) ?? null,
         searched: searched.has(a.id), contacts: contactMap.get(a.id) ?? [],
         signals: low ? [] : mine.slice(0, 3).map((s) => ({
@@ -154,8 +155,8 @@ const shortName = (n: string | null) => { const p = (n ?? "").trim().split(/\s+/
 async function meetingsView(admin: boolean) {
   const now = Date.now();
   const { data } = await sb.from("cp_meetings")
-    .select("id,title,starts_at,ends_at,attendee_name,attendee_email,attendee_domain,account_id,brief,outcome,debriefed_at,notes,recap,crm_sync")
-    .eq("status", "briefed").order("starts_at", { ascending: false }).limit(60);
+    .select("id,title,starts_at,ends_at,status,cancelled_at,rescheduled_from,reschedule_count,attendee_name,attendee_email,attendee_domain,account_id,brief,outcome,debriefed_at,notes,recap,crm_sync")
+    .in("status", ["briefed", "cancelled"]).order("starts_at", { ascending: false }).limit(60);
   const ids = [...new Set((data ?? []).map((m) => m.account_id).filter(Boolean))] as string[];
   const { data: accts } = ids.length ? await sb.from("cp_accounts").select("id,name,domain,hubspot_company_id").in("id", ids) : { data: [] };
   const byId = new Map((accts ?? []).map((a) => [a.id, a]));
@@ -165,17 +166,19 @@ async function meetingsView(admin: boolean) {
       id: m.id, title: m.title, starts_at: m.starts_at, ends_at: new Date(endsAt(m)).toISOString(),
       attendee: admin ? m.attendee_name : shortName(m.attendee_name), email: admin ? m.attendee_email : null,
       company: a?.name ?? m.attendee_domain, domain: m.attendee_domain, in_hubspot: !!a?.hubspot_company_id,
-      outcome: m.outcome, debriefed_at: m.debriefed_at,
+      outcome: m.outcome, debriefed_at: m.debriefed_at, status: m.status, cancelled_at: m.cancelled_at, moved_from: m.rescheduled_from, moves: m.reschedule_count,
       brief: admin ? m.brief : null, notes: admin ? m.notes : null, recap: admin ? m.recap : null, crm: admin ? m.crm_sync : null,
     };
   };
-  const rows = (data ?? []).map(view);
+  const all = (data ?? []).map(view);
+  const rows = all.filter((m) => m.status === "briefed");
   const ended = (m: { ends_at: string }) => Date.parse(m.ends_at) <= now;
   return {
     labels: OUTCOME_LABEL,
     needs: rows.filter((m) => ended(m) && !m.outcome && Date.parse(m.starts_at) > now - 14 * DAY),
     upcoming: rows.filter((m) => !ended(m)).reverse(),
     done: rows.filter((m) => m.outcome).slice(0, 12),
+    cancelled: all.filter((m) => m.status === "cancelled" && Date.parse(m.cancelled_at ?? m.starts_at) > now - 14 * DAY).slice(0, 8),
   };
 }
 

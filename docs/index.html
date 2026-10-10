@@ -394,7 +394,7 @@ async function loadToday() {
 
 /* ============ Accounts: every company, one list ============ */
 let aview = "all", aq = "";
-const FILTERS = [["all", "All"], ["new", "New"], ["nocontact", "No contact yet"], ["tocontact", "Ready to contact"], ["progress", "In progress"], ["parked", "Parked"], ["looked", "Looked up"], ["low", "Low fit"]];
+const FILTERS = [["all", "All"], ["new", "New"], ["nocontact", "No contact yet"], ["tocontact", "Ready to contact"], ["progress", "In progress"], ["parked", "Parked"], ["looked", "Looked up"], ["revival", "Closed-lost"], ["low", "Low fit"]];
 const parkedS = (a) => a.outreach_status === "snoozed" || a.outreach_status === "not_now";
 const FILTER_FN = {
   all: (a) => !a.low && !parkedS(a),
@@ -404,6 +404,7 @@ const FILTER_FN = {
   progress: (a) => ["contacted", "replied", "meeting"].includes(a.outreach_status),
   parked: parkedS,
   looked: (a) => a.source === "research",
+  revival: (a) => !!a.lost_at,
   low: (a) => a.low,
 };
 
@@ -447,6 +448,7 @@ function aCard(a) {
       <div class="meta">${esc(a.segment || a.domain)}</div>${fitLine(a.fit, a.firmo)}
     </div></div>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
+    ${a.lost_at ? `<div class="status-line">Closed-lost in HubSpot ${esc(ago(a.lost_at))}${a.lost_reason ? `: ${esc(a.lost_reason)}` : ""}</div>` : ""}
     ${reason ? `<div class="why">${reason}</div>` : ""}
     ${sigList(a.signals, 1)}
     ${contactLine(a)}
@@ -740,8 +742,12 @@ function mNeed(m) {
     <div class="actions" style="margin-top:12px"><button class="btn primary" data-savedebrief>Save debrief</button><span class="meta">Updates HubSpot${m.in_hubspot ? "" : " (once the company is pushed)"}. Notes cost about 1 cent for the recap.</span></div></article>`;
 }
 function mUp(m) {
-  return `<article class="card"><div class="eyebrow" style="margin-bottom:6px"><span class="badge accent">Upcoming</span><span>Brief emailed to you</span></div>${head(m)}
+  return `<article class="card"><div class="eyebrow" style="margin-bottom:6px"><span class="badge accent">Upcoming</span>${m.moved_from ? `<span class="badge warn">Moved</span><span>was ${esc(when(m.moved_from))}</span>` : `<span>Brief emailed to you</span>`}</div>${head(m)}
     ${m.brief ? `<details><summary>View the brief</summary><pre class="draft" style="margin:6px 0 0">${esc(m.brief)}</pre></details>` : ""}</article>`;
+}
+function mCancelled(m) {
+  return `<article class="card"><div class="eyebrow" style="margin-bottom:6px"><span class="badge warn">Cancelled</span><span>${esc(ago(m.cancelled_at))}</span></div>${head(m)}
+    <p class="meta" style="margin:10px 0 0">No debrief needed. A to-do to reschedule was created in HubSpot${m.in_hubspot ? "" : " (once the company is pushed)"} and the account is back in Today for a follow-up.</p></article>`;
 }
 function mDone(m) {
   const addNotes = !m.recap && !m.notes ? `<details data-mid="${esc(m.id)}"><summary>Add notes for a recap</summary><textarea class="notes" data-notes placeholder="Two lines on what you heard."></textarea>
@@ -752,7 +758,7 @@ function mDone(m) {
 function drawMeetings() {
   const d = MT, sec = (t, list, fn) => list.length ? `<p class="label" style="margin:22px 0 10px">${t}</p>${list.map(fn).join("")}` : "";
   const c = $("c-meetings"); c.textContent = d.needs.length; c.hidden = !d.needs.length;
-  $("meetbody").innerHTML = (sec("Needs a debrief", d.needs, mNeed) + sec("Upcoming", d.upcoming, mUp) + sec("Done", d.done, mDone)).replace(/^<p class="label" style="margin:22px 0 10px">/, '<p class="label" style="margin:0 0 10px">')
+  $("meetbody").innerHTML = (sec("Needs a debrief", d.needs, mNeed) + sec("Upcoming", d.upcoming, mUp) + sec("Cancelled", d.cancelled || [], mCancelled) + sec("Done", d.done, mDone)).replace(/^<p class="label" style="margin:22px 0 10px">/, '<p class="label" style="margin:0 0 10px">')
     || `<div class="card empty">No meetings yet.<br>When someone outside books a meeting with you, a private brief is emailed and the meeting shows up here. After it ends you get a one-tap "how did it go?" email.</div>`;
 }
 

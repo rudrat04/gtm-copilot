@@ -8,7 +8,7 @@ import icp from "./icp.json" with { type: "json" };
 // records Account Copilot created (the company, its contacts and the one deal we open). Best effort: a HubSpot
 // problem is logged and reported, but never blocks the action in the app.
 
-export type SyncKind = "contacted" | "replied" | "meeting" | "snooze" | "not_now" | "went_well" | "follow_up" | "no_show" | "not_fit";
+export type SyncKind = "contacted" | "replied" | "meeting" | "snooze" | "not_now" | "went_well" | "follow_up" | "no_show" | "not_fit" | "cancelled";
 
 const LEAD: Partial<Record<SyncKind, LeadStatus>> = {
   contacted: "ATTEMPTED_TO_CONTACT", replied: "CONNECTED", meeting: "IN_PROGRESS", snooze: "BAD_TIMING", not_now: "BAD_TIMING",
@@ -17,9 +17,10 @@ const LEAD: Partial<Record<SyncKind, LeadStatus>> = {
 const DEAL: Partial<Record<SyncKind, DealStage>> = { meeting: "appointmentscheduled", went_well: "qualifiedtobuy", follow_up: "appointmentscheduled", not_fit: "closedlost" };
 const LABEL: Record<SyncKind, string> = {
   contacted: "Marked contacted", replied: "They replied", meeting: "Meeting booked", snooze: "Snoozed", not_now: "Marked not now",
-  went_well: "Meeting went well", follow_up: "Meeting needs a follow-up", no_show: "No-show", not_fit: "Not a fit",
+  went_well: "Meeting went well", follow_up: "Meeting needs a follow-up", no_show: "No-show", not_fit: "Not a fit", cancelled: "Meeting cancelled",
 };
 const TASK: Partial<Record<SyncKind, { subject: (who: string) => string; days: number }>> = {
+  cancelled: { subject: (w) => `Reschedule: ${w} cancelled the meeting`, days: 1 },
   went_well: { subject: (w) => `Send the recap and propose a next step: ${w}`, days: 1 },
   follow_up: { subject: (w) => `Follow up after the meeting: ${w}`, days: 3 },
   no_show: { subject: (w) => `Reschedule: ${w} did not show`, days: 1 },
@@ -58,11 +59,14 @@ export async function syncOutcome(accountId: string, kind: SyncKind, ctx: { note
     if (!dealId && stage !== "closedlost") {
       await step("Deal opened", async () => {
         dealId = await createDeal({ name: `${a.name} · ${icp.seller.name}`, stage, companyId: a.hubspot_company_id!, contactId, ownerId: icp.owner.hubspotOwnerId });
-        await sb.from("cp_accounts").update({ hubspot_deal_id: dealId }).eq("id", accountId);
+        await sb.from("cp_accounts").update({ hubspot_deal_id: dealId, deal_stage: stage }).eq("id", accountId);
       });
     } else if (dealId) {
       const id = dealId;
-      await step(`Deal moved to ${stage === "closedlost" ? "closed lost" : stage === "qualifiedtobuy" ? "qualified to buy" : "appointment scheduled"}`, async () => { if (!(await moveDeal(id, stage))) throw new Error("deal"); });
+      await step(`Deal moved to ${stage === "closedlost" ? "closed lost" : stage === "qualifiedtobuy" ? "qualified to buy" : "appointment scheduled"}`, async () => {
+        if (!(await moveDeal(id, stage))) throw new Error("deal");
+        await sb.from("cp_accounts").update({ deal_stage: stage, ...(stage === "closedlost" ? { lost_at: new Date().toISOString() } : {}) }).eq("id", accountId);
+      });
     }
   }
 
@@ -72,7 +76,8 @@ export async function syncOutcome(accountId: string, kind: SyncKind, ctx: { note
   const t = TASK[kind];
   if (t && ctx.createTasks) {
     await step("To-do created", async () => {
-      await createTask({ subject: t.subject(who), html: `<p>${esc(LABEL[kind])} (${esc(a.name)}).</p>`, dueIso: new Date(Date.now() + t.days * DAY).toISOString(), priority: "HIGH", ownerId: icp.owner.hubspotOwnerId, companyId: a.hubspot_company_id, contactId });
+      const taskId = await createTask({ subject: t.subject(who), html: `<p>${esc(LABEL[kind])} (${esc(a.name)}).</p>`, dueIso: new Date(Date.now() + t.days * DAY).toISOString(), priority: "HIGH", ownerId: icp.owner.hubspotOwnerId, companyId: a.hubspot_company_id, contactId });
+      await sb.from("cp_tasks").insert({ key: `post:${kind}:${accountId}:${Date.now()}`, account_id: accountId, hubspot_task_id: taskId }); // so completing it can be read back
     });
   }
   await log("info", "crm_synced", { account: a.domain, detail: { kind, actions } });

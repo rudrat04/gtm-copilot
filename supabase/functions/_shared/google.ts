@@ -63,7 +63,7 @@ export async function listChangedEvents(updatedMin: string): Promise<CalEvent[]>
     updatedMin,
     timeMin: new Date().toISOString(),
     singleEvents: "true",
-    showDeleted: "false",
+    showDeleted: "true", // cancelled meetings must show up, so we can tell the owner
     maxResults: "50",
     orderBy: "updated",
   });
