@@ -12,6 +12,7 @@ async function hs(path: string, init: RequestInit = {}, quiet: number[] = []) {
     },
   });
   const text = await res.text();
+  // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
   let body: any = {};
   try {
     body = text ? JSON.parse(text) : {};

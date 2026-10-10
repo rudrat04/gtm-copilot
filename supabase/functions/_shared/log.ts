@@ -2,6 +2,18 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { cors, sb } from "./db.ts";
 
 type Level = "info" | "warn" | "error";
+
+// Defence in depth: whatever ends up in a log line, secrets are masked first.
+const SECRET_PATTERNS: [RegExp, string][] = [
+  [/(api[_-]?key|token|secret|password|authorization)(["']?\s*[=:]\s*["']?)[^&\s"')]+/gi, "$1$2[redacted]"],
+  [/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]"],
+  [/sk-ant-[A-Za-z0-9_-]+/g, "[redacted]"],
+  [/eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, "[redacted-jwt]"],
+  [/\b[a-f0-9]{40,}\b/gi, "[redacted-hex]"],
+];
+export function redact(text: string): string {
+  return SECRET_PATTERNS.reduce((t, [re, to]) => t.replace(re, to), text);
+}
 type Ctx = { fn: string; runId: string };
 
 const store = new AsyncLocalStorage<Ctx>();
@@ -23,8 +35,8 @@ export async function log(
     level,
     event,
     account: data.account ?? null,
-    message: data.message?.slice(0, 500) ?? null,
-    detail: data.detail ?? {},
+    message: data.message ? redact(data.message).slice(0, 500) : null,
+    detail: JSON.parse(redact(JSON.stringify(data.detail ?? {}))),
     ms: data.ms ?? null,
   };
   console[level === "info" ? "log" : level](JSON.stringify(row));

@@ -39,7 +39,7 @@ export async function fetchFirmo(domain: string): Promise<Firmo | null> {
   }
 
   const started = Date.now();
-  const res = await fetch(`https://api.hunter.io/v2/companies/find?domain=${encodeURIComponent(domain)}&api_key=${key}`, { signal: AbortSignal.timeout(20000) });
+  const res = await fetch(`https://api.hunter.io/v2/companies/find?domain=${encodeURIComponent(domain)}`, { headers: { "X-API-KEY": key }, signal: AbortSignal.timeout(20000) });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     // 404 means Hunter has no profile for this domain; that is not an error worth a red log.

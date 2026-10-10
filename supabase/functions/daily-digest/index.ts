@@ -1,5 +1,5 @@
 import { json, sb } from "../_shared/db.ts";
-import { isAdmin } from "../_shared/auth.ts";
+import { isAdmin, isCron } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
 import { googleConfigured, ownerEmail, sendMail } from "../_shared/google.ts";
 import { attachContacts, buildToday, hash } from "../_shared/today.ts";
@@ -18,6 +18,7 @@ async function state(key: string) {
 
 serve("daily-digest", async (req) => {
   const admin = await isAdmin(req);
+  if (!admin && !(await isCron(req))) return json({ error: "Not allowed" }, 401);
   const opts = (await req.json().catch(() => null)) ?? {};
   const idle = (extra: Record<string, unknown> = {}) => {
     const r = json({ sent: false, ...extra });
@@ -58,10 +59,10 @@ serve("daily-digest", async (req) => {
 
   // 1) The email.
   const mail = digestEmail(today.items, today.hidden, links);
-  if (admin && opts.dry === true) return json({ dry: true, subject: mail.subject, body: mail.body }); // preview only: nothing is sent or created
+  if (admin && opts.dry === true) return json({ dry: true, subject: mail.subject, body: mail.body, html: mail.html }); // preview only: nothing is sent or created
   let emailed = false;
   try {
-    await sendMail(ownerEmail(), mail.subject, mail.body);
+    await sendMail(ownerEmail(), mail.subject, mail.body, mail.html);
     emailed = true;
   } catch (e) {
     await log("error", "digest_email_failed", { message: (e as Error).message });

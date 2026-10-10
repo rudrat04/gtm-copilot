@@ -1,8 +1,9 @@
 import { json, sb } from "../_shared/db.ts";
+import { jobAllowed } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
 import { type CalEvent, getEvent, googleConfigured, listChangedEvents, ownerEmail, sendMail } from "../_shared/google.ts";
 import { lookupForBrief, tierLabel } from "../_shared/hubspot.ts";
-import { buildBrief } from "../_shared/brief.ts";
+import { buildBrief, buildBriefHtml } from "../_shared/brief.ts";
 import { tierOf } from "../_shared/score.ts";
 
 // Polled by pg_cron every minute. It reads Calendar changes since the last poll, and for each new
@@ -90,6 +91,7 @@ async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry"> {
     attempts,
   }, { onConflict: "calendar_event_id" });
 
+  // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
   let researched: any = null;
   if (business) {
     try {
@@ -106,7 +108,7 @@ async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry"> {
   const hubspot = await lookupForBrief(email, business ? domain : null).catch(() => null);
 
   let title: string | null = null;
-  let accountId: string | null = researched?.account?.id ?? null;
+  const accountId: string | null = researched?.account?.id ?? null;
   if (accountId) {
     const { data: person } = await sb.from("cp_people").select("title").eq("account_id", accountId).eq("email", email).maybeSingle();
     title = person?.title ?? null;
@@ -117,7 +119,7 @@ async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry"> {
     weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: tz,
   }) + ` (${tz})`;
 
-  const brief = buildBrief({
+  const briefInput = {
     company: account?.name ?? (business ? domain : "Personal email address"),
     domain: business ? domain : null,
     meetingTitle: ev.summary ?? "(no title)",
@@ -128,6 +130,7 @@ async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry"> {
     priority: account?.priority_score ?? null,
     tierLabel: account?.priority_score != null ? tierLabel(tierOf(account.priority_score)) : "",
     dossier: researched?.dossier ?? null,
+    // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
     signals: (researched?.signals ?? []).slice(0, 5).map((s: any) => ({
       kind: s.kind, title: s.title, age: ago(s.detail?.published),
     })),
@@ -136,10 +139,11 @@ async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry"> {
     note: !business
       ? "This attendee uses a personal email, so there is no company to research."
       : !researched ? "Research was unavailable, so this brief has less detail than usual." : undefined,
-  });
+  };
+  const brief = buildBrief(briefInput);
 
   const owner = ownerEmail();
-  await sendMail(owner, `Brief: ${account?.name ?? domain} · ${attendeeName} · ${when.split(" (")[0]}`, brief);
+  await sendMail(owner, `Brief: ${account?.name ?? domain} · ${attendeeName} · ${when.split(" (")[0]}`, brief, buildBriefHtml(briefInput));
   await sb.from("cp_meetings").update({
     status: "briefed", brief, account_id: accountId, emailed_at: new Date().toISOString(), error: null,
   }).eq("calendar_event_id", ev.id);
@@ -147,7 +151,8 @@ async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry"> {
   return "briefed";
 }
 
-serve("meeting-brief", async () => {
+serve("meeting-brief", async (req) => {
+  if (!(await jobAllowed(req))) return json({ error: "Not allowed" }, 401);
   const idle = (extra: Record<string, unknown> = {}) => {
     const r = json({ processed: 0, idle: true, ...extra });
     r.headers.set("x-noop", "1");

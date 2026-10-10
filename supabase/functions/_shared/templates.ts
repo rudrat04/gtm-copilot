@@ -1,6 +1,7 @@
 import icp from "./icp.json" with { type: "json" };
 import type { TodayItem } from "./today.ts";
 import type { Contact } from "./contacts.ts";
+import { button, esc as h, h2, layout, link, list, mailto, muted, quote } from "./emailhtml.ts";
 
 // Internal messages (the owner's morning email, hot alerts, HubSpot task bodies) are fixed templates
 // filled from stored data. They lead with the PERSON to contact and show the company as context.
@@ -81,7 +82,7 @@ export function digestEmail(items: TodayItem[], hidden: number, links: Links) {
     `Open the full list: ${page}`,
     `\n— Account Copilot${hidden ? ` · ${hidden} lower-priority accounts not shown` : ""} · outreach stays manual, nothing is sent for you`,
   ].filter(Boolean).join("\n");
-  return { subject: `Today: ${items.length} prospect${items.length === 1 ? "" : "s"} to focus on (${parts})`, body };
+  return { subject: `Today: ${items.length} prospect${items.length === 1 ? "" : "s"} to focus on (${parts})`, body, html: digestHtml(items, hidden, links) };
 }
 
 /** An instant alert when a new signal appears on an account you have not contacted yet. */
@@ -97,6 +98,7 @@ export function alertEmail(
   const who = c ? `${c.name} at ${a.name}` : a.name;
   return {
     subject: `Hot: ${who} (${TIER[a.tier]}), ${topShort}`,
+    html: alertHtml(a, top, why, contacts, hubspotId),
     body: [
       c ? `Contact: ${person(c)}${c.email ? `\nEmail: ${c.email}` : ""}` : `Contact: none found yet, use "Find relevant people"`,
       c2 ? `Also consider: ${person(c2)}${c2.email ? ` (${c2.email})` : ""}` : "",
@@ -107,6 +109,74 @@ export function alertEmail(
       `\n— Account Copilot · you get at most ${icp.alerts.maxPerDay} of these a day`,
     ].filter(Boolean).join("\n"),
   };
+}
+
+
+// ---- HTML versions (the plain text above stays as the fallback) ----
+
+function itemHtml(it: TodayItem, links: Links): string {
+  const a = it.account;
+  const wrap = (inner: string) => `<div style="padding:14px 0;border-top:1px solid #d6d3d1">${inner}</div>`;
+  if (it.type === "meeting") {
+    return wrap(`<div style="font-size:17px;font-weight:600">${h(when(it.meeting!.starts_at))}</div><div>${h(it.headline)}</div>${muted("A private brief was emailed to you when it was booked")}`);
+  }
+  const open = a && links.get(a.id) ? hubspotCompanyUrl(links.get(a.id)!) : page;
+  const [c, c2] = it.contacts;
+  const verb = it.type === "follow_up" ? "Follow up with " : it.type === "revive" ? "Revisit " : "";
+  const headline = c
+    ? `<div style="font-size:17px;font-weight:600">${h(verb + c.name)} <span style="font-weight:400;color:#78716c">· ${h(c.title)} at ${h(a!.name)}</span></div>`
+    : `<div style="font-size:17px;font-weight:600">${h(verb + a!.name)} <span style="font-weight:400;color:#78716c">· no contact found yet</span></div>`;
+  const signals = it.signals.slice(0, 2).map((s) => h(sigText(s)));
+  return wrap([
+    headline,
+    c?.email ? `<div>${mailto(c.email)}</div>` : "",
+    muted(`${h(a!.name)} · ${h(TIER[a!.tier] ?? "")} · priority ${h(a!.priority ?? "n/a")}${a!.firmo ? ` · ${h(a!.firmo)}` : ""}`),
+    it.type === "follow_up" ? muted(h(it.headline)) : "",
+    quote("Why today:", it.why || it.reason),
+    list(signals),
+    it.last_action ? muted(`Last action: ${h(it.last_action)}`) : "",
+    c2 ? `<div style="margin-top:6px">Also consider: <b>${h(c2.name)}</b>, ${h(c2.title)}${c2.email ? ` (${mailto(c2.email)})` : ""}</div>` : "",
+    !c ? muted(`Next: open the page and use <b>Find relevant people</b>`) : "",
+    `<div style="margin-top:6px">${link(open, links.get(a!.id) ? "Open in HubSpot" : "Open in Account Copilot")}</div>`,
+  ].join(""));
+}
+
+function digestHtml(items: TodayItem[], hidden: number, links: Links): string {
+  const group = (types: string[]) => items.filter((i) => types.includes(i.type));
+  const section = (title: string, list: TodayItem[]) => (list.length ? h2(title) + list.map((i) => itemHtml(i, links)).join("") : "");
+  const inner = [
+    `<div style="font-size:20px;font-weight:700">Good morning ${h(icp.owner.name)}</div>`,
+    muted(`Here is who to contact for ${h(longDate())}.`, 14),
+    section("New and hot", group(["hot", "new"])),
+    section("Follow-ups due", group(["follow_up"])),
+    section("Meetings", group(["meeting"])),
+    section("Worth another look", group(["revive"])),
+    `<div style="margin-top:18px">${button(page, "Open Account Copilot")}</div>`,
+  ].join("");
+  return layout(inner, `Account Copilot${hidden ? ` · ${hidden} lower-priority accounts not shown` : ""} · outreach stays manual, nothing is sent for you`);
+}
+
+function alertHtml(
+  a: { name: string; tier: string; firmo?: string },
+  top: { title: string; published?: string | null },
+  why: string,
+  contacts: Contact[],
+  hubspotId?: string,
+): string {
+  const [c, c2] = contacts;
+  const open = hubspotId ? hubspotCompanyUrl(hubspotId) : page;
+  const inner = [
+    `<div style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#78716c">Hot signal</div>`,
+    c
+      ? `<div style="font-size:19px;font-weight:700;margin-top:4px">${h(c.name)} <span style="font-weight:400;color:#78716c">· ${h(c.title)} at ${h(a.name)}</span></div>${c.email ? `<div>${mailto(c.email)}</div>` : ""}`
+      : `<div style="font-size:19px;font-weight:700;margin-top:4px">${h(a.name)} <span style="font-weight:400;color:#78716c">· no contact found yet</span></div>${muted(`Open the page and use <b>Find relevant people</b>`)}`,
+    muted(`${h(a.name)} · ${h(TIER[a.tier] ?? "")}${a.firmo ? ` · ${h(a.firmo)}` : ""}`),
+    quote("Why today:", why),
+    list([`${h(top.title.slice(0, 140))} <span style="color:#78716c">(${top.published ? `published ${h(age(top.published))}` : "found today"})</span>`]),
+    c2 ? `<div>Also consider: <b>${h(c2.name)}</b>, ${h(c2.title)}${c2.email ? ` (${mailto(c2.email)})` : ""}</div>` : "",
+    `<div>${button(open, hubspotId ? "Open in HubSpot" : "Open in Account Copilot")}</div>`,
+  ].join("");
+  return layout(inner, `Account Copilot · you get at most ${icp.alerts.maxPerDay} of these a day · outreach stays manual`);
 }
 
 /** HubSpot task title and body (HTML) for one prospect. */

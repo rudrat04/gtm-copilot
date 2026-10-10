@@ -18,7 +18,7 @@ export type Contact = {
   email_status: string | null;
 };
 
-const maskEmail = (e: string | null) => (e ? `${e.slice(0, 2)}***@${e.split("@")[1]}` : null);
+const maskEmail = (e: string | null) => (e ? `***@${e.split("@")[1]}` : null);
 
 /** Best contact first, then the best one from a different persona, then the next best. */
 export async function contactsFor(accountIds: string[], admin: boolean, limit = icp.contacts.perItem): Promise<Map<string, Contact[]>> {

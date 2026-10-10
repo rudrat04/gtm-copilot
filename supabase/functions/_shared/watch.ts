@@ -101,7 +101,7 @@ export async function lightCheck(admin: boolean) {
         why, contacts, c.a.hubspot_company_id ?? undefined,
       );
       try {
-        await sendMail(ownerEmail(), mail.subject, mail.body);
+        await sendMail(ownerEmail(), mail.subject, mail.body, mail.html);
         alerted++; budget--;
         await log("info", "hot_alert_sent", { account: c.a.domain, detail: { fresh: c.fresh, score: c.score } });
       } catch (e) {

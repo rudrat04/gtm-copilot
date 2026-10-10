@@ -87,8 +87,8 @@ export const hunter: PeopleProvider = {
 
     const started = Date.now();
     const url = `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}` +
-      `&type=personal&department=executive,sales,management,operations&limit=10&api_key=${key}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+      `&type=personal&department=executive,sales,management,operations&limit=10`;
+    const res = await fetch(url, { headers: { "X-API-KEY": key }, signal: AbortSignal.timeout(20000) });
     const body = await res.json().catch(() => ({}));
 
     if (!res.ok) {
@@ -101,6 +101,7 @@ export const hunter: PeopleProvider = {
       throw new Error(`Hunter ${res.status}`);
     }
 
+    // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
     const emails = (body.data?.emails ?? []) as Record<string, any>[];
     // Hunter charges 1 credit for a domain search that returns results, 0 when nothing is found.
     const credits = emails.length ? 1 : 0;
@@ -136,7 +137,7 @@ export async function hunterBalance(): Promise<{ remaining: number; available: n
   const key = Deno.env.get("HUNTER_API_KEY");
   if (!key) return null;
   try {
-    const r = await fetch(`https://api.hunter.io/v2/account?api_key=${key}`, { signal: AbortSignal.timeout(8000) });
+    const r = await fetch("https://api.hunter.io/v2/account", { headers: { "X-API-KEY": key }, signal: AbortSignal.timeout(8000) });
     const c = (await r.json()).data?.requests?.credits;
     return c ? { remaining: Number(c.remaining), available: Number(c.available) } : null;
   } catch {

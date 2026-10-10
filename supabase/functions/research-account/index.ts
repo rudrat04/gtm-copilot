@@ -1,9 +1,9 @@
 import { json, normalizeDomain, sb } from "../_shared/db.ts";
 import { askClaude, BudgetError, parseJson } from "../_shared/claude.ts";
-import { collectSignals } from "../_shared/signals.ts";
+import { collectSignals, type SiteInfo } from "../_shared/signals.ts";
 import { priorityScore } from "../_shared/score.ts";
 import { log, serve } from "../_shared/log.ts";
-import { isAdmin } from "../_shared/auth.ts";
+import { callerId, isAdmin, rateOk } from "../_shared/auth.ts";
 import { fetchFirmo, firmoLine, fitPoints, saveFirmo } from "../_shared/firmo.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
@@ -20,7 +20,7 @@ Talk-track openers must be questions about the prospect's situation. They must n
 When there is no buying signal, say so and do not invent problems.
 Be specific and short. No filler, no hype. Return a single JSON object and nothing else.`;
 
-function prompt(name: string, domain: string, site: unknown, signals: unknown[], facts: string): string {
+function prompt(name: string, domain: string, site: SiteInfo | null, signals: unknown[], facts: string): string {
   return `Company: ${name} (${domain})
 Verified facts: ${facts || "none available"}
 
@@ -67,6 +67,15 @@ serve("research-account", async (req) => {
         .eq("account_id", account.id).order("detected_at", { ascending: false }).limit(30);
       await log("info", "research_cache_hit", { account: domain, detail: { age_hours: +((Date.now() - new Date(cached.created_at).getTime()) / 3600_000).toFixed(1) } });
       return json({ account, signals, dossier: cached.content, cached: true });
+    }
+  }
+
+  // Fresh research spends AI credits. Owner is unlimited; everyone else gets a few an hour and a daily cap overall.
+  if (!(await isAdmin(req))) {
+    const me = await callerId(req);
+    if (!(await rateOk(`research:${me}`, 3600, 6)) || !(await rateOk("research:all", 86400, 40))) {
+      await log("warn", "research_rate_limited", { account: domain });
+      return json({ error: "Too many new lookups right now. Saved companies still load instantly; try again in a little while." }, 429);
     }
   }
 

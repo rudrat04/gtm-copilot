@@ -5,7 +5,7 @@ import { reasonLine } from "../_shared/today.ts";
 import { fitPoints } from "../_shared/firmo.ts";
 import { log, serve } from "../_shared/log.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
-import { isAdmin } from "../_shared/auth.ts";
+import { isAdmin, jobAllowed } from "../_shared/auth.ts";
 import { lightCheck } from "../_shared/watch.ts";
 
 // Called by pg_cron every few minutes. It only touches accounts whose last scan is stale,
@@ -56,6 +56,7 @@ async function scanOne(a: Account) {
 
 serve("signal-scan", async (req) => {
   // Daily light check (mode: "light") shares this endpoint with the weekly full scan.
+  if (!(await jobAllowed(req))) return json({ error: "Not allowed" }, 401);
   const body = (await req.json().catch(() => null)) ?? {};
   if (body.mode === "light") return await lightCheck(await isAdmin(req));
 

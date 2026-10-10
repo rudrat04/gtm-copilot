@@ -63,6 +63,23 @@ select feature, count(*), round(sum(cost_usd)::numeric, 4) usd from cp_ai_usage 
 
 Pause or resume any job with `select cron.alter_job((select jobid from cron.job where jobname = '<name>'), active := false);` (true to resume).
 
+## Security
+
+- **Two doors, two keys.** Public visitors can read; changing anything or seeing full names and emails needs the owner key (`x-admin-key`). Scheduled jobs (`signal-scan`, `meeting-brief`, `daily-digest`) reject everyone except the scheduler, which sends a secret that lives only in the database (`cp_state`) and is read by the functions with the service role.
+- **Public endpoints cannot burn credits.** Fresh research is rate limited (6 per person per hour, 40 a day overall); saved results are free. A $0.25 daily AI cap and a monthly Hunter cap apply on top.
+- **Secrets stay out of logs and URLs.** The Hunter key travels in a header, never in a URL, and every log line is scrubbed for keys, tokens and long hex strings before it is stored. Raw IP addresses are never stored.
+- **Database:** every table has row level security with no public policies, so only the server can read or write. Views use `security_invoker`.
+- **Page:** a content security policy limits it to talking to this project's backend only; all dynamic text is escaped.
+- Public views show names as "First L." with emails masked to the domain.
+
+## Checks
+
+```bash
+bash scripts/smoke.sh                       # 24 security and behaviour checks against the live project, no credits used
+cd supabase/functions && deno lint . && deno check <function>/index.ts
+SUPABASE_URL=http://x SUPABASE_SERVICE_ROLE_KEY=x deno run --allow-env --allow-write scripts/preview-emails.ts /tmp/emails   # render the three emails to HTML
+```
+
 ## Principles
 
 Outreach is human. The system only says who to contact, why now, and what to say. Every number is explainable: scores come from fixed weights, not a black box. Public visitors never see full names or emails.

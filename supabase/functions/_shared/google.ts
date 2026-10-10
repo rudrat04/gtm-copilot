@@ -83,18 +83,31 @@ function b64(s: string): string {
   for (const b of new TextEncoder().encode(s)) bin += String.fromCharCode(b);
   return btoa(bin);
 }
+// Mail lines must stay short (RFC 2045): wrap base64 bodies at 76 columns.
+const wrap76 = (s: string) => s.replace(/(.{76})/g, "$1\r\n");
 
-/** Sends a plain-text email from the signed-in account. Only ever used to email the owner. */
-export async function sendMail(to: string, subject: string, text: string) {
-  const raw = [
-    `To: ${to}`,
-    `Subject: =?UTF-8?B?${b64(subject)}?=`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: base64",
-    "",
-    b64(text),
-  ].join("\r\n");
+/** Plain text when ASCII; otherwise encoded words of at most 15 characters each, as the standard requires. */
+function encodeSubject(s: string): string {
+  if (/^[\x20-\x7e]*$/.test(s)) return s;
+  const chars = [...s];
+  const words: string[] = [];
+  for (let i = 0; i < chars.length; i += 15) words.push(`=?UTF-8?B?${b64(chars.slice(i, i + 15).join(""))}?=`);
+  return words.join("\r\n ");
+}
+
+/**
+ * Sends an email from the signed-in account. Only ever used to email the owner.
+ * With `html`, the message has two versions (HTML and plain text) and the reader's client picks one.
+ */
+export async function sendMail(to: string, subject: string, text: string, html?: string) {
+  const head = [`To: ${to}`, `Subject: ${encodeSubject(subject)}`, "MIME-Version: 1.0"];
+  const part = (type: string, body: string) =>
+    [`Content-Type: ${type}; charset=UTF-8`, "Content-Transfer-Encoding: base64", "", wrap76(b64(body))].join("\r\n");
+  const boundary = `ac_${crypto.randomUUID().replace(/-/g, "")}`;
+  const raw = html
+    ? [...head, `Content-Type: multipart/alternative; boundary="${boundary}"`, "",
+      `--${boundary}`, part("text/plain", text), `--${boundary}`, part("text/html", html), `--${boundary}--`, ""].join("\r\n")
+    : [...head, part("text/plain", text)].join("\r\n");
   const body = b64(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   await g("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",

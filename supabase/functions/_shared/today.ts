@@ -10,6 +10,7 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const FUNDING = /\b(raises?|raised|funding|series [a-d]|seed round|valuation|acquir)\b/i;
 
+// deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
 type SigRow = { account_id: string; kind: string; title: string; url: string | null; detail: Record<string, any> | null; detected_at: string };
 
 export type TodayType = "meeting" | "follow_up" | "hot" | "new" | "revive";

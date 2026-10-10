@@ -8,7 +8,9 @@ export const sb = createClient(
 
 export const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-admin-key",
+  "Access-Control-Expose-Headers": "x-run-id",
+  "Access-Control-Max-Age": "86400",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 

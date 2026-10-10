@@ -21,7 +21,7 @@ type Row = {
   phone_revealed: boolean; hubspot_contact_id: string | null; account_id: string;
 };
 
-const maskEmail = (e: string | null) => (e ? `${e.slice(0, 2)}***@${e.split("@")[1]}` : null);
+const maskEmail = (e: string | null) => (e ? `***@${e.split("@")[1]}` : null);
 const abbreviate = (r: Row) => `${r.first_name} ${(r.last_name || "").charAt(0)}.`.trim();
 
 /** Public visitors see first name + last initial and a masked email. The owner sees full names. */

@@ -63,6 +63,14 @@ python3 -m http.server 8080 --directory docs
 ```
 Database changes go through migrations in `supabase/migrations/` and are applied to the project (Supabase MCP `apply_migration`, or the CLI).
 
+## Security and quality rules (keep these true)
+- Owner = `x-admin-key` header (`ADMIN_KEY`). The page sends it only after the owner clicks unlock. CORS must keep allowing `x-admin-key` (`_shared/db.ts`), or owner mode silently breaks in browsers.
+- Scheduled endpoints use `jobAllowed` (`_shared/auth.ts`): owner key OR `x-cron-secret`, checked against `cp_state.cron_secret`. The cron jobs read the secret from that row inside their SQL, so it is never in the repo. If you recreate a cron job, include the header (see `supabase/migrations/20261012000001_security_hardening.sql`).
+- Public fresh research is rate limited via `rateOk` (`cp_rate` table). Public views must never show full names or emails (`contactsFor`, `people` view).
+- Hunter calls use the `X-API-KEY` header, not a URL parameter. `log()` redacts secrets; do not log request URLs or bodies with credentials.
+- Before finishing any change run: `bash scripts/smoke.sh` (24 checks), `deno lint .`, and `deno check` on each function (use `npx deno`). All must be clean. The deploy bundler does NOT type-check.
+- Emails are multipart (plain text + HTML) via `sendMail(to, subject, text, html)`; HTML blocks live in `_shared/emailhtml.ts`, templates in `_shared/templates.ts` and `_shared/brief.ts`. Preview with `scripts/preview-emails.ts`. They only ever go to the owner.
+
 ## Debugging and cost control
 Every function run logs to `cp_logs` with a `run_id`; failed requests return that id. Useful queries are in the README ("Debugging and cost control"): `select * from cp_recent_problems;`, `select * from cp_log_summary;`, AI spend from `cp_ai_usage`, Hunter usage from `cp_provider_usage`.
 
