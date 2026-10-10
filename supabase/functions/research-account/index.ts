@@ -14,7 +14,7 @@ Describe the company only from the website evidence and signals. Never attribute
 Use ONLY the evidence provided. If something is not in the evidence, write "unknown" rather than guessing.
 Website text (product demos, sample deals, customer quotes, pricing examples) is marketing copy about their product. It is NOT evidence of the company's own sales situation, stage, team size or deal sizes. Never cite it that way.
 Do not state funding stage or headcount unless the evidence says so.
-Talk-track openers must be questions about the prospect's situation. They must never claim customers, experience, research or relationships ("we work with", "teams we've seen", "we noticed"). Ground each one in a listed signal or in what the company sells.
+Talk-track openers must be questions about the prospect's situation. They must never claim customers, experience, research or relationships ("we work with", "teams we've seen", "we noticed"), and must never say or imply the prospect said something ("you mentioned", "you said", "I saw", "I noticed", "as you know"). Ground each one in a listed signal or in what the company sells.
 When there is no buying signal, say so and do not invent problems.
 Be specific and short. No filler, no hype. Return a single JSON object and nothing else.`;
 
@@ -72,7 +72,9 @@ serve("research-account", async (req) => {
   const { site, signals } = await collectSignals(guessName, domain, account?.segment ?? "");
 
   if (!account) {
-    const name = site?.title ? site.title.split(/[|\-–:]/)[0].trim().slice(0, 60) || guessName : guessName;
+    // Website titles are often long slogans; fall back to the domain name when the first part is not a short name.
+    const firstPart = site?.title ? site.title.split(/\s*[|–—:]\s*|\s+-\s+/)[0].trim() : "";
+    const name = firstPart && firstPart.length <= 40 && !firstPart.includes("&") ? firstPart : guessName;
     const { data, error } = await sb.from("cp_accounts")
       .insert({ domain, name, source: "research" }).select().single();
     if (error) {

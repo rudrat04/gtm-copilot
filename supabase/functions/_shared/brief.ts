@@ -33,7 +33,11 @@ export function buildBrief(i: BriefInput): string {
 
   if (d || i.fit != null) {
     lines.push(`\nAT A GLANCE`);
-    lines.push(`ICP fit ${i.fit ?? "n/a"}/100 · Priority ${i.priority ?? "n/a"} · ${i.tierLabel ?? ""}`.trim());
+    lines.push([
+      i.fit != null ? `ICP fit ${i.fit}/100` : null,
+      i.priority != null ? `Priority ${i.priority}` : null,
+      i.tierLabel || null,
+    ].filter(Boolean).join(" · ") || "No score yet");
     if (d?.summary) lines.push(d.summary);
   }
   if (d?.why_now) lines.push(`\nWHY NOW\n${d.why_now}`);
