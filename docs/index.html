@@ -219,7 +219,7 @@ function dossierHtml(d) {
     <div class="card">
       <div class="head">
         <div><p class="name">${esc(a.name)}</p><span class="domain">${esc(a.domain)}</span></div>
-        <div class="score"><b style="color:${scoreColor(score)}">${esc(score)}</b><span>ICP fit</span></div>
+        <div class="score" title="ICP fit: how well this company matches your target profile, from its dossier"><b style="color:${scoreColor(score)}">${esc(score)}</b><span>ICP fit</span></div>
       </div>
       <p>${esc(x.summary)}</p>
       <div class="whynow">${esc(x.why_now)}</div>
@@ -265,7 +265,7 @@ function qCard(a) {
   const d = a.draft;
   const newest = (a.signals || []).map((s) => Date.parse(s.first_seen)).filter(Boolean).sort((x, y) => y - x)[0];
   return `<div class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}"><div class="qrow">
-    <div class="rank"><b style="color:${scoreColor(a.priority_score)}">${esc(a.priority_score)}</b><span>priority</span></div>
+    <div class="rank" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority_score)}">${esc(a.priority_score)}</b><span>priority</span></div>
     <div class="qmain">
       <div class="head"><div><p class="name">${esc(a.name)} ${tierTag(a.tier)}</p>
         <span class="domain">${esc(a.domain)} · ${esc(a.segment || "")}${a.icp_score != null ? ` · ICP fit ${esc(a.icp_score)}` : ""}</span><br>
@@ -276,9 +276,11 @@ function qCard(a) {
       <div class="chips">${(a.signals || []).map(chip).join("")}</div>
       ${d ? `<details><summary>Draft email to ${esc(d.persona)}</summary><div class="draft"><b>${esc(d.subject)}</b>\n\n${esc(d.body)}</div></details>` : ""}
       <div class="dbox"></div>
+      <div class="draftbox"></div>
       <div class="pbox"></div>
       <div class="actions qactions">
         <button data-act="people">Find relevant people</button>
+        ${d ? "" : `<button class="ghost" data-act="draft">Draft email</button>`}
         <button class="ghost" data-act="dossier">${a.has_dossier ? "View dossier" : "Generate dossier"}</button>
         ${lifeButtons(a)}
         <span class="toast"></span></div>
@@ -347,6 +349,18 @@ function wireCards(root, reload) {
     const card = btn.closest(".card"), toast = card.querySelector(".qactions .toast");
     const act = btn.dataset.act;
     if (act === "people") { btn.hidden = true; mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain); return; }
+    if (act === "draft") {
+      btn.disabled = true; toast.textContent = "Writing the draft…";
+      try {
+        const r = await api("queue", { action: "draft", account_id: card.dataset.id });
+        if (r.mode === "dry_run") { toast.textContent = r.message; btn.disabled = false; return; }
+        const dr = r.draft;
+        card.querySelector(".draftbox").innerHTML = `<div class="card" style="margin:12px 0 0"><h2>Draft email to ${esc(dr.persona)}</h2>
+          <div class="draft"><b>${esc(dr.subject)}</b>\n\n${esc(dr.body)}</div><p class="toast" style="margin-bottom:0">A starting point. Edit it and send it yourself; nothing is sent for you.</p></div>`;
+        toast.textContent = ""; btn.hidden = true;
+      } catch (err) { toast.textContent = err.message; btn.disabled = false; }
+      return;
+    }
     if (act === "dossier") {
       btn.disabled = true;
       try {
@@ -371,7 +385,7 @@ function tCard(i) {
   const a = i.account;
   const right = i.meeting
     ? `<div class="score"><b style="font-size:18px">${esc(new Date(i.meeting.starts_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }))}</b><span>${esc(day(i.meeting.starts_at))}</span></div>`
-    : a?.priority != null ? `<div class="score"><b style="color:${scoreColor(a.priority)}">${esc(a.priority)}</b><span>priority</span></div>` : "";
+    : a?.priority != null ? `<div class="score" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority)}">${esc(a.priority)}</b><span>priority</span></div>` : "";
   const head = `<div class="head"><div><span class="tag ${TODAY_CLS[i.type] || ""}">${esc(i.label)}</span>
     <p class="name" style="font-size:18px;margin-top:6px">${a && i.type !== "meeting" ? esc(a.name) + " " + tierTag(a.tier) : esc(i.headline)}</p>
     ${a && i.type !== "meeting" ? `<span class="domain">${esc(i.headline)}</span>` : ""}</div>${right}</div>`;
@@ -384,8 +398,9 @@ function tCard(i) {
     <div class="whynow">${esc(i.why || i.reason)}</div>
     <div class="chips">${(i.signals || []).map(chip).join("")}</div>
     ${contact}${i.last_action ? `<p class="domain" style="margin:4px 0 0">Last action: ${esc(i.last_action)}</p>` : ""}
+    <div class="draftbox"></div>
     <div class="pbox"></div>
-    <div class="actions qactions"><button data-act="people">Find relevant people</button>${lifeButtons({ outreach_status: a.outreach })}<span class="toast"></span></div></div>`;
+    <div class="actions qactions"><button data-act="people">Find relevant people</button><button class="ghost" data-act="draft">Draft email</button>${lifeButtons({ outreach_status: a.outreach })}<span class="toast"></span></div></div>`;
 }
 
 async function loadToday() {

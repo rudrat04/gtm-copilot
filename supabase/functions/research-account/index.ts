@@ -38,7 +38,6 @@ Return JSON with exactly these keys:
   "why_now": "one sentence naming the strongest buying signal, or 'No strong signal found'",
   "pains": ["max 3 likely sales/RevOps pains, tied to evidence"],
   "talk_tracks": [{ "angle": "short label", "opener": "one natural sentence a rep could say" }],
-  "likely_buyers": [{ "persona": "title", "why": "short reason" }],
   "risks": ["max 2 reasons this may not be a fit"]
 }
 Give exactly 3 talk_tracks.`;

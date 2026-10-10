@@ -35,7 +35,6 @@ export type Dossier = {
   why_now?: string;
   pains?: string[];
   talk_tracks?: { angle: string; opener: string }[];
-  likely_buyers?: { persona: string; why: string }[];
   risks?: string[];
 };
 export type SignalRow = { kind: string; title: string; url?: string | null };

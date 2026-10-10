@@ -1,8 +1,7 @@
 import { json, sb } from "../_shared/db.ts";
-import { BudgetError } from "../_shared/claude.ts";
 import { collectSignals } from "../_shared/signals.ts";
 import { priorityScore, QUEUE_THRESHOLD } from "../_shared/score.ts";
-import { writeDraft } from "../_shared/draft.ts";
+import { reasonLine } from "../_shared/today.ts";
 import { log, serve } from "../_shared/log.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 import { isAdmin } from "../_shared/auth.ts";
@@ -16,7 +15,7 @@ const BATCH = 6;
 type Account = { id: string; name: string; domain: string; status: string; segment: string | null };
 
 async function scanOne(a: Account) {
-  const { site, signals } = await collectSignals(a.name, a.domain, a.segment ?? "");
+  const { signals } = await collectSignals(a.name, a.domain, a.segment ?? "");
 
   if (signals.length) {
     await sb.from("cp_signals").upsert(
@@ -37,25 +36,12 @@ async function scanOne(a: Account) {
     last_scanned_at: new Date().toISOString(),
   };
 
-  // Only accounts that clear the threshold get an AI-written draft, and never twice.
+  // Accounts that clear the threshold enter the Queue with a plain-English reason. Drafts are written
+  // on demand (the "Draft email" button), so no AI is spent on emails nobody asked for.
   const open = a.status === "new" || a.status === "queued";
   if (open && score >= QUEUE_THRESHOLD) {
-    try {
-      const d = await writeDraft(a.name, a.domain, site, signals);
-      await sb.from("cp_outreach_drafts").delete().eq("account_id", a.id).eq("status", "pending");
-      await sb.from("cp_outreach_drafts").insert({
-        account_id: a.id,
-        persona: d.persona,
-        subject: d.subject,
-        body: d.body,
-      });
-      update.why_now = d.why_now;
-      update.status = "queued";
-    } catch (e) {
-      if (e instanceof BudgetError) return { domain: a.domain, score, note: "budget" };
-      await log("error", "draft_failed", { account: a.domain, message: (e as Error).message, detail: { score } });
-      throw e;
-    }
+    update.why_now = reasonLine(signals as never);
+    update.status = "queued";
   }
 
   const { error: upErr } = await sb.from("cp_accounts").update(update).eq("id", a.id);

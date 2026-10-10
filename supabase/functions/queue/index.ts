@@ -3,6 +3,9 @@ import { isAdmin } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
 import { applyOutcome, type OutcomeKind } from "../_shared/lifecycle.ts";
 import { buildToday } from "../_shared/today.ts";
+import { writeDraft } from "../_shared/draft.ts";
+import { fetchSite } from "../_shared/signals.ts";
+import { BudgetError } from "../_shared/claude.ts";
 import { tierOf } from "../_shared/score.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
@@ -104,6 +107,32 @@ async function playbook() {
   };
 }
 
+/** Writes the outreach draft only when someone asks for it. The owner generates; everyone can read a saved one. */
+async function draft(accountId: string, admin: boolean) {
+  const { data: a } = await sb.from("cp_accounts").select("id,name,domain").eq("id", accountId).maybeSingle();
+  if (!a) return json({ error: "Account not found" }, 404);
+
+  const { data: saved } = await sb.from("cp_outreach_drafts").select("persona,subject,body").eq("account_id", a.id)
+    .in("status", ["pending", "approved"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (saved) return json({ mode: "saved", draft: saved });
+  if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can generate a draft (about 1 cent)." });
+
+  try {
+    const [{ data: sigs }, site] = await Promise.all([
+      sb.from("cp_signals").select("kind,title,url,detail").eq("account_id", a.id).order("detected_at", { ascending: false }).limit(12),
+      fetchSite(a.domain),
+    ]);
+    const d = await writeDraft(a.name, a.domain, site, (sigs ?? []) as never);
+    await sb.from("cp_outreach_drafts").insert({ account_id: a.id, persona: d.persona, subject: d.subject, body: d.body });
+    await log("info", "draft_written", { account: a.domain });
+    return json({ mode: "live", draft: { persona: d.persona, subject: d.subject, body: d.body } });
+  } catch (e) {
+    if (e instanceof BudgetError) return json({ error: "Daily AI budget reached. Try again tomorrow." }, 429);
+    await log("error", "draft_failed", { account: a.domain, message: (e as Error).message });
+    return json({ error: "Could not write the draft. Try again." }, 502);
+  }
+}
+
 serve("queue", async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
@@ -111,6 +140,7 @@ serve("queue", async (req) => {
   const admin = await isAdmin(req);
 
   if (body.action === "list") return json({ ...(await list(String(body.view ?? "todo"))), admin });
+  if (body.action === "draft" && typeof body.account_id === "string") return await draft(body.account_id, admin);
   if (body.action === "today") return json({ ...(await buildToday(admin)), admin });
   if (body.action === "outcome" && typeof body.account_id === "string") {
     const kind = String(body.kind) as OutcomeKind;
@@ -120,12 +150,5 @@ serve("queue", async (req) => {
     return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", ...r.update });
   }
   if (body.action === "icp") return json(await playbook());
-  if (body.action === "check") return json({ admin });
-  if (body.action === "reject" && typeof body.account_id === "string") {
-    // Kept for older pages: "reject" now means "not now".
-    if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed. Unlock to record actions." });
-    const r = await applyOutcome(body.account_id, "not_now");
-    return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", status: "not_now" });
-  }
   return json({ error: "Unknown action" }, 400);
 });

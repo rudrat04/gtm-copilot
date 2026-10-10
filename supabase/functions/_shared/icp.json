@@ -106,7 +106,7 @@
   },
   "ai": {
     "model": "claude-haiku-4-5-20251001",
-    "dailyBudgetUsd": 1.0
+    "dailyBudgetUsd": 0.25
   },
   "tiers": {
     "tier_1": 70,

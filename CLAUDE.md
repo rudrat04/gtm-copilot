@@ -17,7 +17,7 @@ Owner: Rudra (rudrat04 on GitHub). Public repo: https://github.com/rudrat04/gtm-
 - **Supabase** project `gtm-copilot`, ref `tecgblsoylrshcqneevf` (Mumbai, free). Tables are prefixed `cp_`. Edge Functions, `pg_cron`, `pg_net`.
 - **HubSpot** portal "Firstword" (247578382, app-na2). Free plan. API via a Service Key in `.env`.
 - **Hunter.io** free plan (50 credits a month) for people search and emails.
-- **Claude Haiku 4.5** (`claude-haiku-4-5-20251001`) for all AI, with a $1/day cap in the database. About $0.006 per dossier. Total spend so far is well under $1.
+- **Claude Haiku 4.5** (`claude-haiku-4-5-20251001`) for all AI, with a $0.25/day cap in the database. About $0.006 per dossier. Total spend so far is well under $1.
 - Apollo free plan: People API Search is blocked on the free plan, so Apollo is not used. It can be added later as one adapter.
 - Clay free has no usable API, so it is not used.
 - **Google** (Calendar read, Gmail send-to-self): OAuth app `account-copilot` in Google Cloud, published "In production" (unverified, owner only; no 7-day token expiry). Signed-in account: triveditrudra4@gmail.com. Credentials and refresh token live in `.env` (`GOOGLE_*`); re-run `node scripts/google-auth.mjs` if sign-in ever expires.
@@ -35,14 +35,13 @@ supabase/functions/
   _shared/                 db, log, auth, claude, signals, relevance, score, draft, people, hubspot, icp.json
 supabase/migrations/       Schema, logging, people, weekly schedule
 supabase/seed.sql          46 fixture companies
-data/fixtures/companies.json
 backups/                   Local HubSpot backup (gitignored)
 ```
 `supabase/functions/_shared/icp.json` is the single place to re-point the ICP (company profile, personas, signal weights, tiers, schedule, AI budget).
 
 ## How it works
 1. **Research**: collects site text, public job boards (Greenhouse/Lever/Ashby), news, Hacker News. One small AI call (`relevance.ts`) drops namesake noise. Haiku writes the dossier JSON, stored in `cp_dossiers`.
-2. **Signal scan**: scores each account 0-100 with fixed weights (hiring 40, funding news 25, community 10, baseline fit 15). Older news counts less. Score 30+ enters the Queue with an AI draft. Tiers: 70+ Tier 1, 45+ Tier 2.
+2. **Signal scan**: scores each account 0-100 with fixed weights (hiring 40, funding news 25, community 10, baseline fit 15). Older news counts less. Score 30+ enters the Queue with a plain-English `why_now` (template, no AI). Draft emails are written on demand (`queue` -> `draft`, owner only, about 1 cent, saved). Tiers: 70+ Tier 1, 45+ Tier 2.
 3. **Find relevant people**: one Hunter domain search (1 credit), ranked by job title against the personas. Results are stored in `cp_people`.
 4. **Enrich**: reveals the stored email. Phone is not available on free providers (the button is disabled).
 5. **Push to HubSpot** (owner only): creates or updates the company and the enriched contacts, links them, and attaches a note built from the stored dossier JSON (no AI). Fills the existing `gtm_*` fields (fit, priority, signal, intent, why now, why fit, last scored; contact persona and persona score) plus the native ICP tier. Re-push updates scores only, never lifecycle stage or owner.
@@ -74,7 +73,7 @@ The `signal-scan` cron runs **weekly: Mondays 06:00-06:55 UTC** (every 5 minutes
 
 ## Next steps (agreed order)
 Philosophy: outreach stays manual and human; the system finds the right prospect at the right time (speed to lead). The prospect-facing draft email stays AI-written and is only a suggestion. Internal items use templates plus the one cached AI line.
-1. DONE: lifecycle, Today list and tab, daily light check and hot alerts, morning email, HubSpot to-dos.
+1. DONE: lifecycle, Today list and tab, daily light check and hot alerts, morning email, HubSpot to-dos, clean-up pass (README rewritten, dossier no longer asks for likely_buyers, drafts on demand, AI cap lowered, statuses tightened).
 2. **Sync outcomes to HubSpot** (contacted, replied, meeting as notes or lifecycle changes) and detect completed HubSpot tasks; also optionally detect replies from HubSpot activity.
 3. **Inbound speed to lead**: a form submit is enriched, scored and routed to the owner (email plus HubSpot task) in about a minute.
 4. **Outcome feedback page**: which signals convert, from `cp_outcomes`; tune weights from real results.
@@ -82,6 +81,8 @@ Philosophy: outreach stays manual and human; the system finds the right prospect
 Also optional: team-page fallback for people search, Apollo adapter when the plan allows.
 
 ## Known gaps
+- **The ICP size and stage are not enforced anywhere.** icp.json states 20-200 employees and Seed to Series B, but fit is judged by the AI from website text only; there is no headcount or funding data source on the free plans. Ideas: a manual column on the fixture list, or a free enrichment source.
+- Priority uses a fixed baseline fit; the dossier's ICP fit is not fed back into it.
 - Each push adds a new dossier note to the company (history builds up).
 - Namesake companies (Orb, Linear, Default) can still leak wrong news despite the relevance check; it was tightened once, watch for more.
 - Brief questions come from dossier talk tracks; the prompt forbids "you mentioned"-style claims, but old cached dossiers may still contain them (refresh the dossier to regenerate).
