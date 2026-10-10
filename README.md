@@ -1,79 +1,60 @@
 # Account Copilot
 
-A small, demo-able GTM system for B2B SaaS teams: find the right accounts, understand them in seconds, approve outreach, and walk into every meeting prepared. One Supabase database, one tiny UI, HubSpot as the CRM. Nothing is ever sent automatically.
+A small, demo-able GTM system for B2B SaaS teams. It finds the right accounts at the right time from public buying signals, researches them in seconds, finds and enriches the right people, and pushes everything to HubSpot. **Outreach stays manual: nothing is ever sent to a prospect.** Live demo: https://copilot.f1rstword.com
 
-## Modules
+## What it does
 
-1. **Account Research**: type a company domain, get a sales-ready dossier (what they do, hiring, news, pains, talk tracks, likely buyers).
-2. **Signal Radar**: a nightly scan of an ICP list, ranked by "why now". Approve an account and it lands in HubSpot with an email draft.
-3. **Meeting Brief**: when a meeting with an external attendee is booked in Google Calendar, a brief is written into the event within about a minute.
-4. **Revival** (stretch): lost deals plus fresh signals, with a re-engagement draft.
+| Tab / flow | What happens |
+|---|---|
+| **Today** | A capped daily list (8): meetings, follow-ups due (day 3/7/14), hot new signals, accounts worth a second look. Each item has a one-line "Why today". |
+| **Research** | Type any company domain, get a dossier in about 10 seconds (what they do, hiring, news, pains, talk tracks, risks, ICP fit). |
+| **Queue** | Accounts ranked 0-100 by buying signals with tiers, signal ages, a draft-email button, and lifecycle buttons (contacted, replied, meeting, snooze, not now). |
+| **People** | On any account: Find relevant people, Enrich the email, preview what will go to HubSpot, Push. No AI is used for the push. |
+| **ICP & Signals** | The playbook for the sales team: target profile, personas, signals and weights, how to read the scores. |
+| **Meeting briefs** | When a meeting with an outside guest is booked in Google Calendar, a private brief is emailed to the owner within about a minute. It is never written into the invite, because guests can read it. |
+| **Daily rhythm** | Light check with instant hot alerts, a morning email, and HubSpot to-dos for the rep. |
 
-## Stack
+## How a day runs (UTC; India time in brackets)
 
-Supabase (Postgres, Edge Functions, pg_cron), HubSpot Free, Apollo Free (cached, optional), Google Calendar and Gmail, Claude Haiku 4.5 with a hard daily spend cap. A fixture mode lets every module run with no credits spent.
+| When | Job | Result |
+|---|---|---|
+| every minute | `meeting-brief` | Briefs for newly booked meetings |
+| 01:00 (06:30) | `signal-watch` | Re-reads sources for queued accounts, stores only new signals, up to 3 hot-alert emails a day |
+| 02:30 (08:00) | `daily-digest` | Today list emailed to the owner, plus HubSpot to-dos (a daily summary and one per prospect already in HubSpot) |
+| Mondays 06:00-06:55 (11:30) | `signal-scan` | Full scan of the ICP list, scores and queues accounts |
+| daily 03:17 | `cp-logs-cleanup` | Deletes logs older than 30 days |
 
-## ICP (configurable in `supabase/functions/_shared/icp.json`)
+Everything emails the owner only. Public visitors can browse; changing anything or revealing emails needs the owner key.
 
-B2B SaaS and tech companies, 20-200 employees, Seed to Series B, US/UK/EU, hiring sales roles. Personas: Head of Sales/VP Sales, Head of RevOps, Founder/CEO at companies under about 30 people.
+## Stack and cost
 
-## Status
+Supabase (Postgres, Edge Functions, pg_cron), HubSpot Free, Hunter free plan (people search and emails), Google Calendar and Gmail (owner-only), Claude Haiku 4.5. AI is used only for the dossier (about $0.006), the relevance check (about $0.0004 per company), the one "Why today" sentence, and draft emails when you click for one. A $0.25 daily cap is enforced in the database. Total spend so far is well under $1; expect roughly $1-2 a month.
 
-Modules 1 (Account Research) and 2 (Signal Radar) are live: `docs/index.html` calls the `research-account`, `signal-scan` and `queue` Edge Functions. Module 3 (Meeting Brief) is next.
+## Configuration
 
-## Debugging and cost control
+One file, `supabase/functions/_shared/icp.json`, holds the seller pitch, target company profile, personas, signal weights, tiers, follow-up days, Today list size, alert limits, schedule text, owner details and the AI budget. Re-pointing the system at a client's market means editing this file. Message formats (morning email, alerts, HubSpot task text) are in `supabase/functions/_shared/templates.ts`.
 
-Every function run writes structured rows to `cp_logs` (function, level, event, company domain, message, details, duration). Each run has one `run_id`, and failed requests return it, so you can replay exactly what happened. Logs are kept for 30 days. No secrets or email addresses are logged.
+## Run it yourself
+
+1. Create a Supabase project, apply `supabase/migrations/` in order, and load `supabase/seed.sql`.
+2. Copy `.env.example` to `.env` and fill it in (HubSpot service key, Anthropic key, Hunter key, owner key, Google OAuth client).
+3. `node scripts/google-auth.mjs` signs in to Google once and saves the refresh token.
+4. `npx supabase secrets set --env-file .env`, then deploy each function with `npx supabase functions deploy <name> --use-api --project-ref <ref>`.
+5. Serve `docs/` with any static host (GitHub Pages works).
+
+## Debugging
+
+Every function run writes structured rows to `cp_logs` with a `run_id` that failed requests return.
 
 ```sql
--- What went wrong recently?
-select * from cp_recent_problems limit 50;
-
--- Replay one run end to end (use the run_id from an error response)
-select created_at, level, event, account, message, detail from cp_logs where run_id = '<run_id>' order by id;
-
--- Everything about one company
-select created_at, fn, level, event, detail from cp_logs where account = 'attio.com' order by id desc limit 50;
-
--- 24-hour health summary
-select * from cp_log_summary;
-
--- AI spend by feature
-select feature, count(*), round(sum(cost_usd)::numeric, 4) as usd from cp_ai_usage group by feature;
+select * from cp_recent_problems limit 50;                       -- what went wrong recently
+select * from cp_log_summary;                                    -- 24-hour health
+select created_at, level, event, message, detail from cp_logs where run_id = '<run_id>' order by id;
+select feature, count(*), round(sum(cost_usd)::numeric, 4) usd from cp_ai_usage group by feature;
 ```
 
-Common events: `fetch_failed` (a source was down or timed out), `relevance_fallback` (the AI relevance check failed, so unfiltered headlines were used), `json_parse_failed` (the model returned bad JSON), `hubspot_request_failed` / `hubspot_note_skipped`, `budget_reached` (daily AI cap hit), `unhandled_exception` (a bug, with stack trace).
+Pause or resume any job with `select cron.alter_job((select jobid from cron.job where jobname = '<name>'), active := false);` (true to resume).
 
-The nightly scan is **paused** to avoid spending AI credits while building. Before a demo:
+## Principles
 
-```sql
-select cron.alter_job((select jobid from cron.job where jobname = 'signal-scan'), active := true);   -- resume
-select cron.alter_job((select jobid from cron.job where jobname = 'signal-scan'), active := false);  -- pause
-```
-
-## People: find, enrich, push
-
-On a dossier (or a Queue card), **Find relevant people** searches a contact database (Hunter free plan, 1 credit per company) for the ICP personas, ranks them by job title, and stores the results. **Enrich** reveals the email of a chosen person (no extra credit, and phone is shown as unavailable on the free provider). **Push to HubSpot** appears only after enriching and creates the company, the enriched contacts (associated to it), and a note built from the stored dossier JSON. No AI credits are used for the push.
-
-- Data sources sit behind one interface (`supabase/functions/_shared/people.ts`), so adding Apollo or another provider means adding one adapter.
-- Public visitors see names as "First L." with masked emails, and Enrich/Push run as dry runs. Only the owner key reveals emails or writes to HubSpot.
-- Hunter usage is capped by `HUNTER_MONTHLY_CAP` (default 40 of 50) and every call is recorded in `cp_provider_usage`.
-- Pushes fill the existing HubSpot fields: company Fit, Priority, Signal and Intent scores, ICP tier, Fit industry, Why now, Why fit and Last scored at; contact Scored persona and Persona score. Re-pushing updates scores only and never changes lifecycle stage or owner.
-- A "What will go to HubSpot" preview shows these values before anything is written.
-
-## Weekly scan and signal freshness
-
-The scan runs every Monday 06:00-06:55 UTC (12 runs of 6 companies). Accounts count as stale after 6 days. Each Queue card shows when the company was last scanned and how old each signal is (published date for news, first-seen date otherwise), with a NEW badge for anything first seen in the last 7 days. Older evidence counts for less: news after 30 days counts half, after 60 days nothing.
-
-## Today list and outreach lifecycle
-
-The **Today** tab is the daily landing page: a capped list (8) of who to focus on, built by rules from the data. Types: meeting (next 36 hours, brief already emailed), follow-up due (day 3, 7, 14 after first contact), hot now (new signal in the last 48 hours), new this week, and snooze ended or worth another look. The only AI is one cached "Why today" sentence per account and signal set (written when the owner opens the page, free for everyone after that). Outreach itself is always manual.
-
-Each account carries a status: open, contacted (touch count and next follow-up), replied, meeting, snoozed, or not now. Every action is stored in `cp_outcomes` with a snapshot of the scores and signals, which is the data for a future "which signals convert" page. Buttons are on Queue and Today cards and work in owner mode only.
-
-## Daily rhythm: light check, hot alerts, morning email, HubSpot to-dos
-
-- **01:00 UTC (06:30 India), `signal-watch`**: a light check of up to 20 queued accounts. It re-reads public sources, stores only signals it has not seen (so "first seen" stays honest), refreshes the priority score, and emails an instant **hot alert** when an account you have not contacted shows a new news item or a newly posted role. At most 3 alerts a day, never repeated for the same signals. No drafts are rewritten.
-- **02:30 UTC (08:00 India), `daily-digest`**: builds the Today list, emails it to you, and creates HubSpot to-dos: one daily summary task, plus one task per prospect that already exists in HubSpot (linked to the company and contact, due today, high priority for Tier 1 and follow-ups). A task is never created twice for the same follow-up or signal set.
-- Both only email you. Nothing is ever sent to a prospect. Both skip themselves if they ran in the last 20 hours; the owner key forces a run (`x-admin-key` header).
-- Message formats live in `supabase/functions/_shared/templates.ts`; owner name, timezone and HubSpot owner id are in `icp.json`.
+Outreach is human. The system only says who to contact, why now, and what to say. Every number is explainable: scores come from fixed weights, not a black box. Public visitors never see full names or emails.
