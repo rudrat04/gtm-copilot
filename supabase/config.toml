@@ -428,3 +428,6 @@ verify_jwt = false
 
 [functions.crm-sync]
 verify_jwt = false
+
+[functions.inbound]
+verify_jwt = false

@@ -155,5 +155,14 @@
     "firmoPerRun": 4,
     "note": "Weekly: reads the latest Hacker News 'Who is hiring' threads for companies hiring sales or RevOps roles, keeps only B2B software companies that fit the ICP, and adds them for scoring.",
     "enabled": true
+  },
+  "inbound": {
+    "slaMinutes": 15,
+    "firmoPerDay": 5,
+    "perHour": 5,
+    "allPerHour": 40,
+    "note": "A form submit is enriched, scored against the profile and routed to the owner with an email and a HubSpot to-do. If nobody has responded after the response target, one reminder is sent.",
+    "hubspotPerDay": 15,
+    "allPerDay": 100
   }
 }

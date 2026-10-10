@@ -51,5 +51,12 @@ expect "setup view loads" "$(post queue '{"action":"setup"}')" "200"
 expect "public cannot save the profile" "$(post queue '{"action":"profile_save","profile":{}}')" "200"
 expect "  ...it is a dry run" "$(field "d.get('mode')")" "dry_run"
 
+expect "inbound: a bad email is rejected" "$(post inbound '{"name":"Test","email":"nope"}')" "400"
+expect "inbound: the honeypot is quietly accepted and ignored" "$(post inbound '{"name":"Bot","email":"bot@example.com","website":"x"}')" "200"
+expect "inbound: the public list hides emails and messages" "$(post inbound '{"action":"list"}')" "200"
+expect "  ...no full emails" "$(field "any('***' not in (l.get('email') or '***') or l.get('message') for l in d['leads'])")" "False"
+expect "public cannot mark a lead contacted" "$(post inbound '{"action":"respond","lead_id":"00000000-0000-0000-0000-000000000000","kind":"contacted"}')" "200"
+expect "  ...it is a dry run" "$(field "d.get('mode')")" "dry_run"
+
 echo; echo "Result: $PASS passed, $FAIL failed"; rm -f /tmp/smoke_body
 [ "$FAIL" = "0" ]

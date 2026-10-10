@@ -104,6 +104,11 @@
   details.how { margin-top: 6px; } details.how > summary { font-size: 14px; font-weight: 600; color: var(--soft); cursor: pointer; margin: 10px 0 14px; }
   textarea.notes { width: 100%; min-height: 76px; resize: vertical; padding: 10px 12px; font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; margin-top: 12px; }
   .recap p { margin: 0 0 8px; } .recap .label { margin: 12px 0 4px; } .recap pre { white-space: pre-wrap; font: inherit; font-size: 14px; margin: 8px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; }
+  .leadform { display: grid; gap: 10px; } .leadform .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .leadform input, .leadform select, .leadform textarea { width: 100%; padding: 10px 12px; font: inherit; font-size: 14.5px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+  .leadform textarea { min-height: 80px; resize: vertical; } .leadform .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+  .steps { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; } .steps li { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 10px; font-size: 14px; } .steps .t { color: var(--good); font-weight: 600; font-size: 13px; }
+  .wait { color: var(--warn); font-weight: 600; } .wait.late { color: var(--bad); }
   .hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
   .badge.hot { --c: var(--bad); } .badge.warm { --c: var(--warn); }
   .fit { margin-top: 3px; font-size: 13.5px; color: var(--muted); } .fit b.good { color: var(--good); } .fit b.warn { color: var(--warn); } .fit b.bad { color: var(--bad); }
@@ -175,6 +180,7 @@
   .err { color: var(--bad); }
 
   @media (max-width: 600px) {
+    .leadform .row2 { grid-template-columns: 1fr; }
     main { padding-top: 18px; }
     .card { padding: 16px; }
     .cols { grid-template-columns: 1fr; gap: 6px; }
@@ -196,6 +202,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="today">Today<span class="count" id="c-today" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="accounts">Accounts<span class="count" id="c-accounts" hidden></span></button>
+    <button role="tab" aria-selected="false" data-tab="inbound">Inbound<span class="count" id="c-inbound" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="meetings">Meetings<span class="count" id="c-meetings" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="research">Research</button>
     <button role="tab" aria-selected="false" data-tab="setup">Setup</button>
@@ -213,6 +220,8 @@
     <p class="hint">Try <a data-d="linear.app">linear.app</a><a data-d="posthog.com">posthog.com</a><a data-d="attio.com">attio.com</a></p>
     <div id="out" aria-live="polite"></div>
   </section>
+
+  <section id="inbound" hidden><div id="inbody" aria-live="polite"></div></section>
 
   <section id="meetings" hidden><div id="meetbody" aria-live="polite"></div></section>
 
@@ -305,7 +314,7 @@ async function refreshMode() {
   try { const d = await api("people", { action: "status" }); drawMode(!!d.admin, d.credits); return !!d.admin; }
   catch { drawMode(false); return false; }
 }
-function reloadVisible() { for (const [id, fn] of [["today", loadToday], ["accounts", loadAccounts], ["meetings", loadMeetings]]) if (!$(id).hidden) fn(); }
+function reloadVisible() { for (const [id, fn] of [["today", loadToday], ["accounts", loadAccounts], ["inbound", loadInbound], ["meetings", loadMeetings]]) if (!$(id).hidden) fn(); }
 
 /* ============ lifecycle: what happened with each account ============ */
 function lifeLine(a) {
@@ -386,7 +395,8 @@ async function loadToday() {
       <span>${d.items.length} to focus on${mix ? ` · ${esc(mix)}` : ""}${d.hidden ? ` · ${d.hidden} more not shown` : ""}</span></div>`;
     const needs = d.needs?.length ? `<div class="needs"><span><b>${d.needs.length} strong account${d.needs.length > 1 ? "s" : ""}</b> with a fresh signal ${d.needs.length > 1 ? "have" : "has"} no contact yet: ${esc(d.needs.slice(0, 3).map((n) => n.name).join(", "))}${d.needs.length > 3 ? "…" : ""}</span><button class="btn ghost sm" data-goto-needs>Find contacts in Accounts</button></div>` : "";
     const deb = d.debriefs ? `<div class="needs" style="margin-bottom:14px"><span><b>${d.debriefs} meeting${d.debriefs > 1 ? "s" : ""}</b> waiting for your debrief</span><button class="btn ghost sm" data-goto-meetings>Open Meetings</button></div>` : "";
-    $("tlist").innerHTML = deb + (d.items.map(tCard).join("") ||
+    const lds = d.leads ? `<div class="needs" style="margin-bottom:14px"><span><b>${d.leads} new lead${d.leads > 1 ? "s" : ""}</b> waiting for a reply</span><button class="btn ghost sm" data-goto-inbound>Open Inbound</button></div>` : "";
+    $("tlist").innerHTML = lds + deb + (d.items.map(tCard).join("") ||
       `<div class="card empty">Nothing ready to contact today.<br>People with a fresh signal and follow-ups due appear here.</div>`) + needs;
     const c = $("c-today"); c.textContent = d.items.length; c.hidden = !d.items.length;
   } catch (e) { $("tlist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
@@ -548,7 +558,7 @@ function wireCards(root, reload) {
   });
 }
 wireCards($("tlist"), () => loadToday());
-$("tlist").addEventListener("click", (e) => { if (e.target.closest("[data-goto-meetings]")) document.querySelector('nav.tabs [data-tab="meetings"]').click(); if (e.target.closest("[data-goto-needs]")) { aview = "nocontact"; document.querySelector('nav.tabs [data-tab="accounts"]').click(); } });
+$("tlist").addEventListener("click", (e) => { if (e.target.closest("[data-goto-meetings]")) document.querySelector('nav.tabs [data-tab="meetings"]').click(); if (e.target.closest("[data-goto-inbound]")) document.querySelector('nav.tabs [data-tab="inbound"]').click(); if (e.target.closest("[data-goto-needs]")) { aview = "nocontact"; document.querySelector('nav.tabs [data-tab="accounts"]').click(); } });
 wireCards($("alist"), () => loadAccounts(true));
 
 // "Show more signals" works everywhere
@@ -713,6 +723,85 @@ async function loadIcp() {
           <li>The Today list holds at most ${esc(p.today.cap)} items. Signals refresh ${esc(p.schedule.toLowerCase())}. Outreach is always manual.</li></ul></article>`;
   } catch (e) { $("icpbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
+
+/* ============ Inbound: a lead arrives, the rep is alerted within a minute ============ */
+let INB = null;
+const LEAD_BADGE = { hot: "hot", warm: "warm", review: "accent", not_fit: "" };
+const INTENT_LABEL = { demo: "Asked for a demo", pricing: "Asked about pricing", question: "Sent a question" };
+const dur = (s) => (s == null ? "" : s < 90 ? `${s} sec` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`);
+
+function leadForm() {
+  return `<article class="card"><p class="label">Try it: send a lead</p>
+    <p class="meta" style="margin:0 0 12px">This is the form a visitor on a client's site would fill in. Submit it and watch the rep get an email and a HubSpot to-do. Your details are stored for this demo and only the owner can see them.</p>
+    <form class="leadform" id="leadform" autocomplete="off">
+      <div class="row2"><input name="name" placeholder="Your name" aria-label="Your name" required maxlength="80"><input name="email" type="email" placeholder="Work email" aria-label="Work email" required maxlength="120"></div>
+      <div class="row2"><input name="company" placeholder="Company (optional)" aria-label="Company" maxlength="80"><input name="role" placeholder="Your role (optional)" aria-label="Your role" maxlength="80"></div>
+      <select name="intent" aria-label="What do you need"><option value="demo">I would like a demo</option><option value="pricing">I have a pricing question</option><option value="question">I have a question</option></select>
+      <textarea name="message" placeholder="Anything we should know? (optional)" aria-label="Message" maxlength="1000"></textarea>
+      <input class="hp" name="website" tabindex="-1" aria-hidden="true" autocomplete="off">
+      <div class="actions" style="margin:0"><button class="btn primary" id="leadgo" type="submit">Send</button><span class="meta">Takes about 10 to 20 seconds while the system checks the company.</span></div>
+    </form><div id="leadout" aria-live="polite"></div></article>`;
+}
+
+function leadCard(l, own, sla) {
+  const waiting = l.status === "new" && l.label && l.label !== "not_fit";
+  const mins = waiting && l.alerted_at ? Math.floor((Date.now() - Date.parse(l.alerted_at)) / 60000) : null;
+  const state = l.status === "new" ? (waiting ? `<span class="wait${mins >= sla ? " late" : ""}">Waiting ${mins ?? 0} min</span>` : "")
+    : `<span class="badge good">${l.status === "closed" ? "Closed" : l.status === "replied" ? "Replied" : "Contacted"}${l.response_seconds != null ? ` · ${dur(l.response_seconds)}` : ""}</span>`;
+  const sigs = (l.signals || []).map((t) => `<li><span class="k hiring">Signal</span><span class="t">${esc(t)}</span><span class="when"></span></li>`).join("");
+  return `<article class="card" data-lid="${esc(l.id)}">
+    <div class="eyebrow"><span class="badge ${LEAD_BADGE[l.label] || ""}">${esc(INB.labels[l.label] || "Processing")}</span><span>${esc(INTENT_LABEL[l.intent])}</span><span>${esc(ago(l.created_at))}</span>${state}</div>
+    <h3 class="title">${esc(l.name)}${l.company ? ` <span class="sub" style="font-weight:400">· ${esc(l.company)}</span>` : ""}</h3>
+    <div class="meta">${l.role ? `${esc(l.role)} · ` : ""}${own ? `<a href="mailto:${esc(l.email)}">${esc(l.email)}</a>` : esc(l.email)}</div>
+    ${l.label !== "not_fit" ? fitLine(l.fit, l.facts) : ""}
+    ${l.message ? `<div class="why">“${esc(l.message)}”</div>` : ""}
+    ${l.why ? `<div class="why"><b>Why now.</b> ${esc(l.why)}</div>` : ""}
+    ${sigs ? `<ul class="sigs">${sigs}</ul>` : ""}
+    ${own && l.status !== "closed" ? `<div class="actions"><a class="btn primary" href="mailto:${esc(l.email)}">Reply</a>${l.status === "new" ? `<button class="btn ghost" data-resp="contacted">Mark contacted</button>` : ""}${l.status !== "replied" ? `<button class="btn ghost" data-resp="replied">They replied</button>` : ""}<button class="btn ghost" data-resp="closed">Close</button></div>` : ""}</article>`;
+}
+
+function drawInbound() {
+  const d = INB, st = d.stats;
+  const c = $("c-inbound"); c.textContent = st.waiting; c.hidden = !st.waiting;
+  if (!$("leadformbox")) $("inbody").innerHTML = `<div id="instats"></div><div id="leadformbox">${leadForm()}</div><div id="leadlist"></div>`; // the form is drawn once, so a result stays visible
+  $("instats").innerHTML = `<div class="tiles"><div class="tile"><b>${esc(st.last_30d)}</b><span>leads in 30 days</span></div>
+      <div class="tile"><b style="color:${st.waiting ? "var(--warn)" : "inherit"}">${esc(st.waiting)}</b><span>waiting for a reply</span></div>
+      <div class="tile"><b>${st.median_response_seconds == null ? "–" : esc(dur(st.median_response_seconds))}</b><span>median time to reply (target ${esc(d.sla_minutes)} min)</span></div></div>`;
+  $("leadlist").innerHTML = d.leads.length ? `<p class="label" style="margin:22px 0 10px">Leads</p>${d.leads.map((l) => leadCard(l, d.admin, d.sla_minutes)).join("")}` : `<div class="card empty">No leads yet. Send one above.</div>`;
+}
+
+async function loadInbound(quiet) {
+  if (!quiet) $("inbody").innerHTML = skeleton(4);
+  try { INB = await api("inbound", { action: "list" }); drawInbound(); }
+  catch (e) { $("inbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+}
+
+$("inbody").addEventListener("submit", async (e) => {
+  if (e.target.id !== "leadform") return;
+  e.preventDefault();
+  const f = e.target, btn = $("leadgo"), out = $("leadout"), data = Object.fromEntries(new FormData(f));
+  btn.disabled = true; out.innerHTML = `<p class="meta" style="margin-top:14px">Checking the company, its fit and any buying signals…</p>`;
+  const t0 = Date.now();
+  try {
+    const r = await api("inbound", { ...data, source: "demo form" });
+    const total = ((Date.now() - t0) / 1000).toFixed(1);
+    out.innerHTML = `<p class="label" style="margin:16px 0 0">${r.duplicate ? "Already received today" : "What just happened"} · ${esc(total)} s in total</p>
+      <ol class="steps">${(r.timeline || []).map((s) => `<li><span class="t">${(s.ms / 1000).toFixed(1)}s</span><span><b>${esc(s.step)}.</b> ${esc(s.detail)}</span></li>`).join("")}</ol>
+      <p class="meta" style="margin:10px 0 0">Routed as <b>${esc(r.label_text)}</b>. Nothing was sent to you; the rep was alerted.</p>`;
+    f.reset(); loadInbound(true).then(() => {});
+  } catch (err) { out.innerHTML = `<p class="err" style="margin-top:12px">${esc(err.message)}</p>`; }
+  btn.disabled = false;
+});
+
+$("inbody").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-resp]"); if (!b) return;
+  const id = b.closest("[data-lid]").dataset.lid; b.disabled = true;
+  try {
+    const r = await api("inbound", { action: "respond", lead_id: id, kind: b.dataset.resp });
+    if (r.mode === "dry_run") { say(r.message); b.disabled = false; return; }
+    say({ contacted: "Marked contacted. Follow-ups are scheduled.", replied: "Marked as replied.", closed: "Closed." }[b.dataset.resp]); loadInbound(true);
+  } catch (err) { say(err.message); b.disabled = false; }
+});
 
 /* ============ Meetings: briefs before, debriefs after ============ */
 let MT = null, sigPending = null; const picked = {};
@@ -927,14 +1016,15 @@ async function loadSetup() {
 /* ============ tabs and start ============ */
 document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll("nav.tabs [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  for (const t of ["today", "research", "accounts", "meetings", "setup"]) $(t).hidden = b.dataset.tab !== t;
-  ({ today: loadToday, accounts: loadAccounts, meetings: loadMeetings, setup: loadSetup }[b.dataset.tab] || (() => {}))();
+  for (const t of ["today", "research", "accounts", "inbound", "meetings", "setup"]) $(t).hidden = b.dataset.tab !== t;
+  ({ today: loadToday, accounts: loadAccounts, inbound: loadInbound, meetings: loadMeetings, setup: loadSetup }[b.dataset.tab] || (() => {}))();
 }));
 
 drawMode(false);
 refreshMode();
 loadToday();
 handleDebriefLink().then((handled) => { if (!handled) api("queue", { action: "meetings" }).then((d) => { MT = d; const c = $("c-meetings"); c.textContent = d.needs.length; c.hidden = !d.needs.length; }).catch(() => {}); });
+api("inbound", { action: "list" }).then((d) => { const c = $("c-inbound"); c.textContent = d.stats.waiting; c.hidden = !d.stats.waiting; }).catch(() => {});
 api("queue", { action: "accounts" }).then((d) => { ACC = d; const c = $("c-accounts"), n = d.accounts.filter((a) => !a.low && a.outreach_status === "open").length; c.textContent = n; c.hidden = !n; }).catch(() => {});
 </script>
 </body>

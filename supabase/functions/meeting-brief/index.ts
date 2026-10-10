@@ -7,6 +7,7 @@ import { lookupForBrief, tierLabel } from "../_shared/hubspot.ts";
 import { buildBrief, buildBriefHtml } from "../_shared/brief.ts";
 import { tierOf } from "../_shared/score.ts";
 import { sendDueDebriefs } from "../_shared/debrief.ts";
+import { nudgeOverdueLeads } from "../_shared/inbound.ts";
 
 // Polled by pg_cron every minute. It reads Calendar changes since the last poll, and for each new
 // meeting with an outside attendee it emails a private brief to the owner. The brief is NOT written
@@ -213,9 +214,15 @@ serve("meeting-brief", async (req) => {
     return 0;
   });
 
+  // Inbound leads nobody has answered within the target time get one reminder.
+  const nudged = await nudgeOverdueLeads().catch(async (e) => {
+    await log("error", "lead_nudge_failed", { message: (e as Error).message });
+    return 0;
+  });
+
   const briefed = results.filter((r) => r === "briefed").length;
   const changes = results.filter((r) => r === "cancelled" || r === "moved").length;
-  if (!debriefs && !briefed && !changes && !results.includes("failed") && !results.includes("retry")) return idle({ checked: events.length });
+  if (!debriefs && !nudged && !briefed && !changes && !results.includes("failed") && !results.includes("retry")) return idle({ checked: events.length });
   await log("info", "calendar_poll", { detail: { events: events.length, briefed, changes, debriefs, results } });
   return json({ processed: events.length, briefed, changes, debriefs });
 });

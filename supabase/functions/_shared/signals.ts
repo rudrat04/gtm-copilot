@@ -212,7 +212,7 @@ export async function collectSignals(name: string, domain: string, segment = "")
   // A company we discovered because it posted sales roles on Hacker News keeps that as a hiring signal while the post is recent.
   const { data: found } = await sb.from("cp_discovered").select("snippet,source_url,found_at").eq("domain", domain).eq("status", "added").maybeSingle();
   if (found && Date.now() - Date.parse(found.found_at) < icp.discovery.maxAgeDays * 86_400_000) {
-    const roles = (found.snippet ?? "").split("|").slice(1, 3).map((x: string) => x.trim()).filter(Boolean).join(" · ");
+    const roles = (found.snippet ?? "").split("|").slice(1, 4).map((x: string) => x.trim()).filter((x: string) => x && !/https?:|www\.|\.(com|io|ai|dev|co)\b/i.test(x) && !/^(remote|onsite|hybrid|full[- ]?time|part[- ]?time)\b/i.test(x)).slice(0, 2).join(" · ");
     signals.push({ kind: "hiring", title: `Hiring: ${roles || "sales roles"} (Hacker News Who is hiring)`, url: found.source_url ?? undefined, detail: { source: "hn_hiring", published: found.found_at } });
   }
   await log("info", "signals_collected", {
