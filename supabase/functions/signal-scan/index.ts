@@ -83,6 +83,7 @@ serve("signal-scan", async (req) => {
       void log("error", "account_scan_failed", { account: stale![i].domain, message: String(r.reason).slice(0, 300) });
     }
   });
+  await sb.from("cp_state").upsert({ key: "scan_last", value: new Date().toISOString(), updated_at: new Date().toISOString() });
   await log("info", "batch_done", {
     detail: {
       attempted: results.length,

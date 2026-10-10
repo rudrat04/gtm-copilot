@@ -6,6 +6,7 @@ import { buildToday, reasonLine } from "../_shared/today.ts";
 import { writeDraft } from "../_shared/draft.ts";
 import { fetchFirmo, firmoLine, fitBreakdown, fitPoints, saveFirmo } from "../_shared/firmo.ts";
 import { priorityScore } from "../_shared/score.ts";
+import { contactsFor } from "../_shared/contacts.ts";
 import { fetchSite } from "../_shared/signals.ts";
 import { BudgetError } from "../_shared/claude.ts";
 import { tierOf } from "../_shared/score.ts";
@@ -30,20 +31,22 @@ function nextScan(now = new Date()): string {
 }
 
 async function scanInfo() {
-  const [{ data: sched }, { data: last }] = await Promise.all([
+  const [{ data: sched }, { data: state }, { data: last }] = await Promise.all([
     sb.rpc("cp_scan_schedule"),
+    sb.from("cp_state").select("value").eq("key", "scan_last").maybeSingle(),
     sb.from("cp_accounts").select("last_scanned_at").not("last_scanned_at", "is", null)
       .order("last_scanned_at", { ascending: false }).limit(1),
   ]);
   return {
     label: icp.schedule.label,
     active: Array.isArray(sched) ? !!sched[0]?.active : false,
-    last_scan: last?.[0]?.last_scanned_at ?? null,
+    // The real weekly scan time; researching a single company also touches last_scanned_at, so it is only a fallback.
+    last_scan: state?.value ?? last?.[0]?.last_scanned_at ?? null,
     next_scan: nextScan(),
   };
 }
 
-async function list(view = "todo") {
+async function list(view = "todo", admin = false) {
   const { data: accounts } = await sb.from("cp_accounts")
     .select("id,name,domain,segment,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at")
     .in("status", ["queued", "pushed"])
@@ -54,6 +57,7 @@ async function list(view = "todo") {
   const scan = await scanInfo();
   if (!ids.length) return { accounts: [], scanned: 0, scan };
 
+  const contactMap = await contactsFor(ids, admin);
   const [{ data: signals }, { data: drafts }, { data: dossiers }, { count }] = await Promise.all([
     sb.from("cp_signals").select("account_id,kind,title,url,detail,detected_at").in("account_id", ids)
       .order("detected_at", { ascending: false }),
@@ -71,6 +75,8 @@ async function list(view = "todo") {
       ...a,
       has_dossier: withDossier.has(a.id),
       firmo: firmoLine(a),
+      outside_icp: (() => { const f = fitBreakdown(a); return f.known && f.size === 0; })(),
+      contacts: contactMap.get(a.id) ?? [],
       tier: tierOf(a.priority_score),
       signals: (signals ?? []).filter((s) => s.account_id === a.id).slice(0, 6).map((s) => ({
         kind: s.kind,
@@ -189,7 +195,7 @@ serve("queue", async (req) => {
   const body = (await req.json().catch(() => null)) ?? {};
   const admin = await isAdmin(req);
 
-  if (body.action === "list") return json({ ...(await list(String(body.view ?? "todo"))), admin });
+  if (body.action === "list") return json({ ...(await list(String(body.view ?? "todo"), admin)), admin });
   if (body.action === "draft" && typeof body.account_id === "string") return await draft(body.account_id, admin);
   if (body.action === "enrich_companies") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);

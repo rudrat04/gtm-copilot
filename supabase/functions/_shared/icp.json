@@ -97,10 +97,10 @@
       },
       {
         "key": "fit",
-        "label": "Baseline fit",
+        "label": "Company fit",
         "weight": 25,
-        "why": "Every company on the curated list already matches the target profile; the dossier refines this.",
-        "source": "Curated ICP list"
+        "why": "Size, funding stage and region compared with your target profile, using real company data.",
+        "source": "Company database (headcount, funding rounds, HQ)"
       }
     ]
   },

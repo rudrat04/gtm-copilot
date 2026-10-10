@@ -5,166 +5,204 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tecgblsoylrshcqneevf.supabase.co; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
 <title>Account Copilot</title>
 <style>
   :root {
-    --bg: #fafaf9; --surface: #ffffff; --ink: #1c1917; --muted: #78716c;
-    --line: #e7e5e4; --accent: #4f46e5; --accent-ink: #ffffff;
-    --good: #15803d; --warn: #b45309; --bad: #b91c1c;
+    --bg: #fafaf9; --surface: #ffffff; --raised: #f5f5f4; --ink: #1c1917; --soft: #44403c; --muted: #78716c;
+    --line: #e7e5e4; --accent: #4f46e5; --accent-ink: #ffffff; --good: #15803d; --warn: #b45309; --bad: #b91c1c;
+    --shadow: 0 8px 28px rgba(0, 0, 0, .14);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0c0a09; --surface: #1c1917; --ink: #fafaf9; --muted: #a8a29e;
-      --line: #292524; --accent: #818cf8; --accent-ink: #0c0a09;
-      --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+      --bg: #0c0a09; --surface: #171412; --raised: #211d1a; --ink: #fafaf9; --soft: #d6d3d1; --muted: #a8a29e;
+      --line: #292524; --accent: #818cf8; --accent-ink: #0c0a09; --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+      --shadow: 0 8px 28px rgba(0, 0, 0, .5);
     }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 780px; margin: 0 auto; padding: 36px 16px 80px; }
-  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
-  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); margin: 0 0 24px; }
-  .top > div:first-child { flex: 1 1 420px; min-width: 0; }
-  .mode { padding-top: 8px; font-size: 12px; color: var(--muted); text-align: right; }
-  .mode a { color: var(--accent); cursor: pointer; text-decoration: underline; }
-  form { display: flex; gap: 8px; }
-  input { flex: 1; min-width: 0; padding: 12px 14px; font: inherit; color: var(--ink);
-    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
-  input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button { padding: 11px 16px; font: inherit; font-weight: 600; cursor: pointer;
-    color: var(--accent-ink); background: var(--accent); border: 0; border-radius: 10px; }
-  button:disabled { opacity: .6; cursor: progress; }
-  .ghost { background: none; color: var(--ink); border: 1px solid var(--line); }
-  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
-  .hint a { color: var(--accent); cursor: pointer; text-decoration: underline; }
-  #out { margin-top: 26px; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 14px; }
-  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
-  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-  .name { font-size: 20px; font-weight: 700; margin: 0; }
-  .domain { color: var(--muted); font-size: 13px; }
-  .score { text-align: right; flex: none; }
-  .score b { font-size: 28px; line-height: 1; }
-  .score span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
-  .whynow { border-left: 3px solid var(--accent); padding-left: 12px; margin-top: 14px; font-weight: 500; }
-  ul { margin: 0; padding-left: 18px; } li { margin: 4px 0; }
-  .track { margin-bottom: 10px; } .track b { display: block; font-size: 13px; } .track q { color: var(--muted); }
-  .sig { display: flex; gap: 10px; align-items: baseline; margin: 6px 0; flex-wrap: wrap; }
-  .tag { flex: none; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px;
-    border: 1px solid var(--line); color: var(--muted); text-transform: uppercase; }
-  .tag.hiring, .tag.good { color: var(--good); } .tag.news, .tag.accent { color: var(--accent); } .tag.warn { color: var(--warn); }
-  .tag.new { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 760px; margin: 0 auto; padding: 26px 16px 110px; }
   a { color: inherit; }
-  .meta { color: var(--muted); font-size: 12px; margin-top: 18px; }
-  .err { color: var(--bad); } .skeleton { color: var(--muted); }
-  nav { display: flex; gap: 4px; margin: 0 0 22px; border-bottom: 1px solid var(--line); overflow-x: auto; }
-  nav button { background: none; color: var(--muted); border-radius: 8px 8px 0 0; padding: 10px 14px; font-weight: 600; white-space: nowrap; }
-  nav button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
-  .qrow { display: flex; gap: 14px; }
-  .rank { flex: none; width: 50px; text-align: center; }
-  .rank b { font-size: 22px; display: block; line-height: 1.1; }
-  .rank span { font-size: 10px; color: var(--muted); text-transform: uppercase; }
-  .qmain { flex: 1; min-width: 0; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-  .chips .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; font-weight: 500; }
-  details summary { cursor: pointer; color: var(--accent); font-size: 13px; margin: 6px 0; }
-  .draft { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 13px; }
-  .actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
-  .pill { font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); }
-  .pill.ok { color: var(--good); }
-  .toast { font-size: 13px; color: var(--muted); }
-  .banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; font-size: 13px;
-    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; }
-  .banner b { font-weight: 600; } .banner .paused { color: var(--warn); font-weight: 600; }
-  .strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 4px 0 12px; }
-  .strip div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; text-align: center; }
-  .strip b { display: block; font-size: 18px; line-height: 1.2; }
-  .strip span { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .person { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
-  .pinfo { min-width: 0; } .pact { flex: none; position: relative; }
-  .mask { color: var(--muted); font-family: ui-monospace, monospace; font-size: 13px; }
-  .menu { position: relative; }
-  .menu-list { position: absolute; right: 0; top: 100%; z-index: 5; margin-top: 4px; min-width: 220px; background: var(--surface);
-    border: 1px solid var(--line); border-radius: 10px; padding: 4px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
-  .menu-list button { display: block; width: 100%; text-align: left; background: none; color: var(--ink); font-weight: 500; padding: 8px 10px; }
-  .menu-list button:hover:not(:disabled) { background: var(--bg); }
-  .menu-list button:disabled { color: var(--muted); cursor: not-allowed; opacity: .7; }
-  .pbox, .dbox { margin-top: 12px; }
-  .ghost.on { border-color: var(--accent); color: var(--accent); }
-  .menu-list { z-index: 20; }
-  .pbox:empty, .dbox:empty { margin: 0; }
-  .pv table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
-  .pv td { padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: top; }
-  .pv td:first-child { color: var(--muted); width: 38%; }
-  .pv h3 { font-size: 12px; margin: 10px 0 2px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-  /* ICP & Signals tab */
-  .lead { font-size: 16px; margin: 0 0 4px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
-  .grid > div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
-  .grid b { display: block; margin-bottom: 2px; }
-  .kv { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-  .kv .tag { text-transform: none; font-weight: 500; font-size: 12px; padding: 3px 10px; }
-  .sigrow { padding: 10px 0; border-top: 1px solid var(--line); }
-  .sigrow:first-of-type { border-top: 0; }
-  .bar { height: 6px; border-radius: 99px; background: var(--line); margin: 6px 0; overflow: hidden; }
-  .bar i { display: block; height: 100%; background: var(--accent); }
-  .sigrow .why { color: var(--muted); font-size: 13px; }
-  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .tiers div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; text-align: center; }
-  .tiers b { font-size: 22px; display: block; }
-  @media (max-width: 560px) { .strip { grid-template-columns: repeat(3, 1fr); } .tiers { grid-template-columns: 1fr; } }
+  button { font: inherit; color: inherit; }
   [hidden] { display: none !important; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+  /* ---- header and tabs ---- */
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .brand h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
+  .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .mode { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 5px 6px 5px 12px; }
+  .mode .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .mode.owner .dot { background: var(--good); }
+  .mode input { width: 150px; padding: 4px 9px; font-size: 12.5px; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); color: var(--ink); }
+  nav.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; scrollbar-width: none; }
+  nav.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 10px 14px; font-weight: 600; font-size: 14px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .count { font-size: 11px; font-weight: 600; background: var(--raised); color: var(--muted); border-radius: 99px; padding: 1px 7px; margin-left: 6px; }
+
+  /* ---- buttons ---- */
+  .btn { font-size: 14px; font-weight: 600; padding: 8px 14px; line-height: 1.2; border-radius: 9px; border: 1px solid transparent; cursor: pointer; white-space: nowrap; background: transparent; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.ghost { border-color: var(--line); background: var(--surface); }
+  .btn.ghost:hover { background: var(--raised); }
+  .btn.link { color: var(--accent); padding: 6px 2px; }
+  .btn.sm { font-size: 13px; padding: 6px 11px; }
+  .btn:disabled { opacity: .55; cursor: progress; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; }
+
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 4px); min-width: 210px; z-index: 40; background: var(--surface); border: 1px solid var(--line); border-radius: 11px; padding: 5px; box-shadow: var(--shadow); }
+  .menu-list button { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 7px; padding: 8px 10px; font-size: 14px; cursor: pointer; }
+  .menu-list button:hover:not(:disabled) { background: var(--raised); }
+  .menu-list button:disabled { color: var(--muted); cursor: not-allowed; }
+  .menu-list hr { border: 0; border-top: 1px solid var(--line); margin: 5px 4px; }
+
+  /* ---- cards ---- */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-bottom: 14px; }
+  .card-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+  .eyebrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .title { font-size: 19px; font-weight: 700; line-height: 1.25; margin: 8px 0 0; overflow-wrap: anywhere; }
+  .sub { color: var(--soft); font-size: 14px; margin-top: 3px; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .meta a { color: var(--accent); text-decoration: none; }
+  .score { text-align: right; min-width: 56px; }
+  .score b { display: block; font-size: 26px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .score span { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .why { margin: 14px 0 0; padding: 10px 14px; background: var(--raised); border-radius: 10px; font-size: 14.5px; }
+  .why b { font-weight: 600; }
+  .status-line { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--accent); }
+  .foot { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); }
+
+  .badge { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 3px 9px; border-radius: 99px; color: var(--c, var(--muted)); background: color-mix(in srgb, var(--c, var(--muted)) 14%, transparent); }
+  .badge.good { --c: var(--good); } .badge.warn { --c: var(--warn); } .badge.accent { --c: var(--accent); } .badge.bad { --c: var(--bad); }
+  .tier { font-size: 12px; font-weight: 700; } .tier.t1 { color: var(--good); } .tier.t2 { color: var(--warn); } .tier.t3 { color: var(--muted); }
+
+  /* ---- signals ---- */
+  .sigs { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; }
+  .sigs li { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; font-size: 14px; }
+  .k { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .k.hiring { color: var(--good); } .k.news { color: var(--accent); } .k.hn { color: var(--warn); }
+  .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--soft); }
+  .t a { text-decoration: none; } .t a:hover { text-decoration: underline; }
+  .when { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .when.fresh { color: var(--accent); font-weight: 600; }
+  .sigs-more { margin-top: 4px; }
+
+  /* ---- panels that open inside a card ---- */
+  .panel { margin-top: 14px; padding: 16px; background: var(--raised); border-radius: 11px; }
+  .panel:empty { display: none; }
+  .draft { white-space: pre-wrap; font-size: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; }
+  ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 4px 0; }
+
+  /* ---- people ---- */
+  .strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 0 0 6px; }
+  .strip div { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 6px; text-align: center; }
+  .strip b { display: block; font-size: 16px; line-height: 1.25; }
+  .strip span { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .person { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .strip + .person { border-top: 0; }
+  .person.dim .pn, .person.dim .pt { opacity: .62; }
+  .person .pn { font-weight: 600; } .person .pt { color: var(--soft); font-size: 13.5px; }
+  .person .pe { font-size: 13px; margin-top: 2px; } .person .mask { color: var(--muted); font-family: ui-monospace, monospace; }
+  .person .pact { flex: none; align-self: center; }
+  .ptag { font-size: 11.5px; color: var(--good); font-weight: 600; margin-left: 6px; }
+  .pill { font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); }
+  .pill.ok { color: var(--good); }
+  .pv table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
+  .pv td { padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: top; } .pv td:first-child { color: var(--muted); width: 38%; }
+  .pv h4 { font-size: 12px; margin: 10px 0 2px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  details summary { cursor: pointer; color: var(--accent); font-size: 13.5px; margin: 8px 0; }
+
+  /* ---- research ---- */
+  .search { display: flex; gap: 8px; }
+  .search input { flex: 1; min-width: 0; padding: 12px 14px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 0 18px; }
+  .hint a { color: var(--accent); cursor: pointer; text-decoration: none; margin-right: 10px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .quote { margin: 0 0 10px; color: var(--soft); } .quote b { display: block; color: var(--ink); font-size: 13.5px; }
+
+  /* ---- today header, tiles, states ---- */
+  .day { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
+  .day h2 { margin: 0; font-size: 18px; } .day span { color: var(--muted); font-size: 13.5px; }
+  .banner { display: flex; gap: 14px; justify-content: space-between; flex-wrap: wrap; font-size: 13px; color: var(--soft); background: var(--surface); border: 1px solid var(--line); border-radius: 11px; padding: 10px 14px; margin-bottom: 12px; }
+  .banner .paused { color: var(--warn); font-weight: 600; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 14px; }
+  .chip { background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 5px 13px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
+  .chip.on { color: var(--accent); border-color: var(--accent); }
+  .empty { text-align: center; color: var(--muted); padding: 34px 16px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .tile b { display: block; font-size: 22px; line-height: 1.2; } .tile span { font-size: 12px; color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+  .grid2 > div { background: var(--raised); border-radius: 10px; padding: 12px 14px; font-size: 14px; }
+  .grid2 b { display: block; margin-bottom: 4px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; } .tags span { background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 2px 10px; font-size: 12.5px; }
+  .sigrow { padding: 12px 0; border-top: 1px solid var(--line); } .sigrow:first-of-type { border-top: 0; padding-top: 0; }
+  .sigrow .why-t { color: var(--muted); font-size: 13px; }
+  .bar { height: 6px; border-radius: 99px; background: var(--line); margin: 7px 0; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--accent); }
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .tiers div { background: var(--raised); border-radius: 10px; padding: 12px; text-align: center; font-size: 13px; }
+  .tiers b { display: block; font-size: 21px; }
+  .skel { display: grid; gap: 10px; } .skel i { display: block; height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--raised), var(--line), var(--raised)); background-size: 200% 100%; animation: sh 1.3s linear infinite; }
+  @keyframes sh { to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skel i { animation: none; } }
+
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 60; max-width: min(92vw, 520px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; box-shadow: var(--shadow); }
+  .err { color: var(--bad); }
+
+  @media (max-width: 600px) {
+    main { padding-top: 18px; }
+    .card { padding: 16px; }
+    .cols { grid-template-columns: 1fr; gap: 6px; }
+    .strip { grid-template-columns: repeat(3, 1fr); }
+    .tiers { grid-template-columns: 1fr; }
+    .sigs li { grid-template-columns: 46px minmax(0, 1fr); } .sigs .when { grid-column: 2; margin-top: -4px; }
+    .person { flex-direction: column; gap: 8px; } .person .pact { align-self: flex-start; }
+    .actions .btn { flex: 1 1 auto; }
+  }
 </style>
 </head>
 <body>
 <main>
-  <div class="top">
-    <div>
-      <h1>Account Copilot</h1>
-      <p class="sub">Research any company, see which accounts are worth contacting this week, and push the best ones to your CRM.</p>
-    </div>
-    <div class="mode" id="mode">Demo mode · <a id="unlock">unlock</a></div>
-  </div>
+  <header class="top">
+    <div class="brand"><h1>Account Copilot</h1><p>Who to contact today, and why</p></div>
+    <div class="mode" id="mode"></div>
+  </header>
 
-  <nav role="tablist">
-    <button role="tab" aria-selected="true" data-tab="today">Today</button>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="today">Today<span class="count" id="c-today" hidden></span></button>
+    <button role="tab" aria-selected="false" data-tab="queue">Queue<span class="count" id="c-queue" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="research">Research</button>
-    <button role="tab" aria-selected="false" data-tab="queue">Queue</button>
     <button role="tab" aria-selected="false" data-tab="icp">ICP &amp; Signals</button>
   </nav>
 
-  <section id="today">
-    <div id="tbanner"></div>
-    <div id="tlist" aria-live="polite"><p class="skeleton">Building today's list…</p></div>
-  </section>
+  <section id="today"><div id="thead"></div><div id="tlist" aria-live="polite"></div></section>
+
+  <section id="queue" hidden><div id="qhead"></div><div id="qlist" aria-live="polite"></div></section>
 
   <section id="research" hidden>
-    <form id="form">
-      <input id="domain" placeholder="linear.app" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Company domain">
-      <button id="go" type="submit">Research</button>
+    <form class="search" id="form">
+      <input id="domain" placeholder="Company domain, for example linear.app" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Company domain">
+      <button class="btn primary" id="go" type="submit">Research</button>
     </form>
-    <p class="hint">Try <a data-d="linear.app">linear.app</a>, <a data-d="posthog.com">posthog.com</a> or <a data-d="attio.com">attio.com</a></p>
+    <p class="hint">Try <a data-d="linear.app">linear.app</a><a data-d="posthog.com">posthog.com</a><a data-d="attio.com">attio.com</a></p>
     <div id="out" aria-live="polite"></div>
   </section>
 
-  <section id="queue" hidden>
-    <div id="qbanner"></div>
-    <div id="qlist" aria-live="polite"></div>
-  </section>
-
-  <section id="icp" hidden><div id="icpbody"><p class="skeleton">Loading…</p></div></section>
+  <section id="icp" hidden><div id="icpbody"></div></section>
 </main>
+<div class="toast" id="toast" hidden role="status"></div>
 
 <script>
 const BASE = "https://tecgblsoylrshcqneevf.supabase.co/functions/v1";
 const KEY = "sb_publishable_V2QMkeCD8XuuoGkz_sVT5Q_4klZp394";
 let adminKey = ""; try { adminKey = localStorage.getItem("cp_admin") || ""; } catch {}
 
+/* ============ helpers ============ */
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const list = (a) => (a?.length ? `<ul>${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "<p>None found.</p>");
 
 async function api(fn, body) {
   const res = await fetch(`${BASE}/${fn}`, {
@@ -177,141 +215,70 @@ async function api(fn, body) {
   return d;
 }
 
+let toastTimer;
+function say(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 4200); }
+
+const days = (iso) => { const t = Date.parse(iso); return Number.isNaN(t) ? null : Math.floor((Date.now() - t) / 864e5); };
 function ago(iso) {
   const t = Date.parse(iso); if (!t) return "";
-  const h = (Date.now() - t) / 3.6e6;
-  if (h < 1) return "just now";
-  if (h < 24) return `${Math.floor(h)}h ago`;
-  const d = Math.floor(h / 24);
-  return d === 1 ? "yesterday" : `${d} days ago`;
+  const h = (Date.now() - t) / 36e5;
+  if (h < 1) return "just now"; if (h < 24) return `${Math.floor(h)}h ago`;
+  const d = Math.floor(h / 24); return d === 1 ? "yesterday" : `${d} days ago`;
 }
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
-const money = (n) => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${Math.round(n / 1e6)}M` : `$${Math.round(n / 1e3)}K`);
-function firmoText(a) {
-  if (!a?.firmo_at) return "";
-  return [a.employee_band ? `${a.employee_band} people` : a.employees ? `${a.employees} people` : null, a.stage,
-    a.raised_usd ? `${money(a.raised_usd)} raised` : null, a.hq_city || a.country].filter(Boolean).join(" · ");
-}
 const scoreColor = (n) => (n >= 70 ? "var(--good)" : n >= 40 ? "var(--warn)" : "var(--bad)");
-const TIER = { tier_1: ["Tier 1", "good"], tier_2: ["Tier 2", "warn"], tier_3: ["Tier 3", ""] };
-const tierTag = (t) => `<span class="tag ${TIER[t]?.[1] || ""}">${TIER[t]?.[0] || ""}</span>`;
+const money = (n) => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${Math.round(n / 1e6)}M` : `$${Math.round(n / 1e3)}K`);
+const firmoText = (a) => !a?.firmo_at ? "" : [a.employee_band ? `${a.employee_band} people` : a.employees ? `${a.employees} people` : null, a.stage && !/^(other|unknown|undisclosed)$/i.test(a.stage) ? a.stage : null, a.raised_usd ? `${money(a.raised_usd)} raised` : null, a.hq_city || a.country].filter(Boolean).join(" · ");
+const TIERS = { tier_1: ["Tier 1", "t1"], tier_2: ["Tier 2", "t2"], tier_3: ["Tier 3", "t3"] };
+const tierHtml = (t) => (TIERS[t] ? `<span class="tier ${TIERS[t][1]}">${TIERS[t][0]}</span>` : "");
+const skeleton = (n = 3) => `<div class="card"><div class="skel">${"<i></i>".repeat(n)}</div></div>`;
+const bullets = (a) => (a?.length ? `<ul class="plain">${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="meta">Nothing found.</p>`);
 
-// ---------- owner mode ----------
+/* ============ signals: a short, tidy list ============ */
+function sigRow(s, hidden = false) {
+  const summary = /\d+ open roles/.test(s.title);
+  const k = s.kind === "hn" ? ["HN", "hn"] : s.kind === "news" ? ["News", "news"] : ["Hiring", "hiring"];
+  let text = s.title.replace(/^Hiring:\s*/i, "").replace(/^Hacker News:\s*/i, "").trim();
+  if (summary) text = `Currently ${text}`;
+  const when = summary ? "" : (s.published ? ago(s.published) : ago(s.first_seen));
+  const fresh = !summary && s.is_new && !s.published;
+  const body = s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>` : esc(text);
+  return `<li${hidden ? " hidden data-more" : ""}><span class="k ${k[1]}">${k[0]}</span><span class="t" title="${esc(s.title)}">${body}</span><span class="when${fresh ? " fresh" : ""}">${esc(when)}</span></li>`;
+}
+function sigList(signals, max = 3) {
+  const sorted = [...(signals || [])].sort((a, b) => (/\d+ open roles/.test(a.title) ? 1 : 0) - (/\d+ open roles/.test(b.title) ? 1 : 0));
+  if (!sorted.length) return "";
+  const head = sorted.slice(0, max).map((x) => sigRow(x)).join(""), rest = sorted.slice(max).map((x) => sigRow(x, true)).join("");
+  return `<ul class="sigs">${head}${rest}</ul>${rest ? `<button class="btn link sm sigs-more" data-more-toggle>Show ${sorted.length - max} more signal${sorted.length - max > 1 ? "s" : ""}</button>` : ""}`;
+}
+const newCount = (signals) => (signals || []).filter((s) => s.is_new && !(s.kind === "hiring" && /\d+ open roles/.test(s.title))).length;
+
+/* ============ owner mode ============ */
+function drawMode(admin, credits) {
+  const el = $("mode");
+  el.className = `mode${admin ? " owner" : ""}`;
+  el.innerHTML = admin
+    ? `<span class="dot"></span>Owner${credits ? ` · ${credits.remaining} of ${credits.available} credits left` : ""}<button class="btn ghost sm" id="lock">Lock</button>`
+    : `<span class="dot"></span>Demo mode<button class="btn ghost sm" id="unlock">Unlock</button>`;
+  if (admin) $("lock").onclick = () => { adminKey = ""; try { localStorage.removeItem("cp_admin"); } catch {} refreshMode(); reloadVisible(); };
+  else $("unlock").onclick = () => {
+    el.innerHTML = `<span class="dot"></span><input id="keyin" type="password" placeholder="Owner key" aria-label="Owner key" autocomplete="off"><button class="btn ghost sm" id="keyno">Cancel</button>`;
+    $("keyin").focus();
+    $("keyno").onclick = () => drawMode(false);
+    $("keyin").onkeydown = (e) => {
+      if (e.key !== "Enter") return;
+      adminKey = e.target.value.trim(); try { localStorage.setItem("cp_admin", adminKey); } catch {}
+      refreshMode().then((ok) => { if (!ok) { adminKey = ""; try { localStorage.removeItem("cp_admin"); } catch {} say("That key was not accepted."); } else reloadVisible(); });
+    };
+  };
+}
 async function refreshMode() {
-  try {
-    const d = await api("people", { action: "status" });
-    $("mode").innerHTML = d.admin
-      ? `Owner mode${d.credits ? ` · People search credits: ${d.credits.remaining}/${d.credits.available}` : ""} · <a id="unlock">lock</a>`
-      : `Demo mode · <a id="unlock">unlock</a>`;
-    $("unlock").onclick = d.admin ? lock : unlock;
-  } catch { /* leave as is */ }
+  try { const d = await api("people", { action: "status" }); drawMode(!!d.admin, d.credits); return !!d.admin; }
+  catch { drawMode(false); return false; }
 }
-function unlock() {
-  const k = prompt("Owner key (leave empty to stay in demo mode)");
-  if (k === null) return;
-  adminKey = k.trim(); try { localStorage.setItem("cp_admin", adminKey); } catch {}
-  refreshMode(); if (!$("queue").hidden) loadQueue();
-}
-function lock() { adminKey = ""; try { localStorage.removeItem("cp_admin"); } catch {} refreshMode(); if (!$("queue").hidden) loadQueue(); }
-$("unlock").onclick = unlock;
+function reloadVisible() { for (const [id, fn] of [["today", loadToday], ["queue", loadQueue]]) if (!$(id).hidden) fn(); }
 
-// ---------- research ----------
-function dossierHtml(d) {
-  const x = d.dossier, a = d.account;
-  const score = x.icp_fit?.score ?? "–";
-  const sigs = (d.signals || []).slice(0, 12).map((s) =>
-    `<div class="sig"><span class="tag ${esc(s.kind)}">${esc(s.kind)}</span>` +
-    (s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a>` : esc(s.title)) +
-    (s.detail?.published ? ` <span class="toast">${esc(ago(s.detail.published))}</span>` : "") + `</div>`).join("");
-  return `
-    <div class="card">
-      <div class="head">
-        <div><p class="name">${esc(a.name)}</p><span class="domain">${esc(a.domain)}</span>${firmoText(a) ? `<br><span class="domain">${esc(firmoText(a))}</span>` : ""}</div>
-        <div class="score" title="ICP fit: how well this company matches your target profile, from its dossier"><b style="color:${scoreColor(score)}">${esc(score)}</b><span>ICP fit</span></div>
-      </div>
-      <p>${esc(x.summary)}</p>
-      <div class="whynow">${esc(x.why_now)}</div>
-    </div>
-    <div class="card"><h2>Why this fit</h2>${list(x.icp_fit?.reasons)}</div>
-    <div class="card"><h2>Likely pains</h2>${list(x.pains)}</div>
-    <div class="card"><h2>Talk tracks</h2>${(x.talk_tracks || []).map((t) =>
-      `<div class="track"><b>${esc(t.angle)}</b><q>${esc(t.opener)}</q></div>`).join("")}</div>
-    <div class="card"><h2>Risks</h2>${list(x.risks)}</div>
-    <div class="card"><h2>Signals (${(d.signals || []).length})</h2>${sigs || "<p>No public signals found.</p>"}</div>
-    <div class="card" id="peoplebox"></div>
-    <p class="meta">${d.cached ? "Served from saved research (no AI call)." : "Fresh research."} Only public data is used. Nothing is sent to anyone.</p>`;
-}
-
-async function run(domain, refresh = false) {
-  $("go").disabled = true;
-  $("out").innerHTML = `<p class="skeleton">Collecting signals and writing the dossier… about 10 seconds.</p>`;
-  try {
-    const d = await api("research-account", { domain, refresh });
-    $("out").innerHTML = dossierHtml(d);
-    mountPeople($("peoplebox"), d.account.name, d.account.domain);
-  } catch (e) { $("out").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
-  finally { $("go").disabled = false; }
-}
-$("form").addEventListener("submit", (e) => { e.preventDefault(); const v = $("domain").value.trim(); if (v) run(v); });
-document.querySelectorAll("[data-d]").forEach((el) => el.addEventListener("click", () => { $("domain").value = el.dataset.d; run(el.dataset.d); }));
-
-// ---------- queue ----------
-function banner(s) {
-  if (!s) return "";
-  return `<div class="banner">
-    <span><b>Signals refresh:</b> ${esc(s.label)} ${s.active ? "" : `<span class="paused">· scans paused</span>`}</span>
-    <span><b>Last scan:</b> ${s.last_scan ? `${esc(ago(s.last_scan))} (${esc(day(s.last_scan))})` : "never"} · <b>Next:</b> ${esc(day(s.next_scan))}</span></div>`;
-}
-
-function chip(s) {
-  const when = s.published ? `published ${ago(s.published)}` : `first seen ${ago(s.first_seen)}`;
-  const label = /\d+ open roles/.test(s.title) ? `Currently: ${s.title}` : `${s.title} · ${s.published ? ago(s.published) : ago(s.first_seen)}`;
-  return `<span class="tag ${esc(s.kind)}" title="${esc(s.title)} (${esc(when)})">${s.is_new ? `<b class="tag new">new</b> ` : ""}${esc(label)}</span>`;
-}
-
-function qCard(a) {
-  const d = a.draft;
-  const newest = (a.signals || []).map((s) => Date.parse(s.first_seen)).filter(Boolean).sort((x, y) => y - x)[0];
-  return `<div class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}"><div class="qrow">
-    <div class="rank" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority_score)}">${esc(a.priority_score)}</b><span>priority</span></div>
-    <div class="qmain">
-      <div class="head"><div><p class="name">${esc(a.name)} ${tierTag(a.tier)}</p>
-        <span class="domain">${esc(a.domain)} · ${esc(a.segment || "")}${a.icp_score != null ? ` · ICP fit ${esc(a.icp_score)}` : ""}</span><br>
-        ${a.firmo ? `<span class="domain">${esc(a.firmo)}</span><br>` : ""}
-        <span class="domain">Scanned ${esc(ago(a.last_scanned_at))}${newest ? ` · newest signal first seen ${esc(ago(new Date(newest).toISOString()))}` : ""}</span></div>
-        ${a.status === "pushed" ? `<span class="pill ok">In HubSpot</span>` : ""}</div>
-      ${lifeLine(a) ? `<p class="toast" style="margin:6px 0 0"><b>${esc(lifeLine(a))}</b></p>` : ""}
-      <div class="whynow">${esc(a.why_now)}</div>
-      <div class="chips">${(a.signals || []).map(chip).join("")}</div>
-      ${d ? `<details><summary>Draft email to ${esc(d.persona)}</summary><div class="draft"><b>${esc(d.subject)}</b>\n\n${esc(d.body)}</div></details>` : ""}
-      <div class="dbox"></div>
-      <div class="draftbox"></div>
-      <div class="pbox"></div>
-      <div class="actions qactions">
-        <button data-act="people">Find relevant people</button>
-        ${d ? "" : `<button class="ghost" data-act="draft">Draft email</button>`}
-        <button class="ghost" data-act="dossier">${a.has_dossier ? "View dossier" : "Generate dossier"}</button>
-        ${lifeButtons(a)}
-        <span class="toast"></span></div>
-    </div></div></div>`;
-}
-
-let qview = "todo";
-const VIEW_LABELS = { todo: "To contact", progress: "In progress", parked: "Snoozed & closed" };
-
-async function loadQueue() {
-  $("qbanner").innerHTML = ""; $("qlist").innerHTML = `<p class="skeleton">Loading…</p>`;
-  try {
-    const d = await api("queue", { action: "list", view: qview });
-    const views = `<div class="actions" style="margin:0 0 12px">${Object.entries(VIEW_LABELS).map(([k, l]) =>
-      `<button class="ghost ${k === qview ? "on" : ""}" data-view="${k}">${l}</button>`).join("")}</div>`;
-    $("qbanner").innerHTML = banner(d.scan) + views + `<p class="toast" style="margin:0 0 12px">${d.accounts.length} accounts here · ${d.scanned} companies scanned</p>`;
-    $("qlist").innerHTML = d.accounts.map(qCard).join("") || `<p>Nothing in this list.</p>`;
-  } catch (e) { $("qlist").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
-}
-$("qbanner").addEventListener("click", (e) => { const b = e.target.closest("[data-view]"); if (b) { qview = b.dataset.view; loadQueue(); } });
-
-// ---------- lifecycle: what happened with each account ----------
+/* ============ lifecycle: what happened with each account ============ */
 function lifeLine(a) {
   const s = a.outreach_status;
   if (s === "contacted") return `Contacted ${ago(a.contacted_at)} · touch ${a.touches}${a.next_followup_at ? ` · next follow-up ${day(a.next_followup_at)}` : " · no more follow-ups planned"}`;
@@ -321,183 +288,186 @@ function lifeLine(a) {
   if (s === "not_now") return "Marked not now";
   return "";
 }
-function lifeButtons(a) {
-  const s = a.outreach_status || a.outreach;
-  if (s === "snoozed" || s === "not_now") return `<button data-life="reopen">Reopen</button>`;
-  const main = s === "open" || s === "contacted" ? `<button data-life="contacted">${s === "open" ? "Mark contacted" : "Contacted again"}</button>` : "";
-  return main + `<div class="menu"><button class="ghost" data-tog>More ▾</button><div class="menu-list" hidden>
-    <button data-life="replied">They replied</button>
-    <button data-life="meeting">Meeting booked</button>
-    <button data-life="snooze" data-days="7">Snooze 1 week</button>
-    <button data-life="snooze" data-days="14">Snooze 2 weeks</button>
-    <button data-life="snooze" data-days="30">Snooze 1 month</button>
-    <button data-life="not_now">Not now</button></div></div>`;
-}
-async function doLife(btn, reload) {
-  const card = btn.closest(".card"), toast = card.querySelector(".qactions .toast");
-  btn.disabled = true; toast.textContent = "Saving…";
-  try {
-    const r = await api("queue", { action: "outcome", account_id: card.dataset.id, kind: btn.dataset.life, days: btn.dataset.days ? Number(btn.dataset.days) : undefined });
-    if (r.mode === "dry_run") { toast.textContent = r.message; btn.disabled = false; return; }
-    reload();
-  } catch (err) { toast.textContent = err.message; btn.disabled = false; }
-}
-function menuToggle(e) {
-  const t = e.target.closest("[data-tog]");
-  if (!t || t.closest(".pbox")) return false; // the people panel has its own menus
-  t.nextElementSibling.hidden = !t.nextElementSibling.hidden; return true;
-}
-document.addEventListener("click", (e) => { if (!e.target.closest(".menu")) document.querySelectorAll(".menu-list").forEach((m) => (m.hidden = true)); });
 
-// One click handler for any list of account cards (Queue and Today).
-function wireCards(root, reload) {
-  root.addEventListener("click", async (e) => {
-    if (menuToggle(e)) return;
-    const lb = e.target.closest("button[data-life]"); if (lb) { doLife(lb, reload); return; }
-    const btn = e.target.closest("button[data-act]"); if (!btn) return;
-    const card = btn.closest(".card"), toast = card.querySelector(".qactions .toast");
-    const act = btn.dataset.act;
-    if (act === "people") { btn.hidden = true; mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain); return; }
-    if (act === "draft") {
-      btn.disabled = true; toast.textContent = "Writing the draft…";
-      try {
-        const r = await api("queue", { action: "draft", account_id: card.dataset.id });
-        if (r.mode === "dry_run") { toast.textContent = r.message; btn.disabled = false; return; }
-        const dr = r.draft;
-        card.querySelector(".draftbox").innerHTML = `<div class="card" style="margin:12px 0 0"><h2>Draft email to ${esc(dr.persona)}</h2>
-          <div class="draft"><b>${esc(dr.subject)}</b>\n\n${esc(dr.body)}</div><p class="toast" style="margin-bottom:0">A starting point. Edit it and send it yourself; nothing is sent for you.</p></div>`;
-        toast.textContent = ""; btn.hidden = true;
-      } catch (err) { toast.textContent = err.message; btn.disabled = false; }
-      return;
-    }
-    if (act === "dossier") {
-      btn.disabled = true;
-      try {
-        toast.textContent = "Loading dossier…";
-        const d = await api("research-account", { domain: card.dataset.domain });
-        const x = d.dossier;
-        card.querySelector(".dbox").innerHTML = `<div class="card" style="margin:0"><h2>Dossier${d.cached ? "" : " (just generated)"}</h2>
-          <p style="margin-top:0">${esc(x.summary)}</p><p><b>ICP fit ${esc(x.icp_fit?.score ?? "–")}</b></p>${list(x.icp_fit?.reasons)}
-          <h2 style="margin-top:12px">Likely pains</h2>${list(x.pains)}</div>`;
-        toast.textContent = ""; btn.textContent = "Refresh view"; btn.disabled = false;
-      } catch (err) { toast.textContent = err.message; btn.disabled = false; }
-    }
-  });
+/**
+ * One primary action per card, chosen from what we already know:
+ *  - parked account: Reopen
+ *  - no contact yet: Find relevant people
+ *  - contact known: Mark contacted (or Contacted again)
+ * Everything else lives in the More menu.
+ */
+function actionsHtml({ outreach, hasContacts, hasDraft }) {
+  const parked = outreach === "snoozed" || outreach === "not_now";
+  const primary = parked ? `<button class="btn primary" data-life="reopen">Reopen</button>`
+    : !hasContacts ? `<button class="btn primary" data-act="people">Find relevant people</button>`
+    : `<button class="btn primary" data-life="contacted">${outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>`;
+  const touched = outreach === "contacted" || outreach === "replied" || outreach === "meeting";
+  const menu = [
+    hasContacts ? `<button data-act="people">See all contacts</button>` : "",
+    !hasContacts && !parked ? `<button data-life="contacted">${outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>` : "",
+    `<button data-act="dossier">View dossier</button>`,
+    parked ? "" : `<hr>${touched ? `<button data-life="reopen">Clear status (reopen)</button>` : ""}<button data-life="replied">They replied</button><button data-life="meeting">Meeting booked</button>
+      <button data-life="snooze" data-days="7">Snooze 1 week</button><button data-life="snooze" data-days="14">Snooze 2 weeks</button><button data-life="snooze" data-days="30">Snooze 1 month</button>
+      <hr><button data-life="not_now">Not now</button>`,
+  ].join("");
+  return `<div class="actions">${primary}<button class="btn ghost" data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>
+    <div class="menu"><button class="btn ghost" data-tog aria-haspopup="menu">More ▾</button><div class="menu-list" hidden>${menu}</div></div></div>
+    <div class="panel dbox"></div><div class="panel draftbox"></div><div class="panel pbox"></div>`;
 }
-wireCards($("qlist"), loadQueue);
-wireCards($("tlist"), () => loadToday());
 
-// ---------- Today ----------
-const TODAY_CLS = { meeting: "accent", follow_up: "warn", hot: "good", new: "", revive: "" };
+/* ============ Today: lead with the person ============ */
+const TODAY_BADGE = { meeting: "accent", follow_up: "warn", hot: "good", new: "", revive: "" };
 
 function tCard(i) {
   const a = i.account;
-  const right = i.meeting
-    ? `<div class="score"><b style="font-size:18px">${esc(new Date(i.meeting.starts_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }))}</b><span>${esc(day(i.meeting.starts_at))}</span></div>`
-    : a?.priority != null ? `<div class="score" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority)}">${esc(a.priority)}</b><span>priority</span></div>` : "";
   if (i.type === "meeting") {
-    return `<div class="card"><div class="head"><div><span class="tag accent">${esc(i.label)}</span>
-      <p class="name" style="font-size:18px;margin-top:6px">${esc(i.headline)}</p></div>${right}</div><div class="whynow">${esc(i.reason)}</div></div>`;
+    return `<article class="card"><div class="card-head"><div><div class="eyebrow"><span class="badge accent">Meeting</span></div>
+      <h3 class="title">${esc(i.headline)}</h3><div class="meta">A private brief was emailed to you when it was booked</div></div>
+      <div class="score"><b style="font-size:20px">${esc(new Date(i.meeting.starts_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }))}</b><span>${esc(day(i.meeting.starts_at))}</span></div></div></article>`;
   }
   const [c, c2] = i.contacts || [];
+  const fresh = newCount(i.signals);
   const verb = i.type === "follow_up" ? "Follow up with " : "";
-  // The person is the headline; the company is the context. With no contact yet, the company leads.
   const title = c ? `${verb}${esc(c.name)}` : esc(a.name);
-  const sub = c
-    ? `${esc(c.title)} at <b>${esc(a.name)}</b> ${tierTag(a.tier)}`
-    : `${tierTag(a.tier)} No contact yet. Use "Find relevant people"`;
-  const head = `<div class="head"><div><span class="tag ${TODAY_CLS[i.type] || ""}">${esc(i.label)}</span>
-    <p class="name" style="font-size:18px;margin-top:6px">${title}</p>
-    <span class="domain">${sub}</span></div>${right}</div>`;
-  const email = c?.email ? `<p class="domain" style="margin:6px 0 0">${c.email.includes("***") ? esc(c.email) : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`}${c.persona ? ` · ${esc(c.persona)}` : ""}</p>` : "";
-  const also = c2 ? `<p class="domain" style="margin:4px 0 0">Also consider: <b>${esc(c2.name)}</b>, ${esc(c2.title)}</p>` : "";
-  return `<div class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">${head}${email}
-    ${a.firmo ? `<p class="domain" style="margin:4px 0 0">${esc(a.name)}: ${esc(a.firmo)}</p>` : ""}
-    <div class="whynow">${esc(i.why || i.reason)}</div>
-    <div class="chips">${(i.signals || []).map(chip).join("")}</div>
-    ${i.type === "follow_up" ? `<p class="domain" style="margin:0 0 4px">${esc(i.headline)}</p>` : ""}${also}
-    ${i.last_action ? `<p class="domain" style="margin:4px 0 0">Last action: ${esc(i.last_action)}</p>` : ""}
-    <div class="draftbox"></div>
-    <div class="pbox"></div>
-    <div class="actions qactions"><button data-act="people">Find relevant people</button><button class="ghost" data-act="draft">Draft email</button>${lifeButtons({ outreach_status: a.outreach })}<span class="toast"></span></div></div>`;
+  const sub = c ? `${esc(c.title)} at <b>${esc(a.name)}</b> · ${tierHtml(a.tier)}` : `${tierHtml(a.tier)} · no contact found yet`;
+  const mail = c?.email ? (c.email.includes("***") ? `<span>${esc(c.email)}</span>` : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) + (c.persona ? ` · ${esc(c.persona)}` : "") : "";
+  return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
+    <div class="card-head"><div>
+      <div class="eyebrow"><span class="badge ${TODAY_BADGE[i.type] || ""}">${esc(i.label)}</span>${fresh ? `<span>${fresh} new signal${fresh > 1 ? "s" : ""}</span>` : ""}${i.type === "follow_up" ? `<span>${esc(i.headline)}</span>` : ""}</div>
+      <h3 class="title">${title}</h3><div class="sub">${sub}</div>
+      ${mail ? `<div class="meta">${mail}</div>` : ""}
+      ${a.firmo ? `<div class="meta">${c ? `${esc(a.name)} · ` : ""}${esc(a.firmo)}</div>` : ""}
+    </div>${a.priority != null ? `<div class="score" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority)}">${esc(a.priority)}</b><span>priority</span></div>` : ""}</div>
+    <div class="why"><b>Why today.</b> ${esc(i.why || i.reason)}</div>
+    ${sigList(i.signals)}
+    ${c2 ? `<div class="meta" style="margin-top:12px">Also consider <b>${esc(c2.name)}</b>, ${esc(c2.title)}</div>` : ""}
+    ${i.last_action ? `<div class="meta" style="margin-top:6px">Last action: ${esc(i.last_action)}</div>` : ""}
+    ${actionsHtml({ outreach: a.outreach, hasContacts: !!c, hasDraft: false })}</article>`;
 }
 
 async function loadToday() {
-  $("tbanner").innerHTML = ""; $("tlist").innerHTML = `<p class="skeleton">Building today's list…</p>`;
+  $("thead").innerHTML = ""; $("tlist").innerHTML = skeleton(4) + skeleton(3);
   try {
     const d = await api("queue", { action: "today" });
     const names = { meeting: "meeting", follow_up: "follow-up", hot: "hot", new: "new", revive: "revisit" };
     const mix = Object.entries(d.counts).map(([k, n]) => `${n} ${names[k]}`).join(", ");
-    $("tbanner").innerHTML = `<div class="banner"><span><b>${esc(new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }))}</b></span>
-      <span>${d.items.length} to focus on${mix ? ` (${esc(mix)})` : ""}${d.hidden ? ` · ${d.hidden} more not shown` : ""}</span></div>`;
+    $("thead").innerHTML = `<div class="day"><h2>${esc(new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }))}</h2>
+      <span>${d.items.length} to focus on${mix ? ` · ${esc(mix)}` : ""}${d.hidden ? ` · ${d.hidden} more not shown` : ""}</span></div>`;
     $("tlist").innerHTML = d.items.map(tCard).join("") ||
-      `<div class="card"><p style="margin:0">Nothing urgent today. New signals and follow-ups appear here when they are due.</p></div>`;
-  } catch (e) { $("tlist").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+      `<div class="card empty">Nothing urgent today.<br>New signals and follow-ups appear here when they are due.</div>`;
+    const c = $("c-today"); c.textContent = d.items.length; c.hidden = !d.items.length;
+  } catch (e) { $("tlist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 
-// ---------- ICP & signals playbook ----------
-async function loadIcp() {
+/* ============ Queue: companies, ranked ============ */
+let qview = "todo";
+const VIEWS = { todo: "To contact", progress: "In progress", parked: "Snoozed & closed" };
+
+function scanBanner(s) {
+  if (!s) return "";
+  return `<div class="banner"><span><b>Signals refresh:</b> ${esc(s.label)}${s.active ? "" : ` <span class="paused">· paused</span>`}</span>
+    <span>Last scan ${s.last_scan ? esc(ago(s.last_scan)) : "never"} · next ${esc(day(s.next_scan))}</span></div>`;
+}
+
+function qCard(a) {
+  const contacts = a.contacts || [];
+  const ll = lifeLine(a);
+  return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
+    <div class="card-head"><div>
+      <div class="eyebrow">${tierHtml(a.tier)}${a.status === "pushed" ? `<span class="badge good">In HubSpot</span>` : ""}${a.icp_score != null ? `<span>ICP fit ${esc(a.icp_score)}</span>` : ""}${a.outside_icp ? `<span class="badge warn">Outside target size</span>` : ""}</div>
+      <h3 class="title">${esc(a.name)}</h3>
+      <div class="sub">${esc(a.segment || a.domain)}</div>
+      ${a.firmo ? `<div class="meta">${esc(a.firmo)}</div>` : ""}
+    </div><div class="score" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority_score)}">${esc(a.priority_score)}</b><span>priority</span></div></div>
+    ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
+    <div class="why">${esc(a.why_now)}</div>
+    ${sigList(a.signals)}
+    ${contacts.length ? `<div class="meta" style="margin-top:12px">Contacts: ${contacts.map((c) => `<b>${esc(c.name)}</b> (${esc(c.title)})`).join(", ")}</div>` : ""}
+    <div class="foot">Scanned ${esc(ago(a.last_scanned_at))}</div>
+    ${actionsHtml({ outreach: a.outreach_status, hasContacts: contacts.length > 0, hasDraft: !!a.draft })}</article>`;
+}
+
+async function loadQueue() {
+  $("qhead").innerHTML = ""; $("qlist").innerHTML = skeleton(4) + skeleton(3);
   try {
-    const p = await api("queue", { action: "icp" });
-    const c = p.company, max = Math.max(...p.signals.map((s) => s.weight));
-    $("icpbody").innerHTML = `
-      <div class="card"><h2>What we sell</h2><p class="lead"><b>${esc(p.seller.name)}</b></p><p style="margin:0">${esc(p.seller.pitch)}</p></div>
-      <div class="card"><h2>Company ICP: who we target</h2>
-        <div class="grid">
-          <div><b>Industry</b><div class="kv">${c.industries.map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</div></div>
-          <div><b>Size</b>${esc(c.employeesMin)}–${esc(c.employeesMax)} employees</div>
-          <div><b>Stage</b><div class="kv">${c.stages.map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</div></div>
-          <div><b>Regions</b><div class="kv">${c.regions.map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</div></div>
-        </div></div>
-      <div class="card"><h2>Contact ICP: who we talk to</h2>
-        <div class="grid">${p.personas.map((x) => `<div><b>${esc(x.title)}</b><span class="domain">${esc(x.note || "Primary buyer")}</span></div>`).join("")}</div></div>
-      <div class="card"><h2>Intent signals we watch</h2>
-        ${p.signals.map((s) => `<div class="sigrow"><div class="head"><b>${esc(s.label)}</b><span class="tag accent">${esc(s.weight)} pts</span></div>
-          <div class="bar"><i style="width:${(s.weight / max) * 100}%"></i></div>
-          <div class="why">${esc(s.why)}</div><div class="why">Source: ${esc(s.source)}</div></div>`).join("")}
-        <p class="toast" style="margin-bottom:0">Older evidence counts for less: news after 30 days counts half, after 60 days nothing.</p></div>
-      <div class="card"><h2>How to read the scores</h2>
-        <div class="tiers"><div><b style="color:var(--good)">${esc(p.tiers.tier_1)}+</b>Tier 1<br><span class="domain">Contact this week</span></div>
-          <div><b style="color:var(--warn)">${esc(p.tiers.tier_2)}+</b>Tier 2<br><span class="domain">Worth a look</span></div>
-          <div><b>&lt; ${esc(p.tiers.tier_2)}</b>Tier 3<br><span class="domain">Keep watching</span></div></div>
-        <ul style="margin-top:12px"><li><b>Priority</b>: the total of the signals above (0–100). Accounts at ${esc(p.queue_threshold)}+ enter the Queue.</li>
-          <li><b>ICP fit</b>: how well the company matches the profile, from its dossier.</li>
-          <li><b>Persona score</b>: how closely a person's job title matches a target buyer.</li></ul></div>
-      <div class="card"><h2>Follow-up rhythm and the Today list</h2>
-        <p style="margin-top:0">${esc(p.follow_up.note)} Outreach is always manual: the system only tells you who to contact and why.</p>
-        <ul><li><b>Hot now</b>: a new signal in the last ${esc(p.today.hot_hours)} hours</li>
-          <li><b>Follow-up due</b>: an account you contacted, on its day 3, 7 or 14</li>
-          <li><b>Meeting</b>: booked for the next day and a half, with a private brief emailed to you</li>
-          <li><b>Snooze ended</b> or <b>worth another look</b>: parked accounts that are ready again</li></ul>
-        <p class="toast" style="margin-bottom:0">The list is capped at ${esc(p.today.cap)} items so the focus stays on quality.</p></div>
-      <div class="card"><h2>Right now</h2>
-        <div class="grid"><div><b>${esc(p.stats.companies)}</b>companies tracked</div><div><b>${esc(p.stats.matching)}</b>match your size and stage (of ${esc(p.stats.enriched)} with data)</div><div><b>${esc(p.stats.queued)}</b>in the Queue</div>
-          <div><b style="color:var(--good)">${esc(p.stats.tier_1)}</b>Tier 1</div><div><b style="color:var(--warn)">${esc(p.stats.tier_2)}</b>Tier 2</div></div>
-        <p class="toast" style="margin-bottom:0">Signals refresh ${esc(p.schedule.toLowerCase())}.</p></div>`;
-  } catch (e) { $("icpbody").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+    const d = await api("queue", { action: "list", view: qview });
+    $("qhead").innerHTML = scanBanner(d.scan) + `<div class="chips">${Object.entries(VIEWS).map(([k, l]) => `<button class="chip${k === qview ? " on" : ""}" data-view="${k}">${l}</button>`).join("")}</div>`;
+    $("qlist").innerHTML = d.accounts.map(qCard).join("") || `<div class="card empty">Nothing in this list.</div>`;
+    if (qview === "todo") { const c = $("c-queue"); c.textContent = d.accounts.length; c.hidden = !d.accounts.length; }
+  } catch (e) { $("qlist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
+$("qhead").addEventListener("click", (e) => { const b = e.target.closest("[data-view]"); if (b) { qview = b.dataset.view; loadQueue(); } });
 
-document.querySelectorAll("nav [data-tab]").forEach((b) => b.addEventListener("click", () => {
-  document.querySelectorAll("nav [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  for (const t of ["today", "research", "queue", "icp"]) $(t).hidden = b.dataset.tab !== t;
-  if (b.dataset.tab === "today") loadToday();
-  if (b.dataset.tab === "queue") loadQueue();
-  if (b.dataset.tab === "icp") loadIcp();
-}));
+/* ============ card actions (shared by Today and Queue) ============ */
+function wireCards(root, reload) {
+  root.addEventListener("click", async (e) => {
+    const life = e.target.closest("button[data-life]");
+    if (life) {
+      life.disabled = true;
+      try {
+        const card = life.closest(".card");
+        const r = await api("queue", { action: "outcome", account_id: card.dataset.id, kind: life.dataset.life, days: life.dataset.days ? Number(life.dataset.days) : undefined });
+        if (r.mode === "dry_run") { say(r.message); life.disabled = false; return; }
+        const msg = { contacted: r.next_followup_at ? `Marked contacted. Next follow-up ${day(r.next_followup_at)}.` : "Marked contacted.", replied: "Marked as replied.", meeting: "Meeting booked.", snooze: "Snoozed.", not_now: "Moved to Snoozed & closed.", reopen: "Reopened." }[life.dataset.life];
+        say(msg); reload();
+      } catch (err) { say(err.message); life.disabled = false; }
+      return;
+    }
 
-// ---------- people: find, enrich, preview, push ----------
-const SEN = { c_suite: "C-suite", vp: "VP", head: "Head", director: "Director", manager: "Manager", ic: "IC" };
+    const btn = e.target.closest("button[data-act]"); if (!btn) return;
+    const card = btn.closest(".card"), act = btn.dataset.act;
+    if (act === "people") { mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain, true); return; }
+    if (act === "draft") {
+      btn.disabled = true; say("Getting the draft…");
+      try {
+        const r = await api("queue", { action: "draft", account_id: card.dataset.id });
+        if (r.mode === "dry_run") { say(r.message); return; }
+        const dr = r.draft;
+        card.querySelector(".draftbox").innerHTML = `<p class="label">Draft email to ${esc(dr.persona)}</p><div class="draft"><b>${esc(dr.subject)}</b>\n\n${esc(dr.body)}</div>
+          <p class="meta" style="margin:8px 0 0">A starting point. Edit it and send it yourself; nothing is sent for you.</p>`;
+        $("toast").hidden = true;
+      } catch (err) { say(err.message); } finally { btn.disabled = false; }
+      return;
+    }
+    if (act === "dossier") {
+      say("Loading the dossier…");
+      try {
+        const d = await api("research-account", { domain: card.dataset.domain }), x = d.dossier;
+        card.querySelector(".dbox").innerHTML = `<p class="label">Dossier${d.cached ? "" : " (just generated)"}</p><p style="margin:0 0 8px">${esc(x.summary)}</p>
+          <p class="meta" style="margin:0 0 6px"><b>ICP fit ${esc(x.icp_fit?.score ?? "–")}</b></p>${bullets(x.icp_fit?.reasons)}
+          <p class="label" style="margin-top:14px">Likely pains</p>${bullets(x.pains)}`;
+        $("toast").hidden = true;
+      } catch (err) { say(err.message); }
+    }
+  });
+}
+wireCards($("tlist"), () => loadToday());
+wireCards($("qlist"), () => loadQueue());
+
+// "Show more signals" works everywhere
+document.addEventListener("click", (e) => {
+  const m = e.target.closest("[data-more-toggle]");
+  if (m) { m.previousElementSibling.querySelectorAll("[data-more]").forEach((li) => (li.hidden = false)); m.remove(); }
+});
+
+// menus: one handler for every dropdown on the page
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-tog]");
+  document.querySelectorAll(".menu-list").forEach((m) => { if (!t || m.parentElement !== t.parentElement) m.hidden = true; });
+  if (t) { const m = t.nextElementSibling; m.hidden = !m.hidden; }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll(".menu-list").forEach((m) => (m.hidden = true)); });
+
+/* ============ People: find, enrich, preview, push ============ */
 const STATUS = { valid: ["Verified", "ok"], accept_all: ["Accepts all", ""], unknown: ["Unverified", ""] };
 
 function strip(c) {
   if (!c) return "";
-  const cell = (v, l, tip) => `<div title="${esc(tip)}"><b>${v ?? "–"}</b><span>${l}</span></div>`;
-  return `<div class="strip">${cell(esc(c.fit), "ICP fit", "From the dossier. Blank until the company is researched.")}${cell(esc(c.priority), "Priority", "Total of all signals, 0 to 100")}
-    ${cell(esc(c.signal), "Signals", "Strength of hiring, news and community signals")}${cell(esc(c.intent), "Intent", "Hiring and funding only")}
-    ${cell(esc(c.tier_label), "ICP tier", "Becomes the ICP tier in HubSpot")}</div>`;
+  const cell = (v, l, tip) => `<div title="${esc(tip)}"><b>${esc(v ?? "–")}</b><span>${l}</span></div>`;
+  return `<div class="strip">${cell(c.fit, "ICP fit", "From the dossier. Blank until the company is researched")}${cell(c.priority, "Priority", "Total of all signals")}${cell(c.signal, "Signals", "Hiring, news, community")}${cell(c.intent, "Intent", "Hiring and funding only")}${cell(c.tier_label, "Tier", "Becomes the ICP tier in HubSpot")}</div>`;
 }
 
-function mountPeople(box, accountName, domain) {
+function mountPeople(box, accountName, domain, autoload) {
   let accountId = null, people = [], msg = "", company = null, dirty = true;
 
   const row = (p) => {
@@ -507,33 +477,35 @@ function mountPeople(box, accountName, domain) {
       : `<span class="mask">${esc(p.email || "no email found")}</span>`;
     const action = p.pushed ? `<span class="pill ok">In HubSpot</span>`
       : p.email_revealed ? `<span class="pill ok">Enriched</span>`
-      : p.email ? `<div class="menu"><button class="ghost" data-tog>Enrich ▾</button>
-          <div class="menu-list" hidden>
-            <button data-en="email">Email</button>
-            <button disabled title="Needs a paid data provider">Phone (paid provider)</button>
-            <button disabled title="Needs a paid data provider">Email + phone (paid provider)</button>
-          </div></div>` : "";
-    return `<div class="person" data-pid="${esc(p.id)}">
-      <div class="pinfo"><b>${esc(p.name)}</b>
-        <span class="tag">${esc(SEN[p.seniority] || p.seniority)}</span>
-        ${p.persona ? `<span class="tag hiring">${esc(p.persona)}</span>` : ""}
-        <span class="tag ${p.persona_score >= 70 ? "good" : ""}" title="How closely this job title matches a target buyer">Persona score ${esc(p.persona_score)}</span>
-        <div class="domain">${esc(p.title)} · ${esc(accountName)}${p.department ? " · " + esc(p.department) : ""}</div>
-        <div>${email}</div></div>
-      <div class="pact">${action}</div></div>`;
+      : p.email ? `<div class="menu"><button class="btn ghost sm" data-tog>Enrich ▾</button><div class="menu-list" hidden>
+          <button data-en="email">Email</button><button disabled title="Needs a paid data provider">Phone (paid provider)</button><button disabled title="Needs a paid data provider">Email + phone (paid provider)</button></div></div>` : "";
+    return `<div class="person${p.persona ? "" : " dim"}" data-pid="${esc(p.id)}"><div>
+      <div><span class="pn">${esc(p.name)}</span>${p.persona ? `<span class="ptag">${esc(p.persona)} · ${esc(p.persona_score)}</span>` : ""}</div>
+      <div class="pt">${esc(p.title)} at ${esc(accountName)}${p.department ? ` · ${esc(p.department)}` : ""}</div>
+      <div class="pe">${email}</div></div><div class="pact">${action}</div></div>`;
   };
 
   const draw = () => {
     const pushable = people.some((p) => p.email_revealed && !p.pushed);
-    box.innerHTML = `<h2>Relevant people</h2>${strip(company)}
-      ${people.map(row).join("")}
-      ${msg ? `<p class="toast">${esc(msg)}</p>` : ""}
-      ${pushable ? `<details data-preview><summary>What will go to HubSpot</summary><div class="pv"><p class="toast">Loading…</p></div></details>
-        <div class="actions"><button data-push>Push to HubSpot</button><span class="toast">No AI credits are used for the push.</span></div>` : ""}`;
+    box.innerHTML = `<p class="label">Relevant people</p>${strip(company)}${people.map(row).join("")}
+      ${msg ? `<p class="meta" style="margin:8px 0 0">${esc(msg)}</p>` : ""}
+      ${pushable ? `<details data-preview><summary>What will go to HubSpot</summary><div class="pv"><p class="meta">Loading…</p></div></details>
+        <div class="actions" style="margin-top:6px"><button class="btn primary" data-push>Push to HubSpot</button><span class="meta">No AI credits are used for the push.</span></div>` : ""}`;
     dirty = true;
   };
 
-  box.innerHTML = `<h2>Relevant people</h2><div class="actions"><button data-find>Find relevant people</button><span class="toast">Searches a contact database by your target roles. Uses 1 search credit.</span></div>`;
+  const find = async () => {
+    box.innerHTML = `<p class="label">Relevant people</p><div class="skel"><i></i><i></i></div>`;
+    try {
+      const d = await api("people", { action: "find", domain });
+      accountId = d.account_id; people = d.people; company = d.company;
+      msg = d.locked ? d.message : people.length ? (d.cached ? "" : "Found with 1 search credit.") : "No matching people found for this company.";
+      draw();
+    } catch (err) { msg = err.message; draw(); }
+  };
+
+  if (autoload) find();
+  else box.innerHTML = `<p class="label">Relevant people</p><div class="actions" style="margin:0"><button class="btn primary" data-find>Find relevant people</button><span class="meta">Searches by your target roles. Uses 1 search credit the first time.</span></div>`;
 
   box.addEventListener("toggle", async (e) => {
     const det = e.target; if (!det.matches?.("details[data-preview]") || !det.open || !dirty) return;
@@ -541,40 +513,111 @@ function mountPeople(box, accountName, domain) {
     try {
       const d = await api("people", { action: "preview", account_id: accountId });
       const rows = (f) => `<table>${f.map((x) => `<tr><td>${esc(x.label)}</td><td>${esc(x.value)}</td></tr>`).join("")}</table>`;
-      det.querySelector(".pv").innerHTML = `<h3>Company: ${esc(d.company.name)}</h3>${rows(d.company.fields)}
-        ${d.contacts.map((c) => `<h3>Contact: ${esc(c.name)} · ${esc(c.title)}</h3>${rows(c.fields)}`).join("")}
-        <h3>Note on the company</h3><p class="toast" style="margin:0">${esc(d.note)}</p>`;
+      det.querySelector(".pv").innerHTML = `<h4>Company: ${esc(d.company.name)}</h4>${rows(d.company.fields)}
+        ${d.contacts.map((c) => `<h4>Contact: ${esc(c.name)} · ${esc(c.title)}</h4>${rows(c.fields)}`).join("")}
+        <h4>Note on the company</h4><p class="meta" style="margin:0">${esc(d.note)}</p>`;
     } catch (err) { det.querySelector(".pv").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
   }, true);
 
   box.onclick = async (e) => {
-    const t = e.target.closest("button"); if (!t) return;
-    if (t.matches("[data-tog]")) { t.nextElementSibling.hidden = !t.nextElementSibling.hidden; return; }
+    const t = e.target.closest("button"); if (!t || t.matches("[data-tog]")) return;
     try {
-      if (t.matches("[data-find]")) {
-        t.disabled = true; box.querySelector(".toast").textContent = "Searching…";
-        const d = await api("people", { action: "find", domain });
-        accountId = d.account_id; people = d.people; company = d.company;
-        msg = d.locked ? d.message : people.length ? (d.cached ? "Saved results, no credit used." : "") : "No matching people found for this company.";
-        draw();
-      } else if (t.matches("[data-en]")) {
+      if (t.matches("[data-find]")) { await find(); }
+      else if (t.matches("[data-en]")) {
         const pid = t.closest(".person").dataset.pid; t.disabled = true;
         const d = await api("people", { action: "enrich", person_id: pid, what: t.dataset.en });
-        if (d.mode === "dry_run") { msg = d.message; draw(); return; }
+        if (d.mode === "dry_run") { say(d.message); return; }
         people = people.map((p) => (p.id === pid ? d.person : p)); msg = ""; draw();
       } else if (t.matches("[data-push]")) {
-        t.disabled = true; box.querySelector("[data-push]").nextElementSibling.textContent = "Pushing…";
+        t.disabled = true; say("Pushing to HubSpot…");
         const d = await api("people", { action: "push", account_id: accountId });
-        if (d.mode === "dry_run") { msg = d.message; draw(); return; }
+        if (d.mode === "dry_run") { say(d.message); t.disabled = false; return; }
         people = people.map((p) => (p.email_revealed ? { ...p, pushed: true } : p));
-        msg = `Pushed the company and ${d.contacts.length} contact(s) to HubSpot${d.used_dossier ? ", with the dossier" : ""}.`; draw();
+        msg = `Pushed the company and ${d.contacts.length} contact(s) to HubSpot${d.used_dossier ? ", with the dossier" : ""}.`; draw(); say(msg);
       }
-    } catch (err) { msg = err.message; draw(); }
+    } catch (err) { say(err.message); t.disabled = false; }
   };
 }
 
+/* ============ Research ============ */
+function dossierHtml(d) {
+  const x = d.dossier, a = d.account, fit = x.icp_fit?.score;
+  const tracks = (x.talk_tracks || []).map((t) => `<p class="quote"><b>${esc(t.angle)}</b>${esc(t.opener)}</p>`).join("");
+  return `
+    <article class="card"><div class="card-head"><div>
+      <div class="eyebrow"><span>Account research</span>${d.cached ? "<span>· saved result</span>" : ""}</div>
+      <h3 class="title">${esc(a.name)}</h3><div class="sub">${esc(a.domain)}</div>${firmoText(a) ? `<div class="meta">${esc(firmoText(a))}</div>` : ""}
+    </div><div class="score" title="ICP fit: how well this company matches your target profile"><b style="color:${scoreColor(fit)}">${esc(fit ?? "–")}</b><span>ICP fit</span></div></div>
+    <p style="margin:14px 0 0">${esc(x.summary)}</p><div class="why"><b>Why now.</b> ${esc(x.why_now)}</div></article>
+    <article class="card"><div class="cols"><div><p class="label">Why it fits</p>${bullets(x.icp_fit?.reasons)}</div><div><p class="label">Watch out for</p>${bullets(x.risks)}</div></div></article>
+    <article class="card"><div class="cols"><div><p class="label">Likely pains</p>${bullets(x.pains)}</div><div><p class="label">Ways in</p>${tracks || '<p class="meta">None.</p>'}</div></div></article>
+    <article class="card"><p class="label">Signals (${(d.signals || []).length})</p>${sigList(d.signals, 5) || '<p class="meta">No public signals found.</p>'}</article>
+    <article class="card" id="peoplebox"></article>
+    <p class="foot">Public sources only. Nothing is sent to anyone.</p>`;
+}
+
+async function run(domain) {
+  $("go").disabled = true;
+  $("out").innerHTML = skeleton(3) + `<p class="meta" style="text-align:center">Collecting signals and writing the dossier. About 10 seconds.</p>`;
+  try {
+    const d = await api("research-account", { domain });
+    $("out").innerHTML = dossierHtml(d);
+    mountPeople($("peoplebox"), d.account.name, d.account.domain, false);
+  } catch (e) { $("out").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+  finally { $("go").disabled = false; }
+}
+$("form").addEventListener("submit", (e) => { e.preventDefault(); const v = $("domain").value.trim(); if (v) run(v); });
+document.querySelectorAll("[data-d]").forEach((el) => el.addEventListener("click", () => { $("domain").value = el.dataset.d; run(el.dataset.d); }));
+
+/* ============ ICP & Signals playbook ============ */
+async function loadIcp() {
+  $("icpbody").innerHTML = skeleton(4);
+  try {
+    const p = await api("queue", { action: "icp" });
+    const c = p.company, max = Math.max(...p.signals.map((s) => s.weight));
+    $("icpbody").innerHTML = `
+      <div class="tiles">
+        <div class="tile"><b>${esc(p.stats.companies)}</b><span>companies tracked</span></div>
+        <div class="tile"><b>${esc(p.stats.matching)}</b><span>match size and stage (of ${esc(p.stats.enriched)})</span></div>
+        <div class="tile"><b>${esc(p.stats.queued)}</b><span>in the Queue</span></div>
+        <div class="tile"><b style="color:var(--good)">${esc(p.stats.tier_1)}</b><span>Tier 1</span></div>
+        <div class="tile"><b style="color:var(--warn)">${esc(p.stats.tier_2)}</b><span>Tier 2</span></div></div>
+      <article class="card"><p class="label">Who we sell to</p><p style="margin:0 0 14px"><b>${esc(p.seller.name)}</b>: ${esc(p.seller.pitch)}</p>
+        <div class="grid2">
+          <div><b>Companies</b><div class="tags">${c.industries.map((x) => `<span>${esc(x)}</span>`).join("")}</div>
+            <p class="meta" style="margin:8px 0 0">${esc(c.employeesMin)}–${esc(c.employeesMax)} people · ${esc(c.stages.join(", "))} · ${esc(c.regions.join(", "))}</p></div>
+          <div><b>People to contact</b>${p.personas.map((x) => `<div>${esc(x.title)}${x.note ? `<div class="meta">${esc(x.note)}</div>` : ""}</div>`).join("")}</div>
+        </div></article>
+      <article class="card"><p class="label">Signals we watch</p>
+        ${p.signals.map((s) => `<div class="sigrow"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(s.label)}</b><span class="badge accent">${esc(s.weight)} pts</span></div>
+          <div class="bar"><i style="width:${(s.weight / max) * 100}%"></i></div><div class="why-t">${esc(s.why)}</div><div class="why-t">Source: ${esc(s.source)}</div></div>`).join("")}
+        <p class="meta" style="margin:6px 0 0">Older evidence counts for less: news after 30 days counts half, after 60 days nothing.</p></article>
+      <article class="card"><p class="label">How to read the scores</p>
+        <div class="tiers"><div><b style="color:var(--good)">${esc(p.tiers.tier_1)}+</b>Tier 1<br><span class="meta">Contact this week</span></div>
+          <div><b style="color:var(--warn)">${esc(p.tiers.tier_2)}+</b>Tier 2<br><span class="meta">Worth a look</span></div>
+          <div><b>&lt; ${esc(p.tiers.tier_2)}</b>Tier 3<br><span class="meta">Keep watching</span></div></div>
+        <ul class="plain" style="margin-top:14px"><li><b>Priority</b>: the total of the signals above (0–100). ${esc(p.queue_threshold)}+ enters the Queue.</li>
+          <li><b>ICP fit</b>: how well the company matches the profile, from its dossier.</li>
+          <li><b>Persona score</b>: how closely a person's title matches a target buyer.</li></ul></article>
+      <article class="card"><p class="label">The daily rhythm</p>
+        <ul class="plain"><li><b>Hot now</b>: a new signal in the last ${esc(p.today.hot_hours)} hours.</li>
+          <li><b>Follow-up due</b>: ${esc(p.follow_up.note)}</li>
+          <li><b>Meeting</b>: booked for the next day and a half, with a private brief emailed to you.</li>
+          <li>The Today list holds at most ${esc(p.today.cap)} items. Signals refresh ${esc(p.schedule.toLowerCase())}. Outreach is always manual.</li></ul></article>`;
+  } catch (e) { $("icpbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+}
+
+/* ============ tabs and start ============ */
+document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("nav.tabs [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+  for (const t of ["today", "research", "queue", "icp"]) $(t).hidden = b.dataset.tab !== t;
+  ({ today: loadToday, queue: loadQueue, icp: loadIcp }[b.dataset.tab] || (() => {}))();
+}));
+
+drawMode(false);
 refreshMode();
 loadToday();
+api("queue", { action: "list", view: "todo" }).then((d) => { const c = $("c-queue"); c.textContent = d.accounts.length; c.hidden = !d.accounts.length; }).catch(() => {});
 </script>
 </body>
 </html>

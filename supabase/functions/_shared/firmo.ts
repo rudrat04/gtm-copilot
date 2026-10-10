@@ -105,7 +105,7 @@ export function firmoLine(a: { employee_band?: string | null; employees?: number
   if (!a.firmo_at) return "";
   return [
     a.employee_band ? `${a.employee_band} people` : a.employees ? `${a.employees} people` : null,
-    a.stage ?? null,
+    a.stage && !/^(other|unknown|undisclosed)$/i.test(a.stage) ? a.stage : null,
     a.raised_usd ? `${usd(a.raised_usd)} raised` : null,
     a.hq_city ?? a.country ?? null,
   ].filter(Boolean).join(" · ");

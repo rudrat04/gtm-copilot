@@ -71,6 +71,12 @@ Database changes go through migrations in `supabase/migrations/` and are applied
 - Before finishing any change run: `bash scripts/smoke.sh` (24 checks), `deno lint .`, and `deno check` on each function (use `npx deno`). All must be clean. The deploy bundler does NOT type-check.
 - Emails are multipart (plain text + HTML) via `sendMail(to, subject, text, html)`; HTML blocks live in `_shared/emailhtml.ts`, templates in `_shared/templates.ts` and `_shared/brief.ts`. Preview with `scripts/preview-emails.ts`. They only ever go to the owner.
 
+## UI rules (docs/index.html, one static file)
+- One primary action per card, chosen from what we know: no contact -> "Find relevant people"; contact known -> "Mark contacted"; parked -> "Reopen". Everything else is in the "More" menu. Never show a button for something the card already shows.
+- Signals are a short list (3 shown, "Show N more"), not badges. Company facts on one line. Feedback is a toast, not inline text. Today leads with the person; Queue leads with the company.
+- Keep the content security policy meta tag; escape all dynamic text with `esc()`; headings inside panels use `<p class="label">`.
+- Test owner mode in a browser without exposing the key: copy the page to a temp folder, drop the CSP tag, and load the key from a temp `key.json` (see the git history of this change). Delete the temp folder afterwards.
+
 ## Debugging and cost control
 Every function run logs to `cp_logs` with a `run_id`; failed requests return that id. Useful queries are in the README ("Debugging and cost control"): `select * from cp_recent_problems;`, `select * from cp_log_summary;`, AI spend from `cp_ai_usage`, Hunter usage from `cp_provider_usage`.
 

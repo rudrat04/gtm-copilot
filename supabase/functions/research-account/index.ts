@@ -17,6 +17,7 @@ Use ONLY the evidence provided. If something is not in the evidence, write "unkn
 Website text (product demos, sample deals, customer quotes, pricing examples) is marketing copy about their product. It is NOT evidence of the company's own sales situation, stage, team size or deal sizes. Never cite it that way.
 Verified facts (headcount, funding stage, funds raised, HQ) come from a company database. Trust them over anything on the website, and quote them when judging ICP fit. Do not state funding stage or headcount unless the verified facts or the evidence say so.
 Talk-track openers must be questions about the prospect's situation. They must never claim customers, experience, research or relationships ("we work with", "teams we've seen", "we noticed"), and must never say or imply the prospect said something ("you mentioned", "you said", "I saw", "I noticed", "as you know"). Ground each one in a listed signal or in what the company sells.
+Never mention demos, demo dialogue, sample data, testimonials or case studies from the website in the pains, the fit reasons or the risks; those are marketing, not facts about the company.
 When there is no buying signal, say so and do not invent problems.
 Be specific and short. No filler, no hype. Return a single JSON object and nothing else.`;
 
