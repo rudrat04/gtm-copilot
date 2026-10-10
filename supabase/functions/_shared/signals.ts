@@ -9,6 +9,7 @@ export type Signal = {
 
 import { keepRelevant } from "./relevance.ts";
 import { log } from "./log.ts";
+import { sb } from "./db.ts";
 
 const UA = "Mozilla/5.0 (compatible; AccountCopilot/0.1; +https://github.com/rudrat04/gtm-copilot)";
 
@@ -207,6 +208,13 @@ export async function collectSignals(name: string, domain: string, segment = "")
   );
 
   const signals: Signal[] = [...(rel.jobsOk ? hiring.signals : []), ...rel.headlines];
+
+  // A company we discovered because it posted sales roles on Hacker News keeps that as a hiring signal while the post is recent.
+  const { data: found } = await sb.from("cp_discovered").select("snippet,source_url,found_at").eq("domain", domain).eq("status", "added").maybeSingle();
+  if (found && Date.now() - Date.parse(found.found_at) < icp.discovery.maxAgeDays * 86_400_000) {
+    const roles = (found.snippet ?? "").split("|").slice(1, 3).map((x: string) => x.trim()).filter(Boolean).join(" · ");
+    signals.push({ kind: "hiring", title: `Hiring: ${roles || "sales roles"} (Hacker News Who is hiring)`, url: found.source_url ?? undefined, detail: { source: "hn_hiring", published: found.found_at } });
+  }
   await log("info", "signals_collected", {
     account: domain,
     detail: {

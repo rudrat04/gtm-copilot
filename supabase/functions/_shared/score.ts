@@ -40,7 +40,8 @@ export function priorityScore(signals: Dated[], fit: number = BASELINE_FIT): Sco
   const summary = signals.find((s) => s.kind === "hiring" && s.detail && "salesOpenings" in s.detail);
   const salesOpenings = Number(summary?.detail?.salesOpenings ?? 0);
   const revops = signals.some((s) => s.kind === "hiring" && REVOPS.test(s.title));
-  const hiring = Math.min(w.hiring, salesOpenings * 12 + (revops ? 10 : 0));
+  const posted = signals.some((s) => s.kind === "hiring" && s.detail?.source === "hn_hiring"); // a recent public sales-role post
+  const hiring = Math.min(w.hiring, Math.max(salesOpenings * 12 + (revops ? 10 : 0), posted ? 12 : 0));
 
   const news = signals.filter((s) => s.kind === "news").map((s) => ({
     f: decay(ageDays(s), 30, 60),

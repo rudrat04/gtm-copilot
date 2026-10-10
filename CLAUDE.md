@@ -31,6 +31,7 @@ supabase/functions/
   signal-scan/             Weekly scan: signals, score, AI draft for accounts scoring 30+
   queue/                   Queue list, reject, ICP playbook data, schedule info
   people/                  find, enrich, preview, push, rerank, status
+  discover/                Weekly: finds new companies (HN Who is hiring), qualifies, adds them
   meeting-brief/           Polls Calendar every minute; emails a private brief to the owner
   _shared/                 db, log, auth, claude, signals, relevance, score, draft, people, hubspot, icp.json
 supabase/migrations/       Schema, logging, people, weekly schedule
@@ -50,7 +51,8 @@ backups/                   Local HubSpot backup (gitignored)
 8. **Daily rhythm**: cron `signal-watch` (01:00 UTC) calls `signal-scan` with `{"mode":"light"}` (`_shared/watch.ts`): re-reads sources for queued accounts, stores only new signals, refreshes scores, sends up to 3 instant hot-alert emails/day (`cp_alerts` dedupes). Cron `daily-digest` (02:30 UTC) emails the Today list to the owner and creates HubSpot to-dos (`_shared/templates.ts`, `createTask` in `hubspot.ts`): a daily summary task plus per-prospect tasks only for accounts already in HubSpot (`cp_tasks` dedupes). Both throttle to once per 20h unless called with the owner key. They only email the owner.
 9. **Company facts**: `_shared/firmo.ts` fetches Hunter company data once per company (0.2 credit; owner-only bulk action `queue` -> `enrich_companies`, or when the owner researches a new domain) into `cp_accounts` (employees, employee_band, stage, raised_usd, last_round_date, founded_year, hq_city, country, firmo_at). `fitBreakdown` turns it into the 25-point fit slice of the priority score (size 10, stage 10, region 5; unknown = neutral baseline 15). `queue` -> `enrich_companies` with `rescore: true` recomputes all priorities.
 10. **Prospect-based Today/alerts**: Today items carry `contacts` (`_shared/contacts.ts`): best person first, then best of another persona, relevance >= 50 only. `autoFindContacts` runs a Hunter people search for strong, in-profile accounts with no people yet, max `icp.contacts.autoPerDay` (2) a day; used by `daily-digest` and the hot alerts. Freshness uses a news item's publish date, ignores Hacker News and open-role COUNT changes (those rows are shown as "Currently: ..."), and Today skips accounts clearly outside the size range. `daily-digest` accepts `{"dry":true}` with the owner key to preview the email without sending or spending credits.
-11. **Public vs owner**: public visitors see "First L." names, masked emails, and dry runs. The owner key (`ADMIN_KEY` in `.env`, sent as the `x-admin-key` header, entered via "unlock" on the page) reveals emails and writes to HubSpot.
+11. **Auto-discovery** (`_shared/discover.ts`, function `discover`, cron `discover` Mondays 05:00 UTC, an hour before the scan): reads the latest two HN "Who is hiring" threads, keeps posts that name sales/RevOps roles and a company site, skips known domains, then one Haiku call per candidate (about $0.001) decides if it is a B2B software company. Passing ones get 0.2 Hunter credit of company facts (max 4 a run; the owner can pass `{"firmo":false}` or `{"dry":true}`) and are dropped if clearly outside size/stage; the rest are inserted into `cp_accounts` with `source = 'discovered'`. Every decision and reason is in `cp_discovered` (shown on the ICP & Signals tab). While the post is under `discovery.maxAgeDays` old it counts as a hiring signal (12 pts, `collectSignals`). Config: `icp.json` -> `discovery`.
+12. **Public vs owner**: public visitors see "First L." names, masked emails, and dry runs. The owner key (`ADMIN_KEY` in `.env`, sent as the `x-admin-key` header, entered via "unlock" on the page) reveals emails and writes to HubSpot.
 
 ## Commands
 ```bash
@@ -68,7 +70,7 @@ Database changes go through migrations in `supabase/migrations/` and are applied
 - Scheduled endpoints use `jobAllowed` (`_shared/auth.ts`): owner key OR `x-cron-secret`, checked against `cp_state.cron_secret`. The cron jobs read the secret from that row inside their SQL, so it is never in the repo. If you recreate a cron job, include the header (see `supabase/migrations/20261012000001_security_hardening.sql`).
 - Public fresh research is rate limited via `rateOk` (`cp_rate` table). Public views must never show full names or emails (`contactsFor`, `people` view).
 - Hunter calls use the `X-API-KEY` header, not a URL parameter. `log()` redacts secrets; do not log request URLs or bodies with credentials.
-- Before finishing any change run: `bash scripts/smoke.sh` (24 checks), `deno lint .`, and `deno check` on each function (use `npx deno`). All must be clean. The deploy bundler does NOT type-check.
+- Before finishing any change run: `bash scripts/smoke.sh` (25 checks), `deno lint .`, and `deno check` on each function (use `npx deno`). All must be clean. The deploy bundler does NOT type-check.
 - Emails are multipart (plain text + HTML) via `sendMail(to, subject, text, html)`; HTML blocks live in `_shared/emailhtml.ts`, templates in `_shared/templates.ts` and `_shared/brief.ts`. Preview with `scripts/preview-emails.ts`. They only ever go to the owner.
 
 ## UI rules (docs/index.html, one static file)
@@ -88,7 +90,10 @@ The `signal-scan` cron runs **weekly: Mondays 06:00-06:55 UTC** (every 5 minutes
 - Test data in HubSpot: companies Clay and Attio, and one real contact (Drew Peterson, VP Sales at Attio). Delete if not wanted.
 - Hunter credits: about 48 of 50 left this month (resets monthly).
 
-## Next steps (agreed order)
+## Next steps (agreed order, revised 13 Oct 2026)
+Vision: the system finds companies and prospects, hands the rep a ready pipeline, and enables them (brief, recap, drafts) so reps spend time on people. Order now: 1) auto-discovery (DONE, first version: HN hiring only), 2) rename Queue to Accounts as a compact table plus board, 3) Meeting debrief + HubSpot status sync (lead status, deals, tasks, read-back) with a Meetings tab, 4) inbound speed to lead, 5) Insights tab, 6) Revival, lookalikes, competitor cards. More discovery sources (funding news, Launch HN) are possible.
+
+Older list:
 Philosophy: outreach stays manual and human; the system finds the right prospect at the right time (speed to lead). The prospect-facing draft email stays AI-written and is only a suggestion. Internal items use templates plus the one cached AI line.
 1. DONE: lifecycle, Today list and tab, daily light check and hot alerts, morning email, HubSpot to-dos, clean-up pass (README rewritten, dossier no longer asks for likely_buyers, drafts on demand, AI cap lowered, statuses tightened).
 2. DONE: firmographics (Hunter) feeding the ICP fit, and prospect-first Today/alerts/digest.

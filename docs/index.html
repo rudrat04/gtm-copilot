@@ -378,7 +378,7 @@ function qCard(a) {
   const ll = lifeLine(a);
   return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
     <div class="card-head"><div>
-      <div class="eyebrow">${tierHtml(a.tier)}${a.status === "pushed" ? `<span class="badge good">In HubSpot</span>` : ""}${a.icp_score != null ? `<span>ICP fit ${esc(a.icp_score)}</span>` : ""}${a.outside_icp ? `<span class="badge warn">Outside target size</span>` : ""}</div>
+      <div class="eyebrow">${tierHtml(a.tier)}${a.status === "pushed" ? `<span class="badge good">In HubSpot</span>` : ""}${a.source === "discovered" && Date.now() - Date.parse(a.created_at) < 14 * 864e5 ? `<span class="badge accent" title="Found automatically from a public Hacker News hiring post">Newly found</span>` : ""}${a.icp_score != null ? `<span>ICP fit ${esc(a.icp_score)}</span>` : ""}${a.outside_icp ? `<span class="badge warn">Outside target size</span>` : ""}</div>
       <h3 class="title">${esc(a.name)}</h3>
       <div class="sub">${esc(a.segment || a.domain)}</div>
       ${a.firmo ? `<div class="meta">${esc(a.firmo)}</div>` : ""}
@@ -584,6 +584,7 @@ async function loadIcp() {
     $("icpbody").innerHTML = `
       <div class="tiles">
         <div class="tile"><b>${esc(p.stats.companies)}</b><span>companies tracked</span></div>
+        <div class="tile"><b style="color:var(--accent)">${esc(p.discovery.added)}</b><span>new companies found this month</span></div>
         <div class="tile"><b>${esc(p.stats.matching)}</b><span>match size and stage (of ${esc(p.stats.enriched)})</span></div>
         <div class="tile"><b>${esc(p.stats.queued)}</b><span>in the Queue</span></div>
         <div class="tile"><b style="color:var(--good)">${esc(p.stats.tier_1)}</b><span>Tier 1</span></div>
@@ -594,6 +595,10 @@ async function loadIcp() {
             <p class="meta" style="margin:8px 0 0">${esc(c.employeesMin)}–${esc(c.employeesMax)} people · ${esc(c.stages.join(", "))} · ${esc(c.regions.join(", "))}</p></div>
           <div><b>People to contact</b>${p.personas.map((x) => `<div>${esc(x.title)}${x.note ? `<div class="meta">${esc(x.note)}</div>` : ""}</div>`).join("")}</div>
         </div></article>
+      <article class="card"><p class="label">Finding new companies</p>
+        <p style="margin:0 0 12px">${esc(p.discovery.note)} ${p.discovery.last ? `Last run ${esc(ago(p.discovery.last))}: ${esc(p.discovery.added)} added, ${esc(p.discovery.rejected)} turned down this month.` : ""}</p>
+        ${p.discovery.recent.map((d) => `<div class="sigrow"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(d.name)}</b><span class="badge ${d.status === "added" ? "good" : ""}">${d.status === "added" ? "Added" : "Skipped"}</span></div>
+          <div class="why-t">${esc(d.reason || "")}${d.source_url ? ` <a href="${esc(d.source_url)}" target="_blank" rel="noopener noreferrer">source</a>` : ""}</div></div>`).join("") || `<p class="meta">Nothing found yet.</p>`}</article>
       <article class="card"><p class="label">Signals we watch</p>
         ${p.signals.map((s) => `<div class="sigrow"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(s.label)}</b><span class="badge accent">${esc(s.weight)} pts</span></div>
           <div class="bar"><i style="width:${(s.weight / max) * 100}%"></i></div><div class="why-t">${esc(s.why)}</div><div class="why-t">Source: ${esc(s.source)}</div></div>`).join("")}

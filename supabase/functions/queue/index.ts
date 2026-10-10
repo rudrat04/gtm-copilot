@@ -48,7 +48,7 @@ async function scanInfo() {
 
 async function list(view = "todo", admin = false) {
   const { data: accounts } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at")
+    .select("id,name,domain,segment,source,created_at,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at")
     .in("status", ["queued", "pushed"])
     .in("outreach_status", VIEWS[view] ?? VIEWS.todo)
     .order("priority_score", { ascending: false })
@@ -97,7 +97,17 @@ async function playbook() {
   const rows = accts ?? [];
   const tiers = { tier_1: 0, tier_2: 0, tier_3: 0 };
   for (const r of rows) if (r.priority_score != null) tiers[tierOf(r.priority_score)]++;
+  const { data: disc } = await sb.from("cp_discovered").select("name,domain,status,reason,source_url,found_at").order("found_at", { ascending: false }).limit(40);
+  const month = Date.now() - 30 * DAY;
+  const recent = (disc ?? []).filter((d) => Date.parse(d.found_at) > month);
   return {
+    discovery: {
+      note: icp.discovery.note,
+      added: recent.filter((d) => d.status === "added").length,
+      rejected: recent.filter((d) => d.status === "rejected").length,
+      last: disc?.[0]?.found_at ?? null,
+      recent: (disc ?? []).slice(0, 14),
+    },
     seller: icp.seller,
     company: icp.company,
     personas: icp.personas.map((p) => ({ title: p.title, note: "onlyIfEmployeesBelow" in p ? `Only when the company has under ${p.onlyIfEmployeesBelow} people` : null })),
