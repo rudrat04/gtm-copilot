@@ -416,3 +416,6 @@ enabled = true
 
 [functions.signal-scan]
 verify_jwt = false
+
+[functions.meeting-brief]
+verify_jwt = false

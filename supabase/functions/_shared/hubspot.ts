@@ -217,3 +217,41 @@ export async function pushContact(c: ContactInput, companyId: string, domain: st
   await log("info", "hubspot_contact_pushed", { account: domain, detail: { contactId: id, created, associated: link.ok } });
   return { contactId: id, created, associated: link.ok };
 }
+
+/** What HubSpot already knows about a meeting attendee and their company. Read-only. */
+export async function lookupForBrief(email: string, domain: string | null) {
+  const out: { company?: string; contact?: string; lastContacted?: string; deals?: number } = {};
+
+  const c = await hs("/crm/v3/objects/contacts/search", {
+    method: "POST",
+    body: JSON.stringify({
+      filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: email }] }],
+      properties: ["firstname", "lastname", "jobtitle", "lifecyclestage", "hs_lead_status", "notes_last_contacted", "num_associated_deals"],
+      limit: 1,
+    }),
+  }, [403, 401]);
+  const contact = c.body.results?.[0]?.properties;
+  if (contact) {
+    out.contact = `Contact: ${[contact.firstname, contact.lastname].filter(Boolean).join(" ")} · ${contact.jobtitle ?? "no title"} · stage ${contact.lifecyclestage ?? "n/a"}${contact.hs_lead_status ? ` · ${contact.hs_lead_status}` : ""}`;
+    if (contact.notes_last_contacted) out.lastContacted = contact.notes_last_contacted.slice(0, 10);
+    out.deals = Number(contact.num_associated_deals ?? 0);
+  }
+
+  if (domain) {
+    const co = await hs("/crm/v3/objects/companies/search", {
+      method: "POST",
+      body: JSON.stringify({
+        filterGroups: [{ filters: [{ propertyName: "domain", operator: "EQ", value: domain }] }],
+        properties: ["name", "lifecyclestage", "notes_last_contacted", "num_associated_deals", "hs_ideal_customer_profile"],
+        limit: 1,
+      }),
+    }, [403, 401]);
+    const p = co.body.results?.[0]?.properties;
+    if (p) {
+      out.company = `Company: in HubSpot · stage ${p.lifecyclestage ?? "n/a"}${p.hs_ideal_customer_profile ? ` · ${p.hs_ideal_customer_profile.replace("_", " ")}` : ""}`;
+      if (!out.lastContacted && p.notes_last_contacted) out.lastContacted = p.notes_last_contacted.slice(0, 10);
+      out.deals = Math.max(out.deals ?? 0, Number(p.num_associated_deals ?? 0));
+    }
+  }
+  return out;
+}
