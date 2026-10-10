@@ -130,5 +130,16 @@
     "hotHours": 48,
     "newDays": 7,
     "meetingHours": 36
+  },
+  "owner": {
+    "name": "Rudra",
+    "timezone": "Asia/Kolkata",
+    "hubspotOwnerId": "89817083",
+    "hubspotPortal": "247578382",
+    "hubspotHost": "app-na2.hubspot.com",
+    "pageUrl": "https://copilot.f1rstword.com/"
+  },
+  "alerts": {
+    "maxPerDay": 3
   }
 }

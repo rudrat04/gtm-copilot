@@ -5,6 +5,8 @@ import { priorityScore, QUEUE_THRESHOLD } from "../_shared/score.ts";
 import { writeDraft } from "../_shared/draft.ts";
 import { log, serve } from "../_shared/log.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
+import { isAdmin } from "../_shared/auth.ts";
+import { lightCheck } from "../_shared/watch.ts";
 
 // Called by pg_cron every few minutes. It only touches accounts whose last scan is stale,
 // so extra or public calls are harmless: once everything is fresh it does nothing.
@@ -66,6 +68,9 @@ async function scanOne(a: Account) {
 }
 
 serve("signal-scan", async (req) => {
+  // Daily light check (mode: "light") shares this endpoint with the weekly full scan.
+  const body = (await req.json().catch(() => null)) ?? {};
+  if (body.mode === "light") return await lightCheck(await isAdmin(req));
 
   const cutoff = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
   const { data: stale, error } = await sb.from("cp_accounts")

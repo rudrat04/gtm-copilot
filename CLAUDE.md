@@ -48,7 +48,8 @@ backups/                   Local HubSpot backup (gitignored)
 5. **Push to HubSpot** (owner only): creates or updates the company and the enriched contacts, links them, and attaches a note built from the stored dossier JSON (no AI). Fills the existing `gtm_*` fields (fit, priority, signal, intent, why now, why fit, last scored; contact persona and persona score) plus the native ICP tier. Re-push updates scores only, never lifecycle stage or owner.
 6. **Meeting Brief**: `meeting-brief` polls Google Calendar (cursor in `cp_state`); for a new future event with an outside attendee it reuses the cached dossier (researches a new company once), checks HubSpot (read-only), builds a plain template brief (no AI beyond the dossier) and emails it to the owner. Briefs are **never written into the calendar event** because guests can read the description. Personal-email attendees get a short note. Failed briefs retry up to 3 times.
 7. **Lifecycle and Today**: accounts have `outreach_status` (open, contacted, replied, meeting, snoozed, not_now), `touches`, `contacted_at` (first contact), `next_followup_at` (day 3/7/14 after first contact, then stop) and `snoozed_until`. Actions go through `queue` -> `outcome` (`_shared/lifecycle.ts`) and are logged in `cp_outcomes`. `queue` -> `today` (`_shared/today.ts`) builds the capped Today list by rules; the one AI line ("Why today") is cached in `cp_why_today` per signal set and only generated in owner mode. The Today tab is the landing tab.
-8. **Public vs owner**: public visitors see "First L." names, masked emails, and dry runs. The owner key (`ADMIN_KEY` in `.env`, sent as the `x-admin-key` header, entered via "unlock" on the page) reveals emails and writes to HubSpot.
+8. **Daily rhythm**: cron `signal-watch` (01:00 UTC) calls `signal-scan` with `{"mode":"light"}` (`_shared/watch.ts`): re-reads sources for queued accounts, stores only new signals, refreshes scores, sends up to 3 instant hot-alert emails/day (`cp_alerts` dedupes). Cron `daily-digest` (02:30 UTC) emails the Today list to the owner and creates HubSpot to-dos (`_shared/templates.ts`, `createTask` in `hubspot.ts`): a daily summary task plus per-prospect tasks only for accounts already in HubSpot (`cp_tasks` dedupes). Both throttle to once per 20h unless called with the owner key. They only email the owner.
+9. **Public vs owner**: public visitors see "First L." names, masked emails, and dry runs. The owner key (`ADMIN_KEY` in `.env`, sent as the `x-admin-key` header, entered via "unlock" on the page) reveals emails and writes to HubSpot.
 
 ## Commands
 ```bash
@@ -73,10 +74,11 @@ The `signal-scan` cron runs **weekly: Mondays 06:00-06:55 UTC** (every 5 minutes
 
 ## Next steps (agreed order)
 Philosophy: outreach stays manual and human; the system finds the right prospect at the right time (speed to lead). The prospect-facing draft email stays AI-written and is only a suggestion. Internal items use templates plus the one cached AI line.
-1. DONE: account lifecycle and the Today list and tab.
-2. **Daily light check and "Hot now"**: cheap daily look at Tier 1/2 accounts (signals only; AI only when something new appears), so Hot is real-time-ish instead of weekly.
-3. **HubSpot tasks and morning email digest** (to the owner only, via the Google sign-in). Check the HubSpot key can create tasks first. Agreed formats: morning email (sections NEW AND HOT, FOLLOW-UPS DUE, MEETINGS, with "Why today"), HubSpot task (title "Contact X at Y: reason", due today, body with why-today, signals, angles), instant hot alert email. Also sync outcomes (contacted, replied) to HubSpot.
-4. **Inbound speed to lead** (form submit enriched and routed in about a minute), **outcome feedback page** (which signals convert, from `cp_outcomes`), **Revival** (closed-lost deals plus fresh signals).
+1. DONE: lifecycle, Today list and tab, daily light check and hot alerts, morning email, HubSpot to-dos.
+2. **Sync outcomes to HubSpot** (contacted, replied, meeting as notes or lifecycle changes) and detect completed HubSpot tasks; also optionally detect replies from HubSpot activity.
+3. **Inbound speed to lead**: a form submit is enriched, scored and routed to the owner (email plus HubSpot task) in about a minute.
+4. **Outcome feedback page**: which signals convert, from `cp_outcomes`; tune weights from real results.
+5. **Revival**: closed-lost deals plus fresh signals as another Today source.
 Also optional: team-page fallback for people search, Apollo adapter when the plan allows.
 
 ## Known gaps

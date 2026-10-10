@@ -70,3 +70,10 @@ The scan runs every Monday 06:00-06:55 UTC (12 runs of 6 companies). Accounts co
 The **Today** tab is the daily landing page: a capped list (8) of who to focus on, built by rules from the data. Types: meeting (next 36 hours, brief already emailed), follow-up due (day 3, 7, 14 after first contact), hot now (new signal in the last 48 hours), new this week, and snooze ended or worth another look. The only AI is one cached "Why today" sentence per account and signal set (written when the owner opens the page, free for everyone after that). Outreach itself is always manual.
 
 Each account carries a status: open, contacted (touch count and next follow-up), replied, meeting, snoozed, or not now. Every action is stored in `cp_outcomes` with a snapshot of the scores and signals, which is the data for a future "which signals convert" page. Buttons are on Queue and Today cards and work in owner mode only.
+
+## Daily rhythm: light check, hot alerts, morning email, HubSpot to-dos
+
+- **01:00 UTC (06:30 India), `signal-watch`**: a light check of up to 20 queued accounts. It re-reads public sources, stores only signals it has not seen (so "first seen" stays honest), refreshes the priority score, and emails an instant **hot alert** when an account you have not contacted shows a new news item or a newly posted role. At most 3 alerts a day, never repeated for the same signals. No drafts are rewritten.
+- **02:30 UTC (08:00 India), `daily-digest`**: builds the Today list, emails it to you, and creates HubSpot to-dos: one daily summary task, plus one task per prospect that already exists in HubSpot (linked to the company and contact, due today, high priority for Tier 1 and follow-ups). A task is never created twice for the same follow-up or signal set.
+- Both only email you. Nothing is ever sent to a prospect. Both skip themselves if they ran in the last 20 hours; the owner key forces a run (`x-admin-key` header).
+- Message formats live in `supabase/functions/_shared/templates.ts`; owner name, timezone and HubSpot owner id are in `icp.json`.

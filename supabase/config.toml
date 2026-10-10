@@ -419,3 +419,6 @@ verify_jwt = false
 
 [functions.meeting-brief]
 verify_jwt = false
+
+[functions.daily-digest]
+verify_jwt = false

@@ -255,3 +255,37 @@ export async function lookupForBrief(email: string, domain: string | null) {
   }
   return out;
 }
+
+export type TaskInput = {
+  subject: string;
+  html: string;
+  dueIso: string;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+  ownerId: string;
+  companyId?: string | null;
+  contactId?: string | null;
+};
+
+/** Creates a to-do for the rep, optionally linked to a company and a contact. */
+export async function createTask(t: TaskInput): Promise<string> {
+  const associations = [] as { to: { id: string }; types: { associationCategory: string; associationTypeId: number }[] }[];
+  if (t.companyId) associations.push({ to: { id: t.companyId }, types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 192 }] });
+  if (t.contactId) associations.push({ to: { id: t.contactId }, types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 204 }] });
+  const r = await hs("/crm/v3/objects/tasks", {
+    method: "POST",
+    body: JSON.stringify({
+      properties: {
+        hs_task_subject: t.subject.slice(0, 250),
+        hs_task_body: t.html,
+        hs_timestamp: t.dueIso,
+        hs_task_status: "NOT_STARTED",
+        hs_task_priority: t.priority,
+        hs_task_type: "TODO",
+        hubspot_owner_id: t.ownerId,
+      },
+      associations,
+    }),
+  });
+  if (!r.ok) throw new Error(`HubSpot task ${r.status}`);
+  return r.body.id;
+}

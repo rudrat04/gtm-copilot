@@ -28,7 +28,7 @@ export type TodayItem = {
   meeting: { title: string; starts_at: string; briefed: boolean } | null;
 };
 
-function hash(s: string): string {
+export function hash(s: string): string {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
   return (h >>> 0).toString(16);
@@ -55,13 +55,13 @@ export function reasonLine(sigs: SigRow[]): string {
 }
 
 /** One short, grounded sentence for the rep. The only AI in the Today list. */
-async function generateWhy(it: { name: string; tier: string; type: string; touches: number; lastAction: string | null; sigs: SigRow[] }): Promise<string | null> {
+export async function generateWhy(it: { name: string; tier: string; type: string; touches: number; lastAction: string | null; sigs: SigRow[] }): Promise<string | null> {
   try {
     const facts = it.sigs.slice(0, 5).map((s) => `${s.kind}: ${s.title}${s.detail?.published ? ` (published ${ageLabel(s.detail.published)})` : ` (first seen ${ageLabel(s.detected_at)})`}`);
     const raw = await askClaude({
       feature: "why-today",
-      maxTokens: 80,
-      system: `You write ONE sentence (max 25 words) telling a sales rep at ${icp.seller.name} why to contact this account today. ${icp.seller.pitch} Use only the facts given. No hype, no invented numbers, no greeting. Plain text only.`,
+      maxTokens: 160,
+      system: `You write ONE sentence (max 25 words) telling a sales rep at ${icp.seller.name} why to contact this account today. ${icp.seller.pitch} Use only the facts given. No hype, no invented numbers, no greeting. Plain text only, one sentence, finish it.`,
       user: `Company: ${it.name} (${it.tier.replace("_", " ")})\nSituation: ${it.type.replace("_", " ")}${it.touches ? `, ${it.touches} touch(es) so far` : ""}${it.lastAction ? `, ${it.lastAction}` : ""}\nSignals:\n${facts.join("\n") || "none"}`,
     });
     return raw.trim().replace(/^["']|["']$/g, "").slice(0, 220) || null;
