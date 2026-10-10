@@ -20,7 +20,7 @@ export async function keepRelevant(
   try {
     const raw = await askClaude({
       feature: "relevance",
-      maxTokens: 200,
+      maxTokens: 400,
       system:
         "You filter research evidence. Many company names are shared by unrelated companies, products and everyday words. Return a single JSON object and nothing else.",
       user: `The company is "${name}" (${domain})${segment ? `, a ${segment} company` : ""}.
