@@ -16,6 +16,8 @@ export type Contact = {
   persona: string | null;
   email: string | null;
   email_status: string | null;
+  revealed: boolean; // email enriched (revealed) by the owner
+  pushed: boolean;   // already in HubSpot
 };
 
 const maskEmail = (e: string | null) => (e ? `***@${e.split("@")[1]}` : null);
@@ -25,7 +27,7 @@ export async function contactsFor(accountIds: string[], admin: boolean, limit = 
   const out = new Map<string, Contact[]>();
   if (!accountIds.length) return out;
   const { data } = await sb.from("cp_people")
-    .select("id,account_id,first_name,last_name,title,persona,email,email_status,relevance,email_confidence")
+    .select("id,account_id,first_name,last_name,title,persona,email,email_status,relevance,email_confidence,email_revealed,hubspot_contact_id")
     .in("account_id", accountIds).gte("relevance", 50) // individual contributors are not the buyer
     .order("relevance", { ascending: false }).order("email_confidence", { ascending: false, nullsFirst: false });
 
@@ -45,6 +47,8 @@ export async function contactsFor(accountIds: string[], admin: boolean, limit = 
       persona: p.persona,
       email: admin ? p.email : maskEmail(p.email),
       email_status: p.email_status,
+      revealed: !!p.email_revealed,
+      pushed: !!p.hubspot_contact_id,
     })));
   }
   return out;

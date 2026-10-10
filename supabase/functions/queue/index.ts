@@ -91,6 +91,58 @@ async function list(view = "todo", admin = false) {
   };
 }
 
+/**
+ * Every company worth showing, in one list. Low-fit companies (clearly outside the target size or stage, or with
+ * no signal) are flagged `low` so the page can hide them. Skipped discovery candidates are never returned.
+ */
+async function accountsView(admin: boolean) {
+  const { data: all } = await sb.from("cp_accounts")
+    .select("id,name,domain,segment,source,created_at,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at")
+    .order("priority_score", { ascending: false, nullsFirst: false }).limit(400);
+  const rows = (all ?? []).map((a) => {
+    const f = fitBreakdown(a);
+    const outside = f.known && (f.size === 0 || f.stage === 0);
+    const deliberate = a.source === "research" || a.source === "discovered"; // someone chose or the system found it
+    const low = !deliberate && (outside || (a.priority_score ?? 0) < 30) && a.outreach_status === "open";
+    const isNew = a.source === "discovered" && a.outreach_status === "open" && Date.now() - Date.parse(a.created_at) < 14 * DAY;
+    return { a, low: low || (a.source === "discovered" && outside && a.outreach_status === "open"), outside, isNew };
+  });
+  const shown = rows.filter((r) => !r.low).map((r) => r.a.id);
+  const ids = shown.length ? shown : ["00000000-0000-0000-0000-000000000000"];
+  const [contactMap, { data: signals }, { data: ppl }, { data: disc }] = await Promise.all([
+    contactsFor(ids, admin),
+    sb.from("cp_signals").select("account_id,kind,title,url,detail,detected_at").in("account_id", ids).order("detected_at", { ascending: false }).limit(1500),
+    sb.from("cp_people").select("account_id").in("account_id", ids),
+    sb.from("cp_discovered").select("domain,reason,found_at").eq("status", "added").order("found_at", { ascending: false }).limit(100),
+  ]);
+  const searched = new Set((ppl ?? []).map((p) => p.account_id));
+  const why = new Map((disc ?? []).map((d) => [d.domain, d.reason]));
+  const sigsBy = new Map<string, NonNullable<typeof signals>>();
+  for (const s of signals ?? []) (sigsBy.get(s.account_id) ?? sigsBy.set(s.account_id, []).get(s.account_id)!).push(s);
+  const isSummary = (s: { kind: string; detail: unknown }) => s.kind === "hiring" && !!s.detail && typeof s.detail === "object" && "salesOpenings" in (s.detail as object);
+
+  return {
+    discovery: { added_30d: (disc ?? []).filter((d) => Date.parse(d.found_at) > Date.now() - 30 * DAY).length, last: disc?.[0]?.found_at ?? null },
+    scan: await scanInfo(),
+    accounts: rows.map(({ a, low, outside, isNew }) => {
+      const mine = (sigsBy.get(a.id) ?? []).filter((s, i, arr) => !isSummary(s) || arr.findIndex(isSummary) === i);
+      return {
+        id: a.id, name: a.name, domain: a.domain, segment: a.segment, source: a.source, created_at: a.created_at,
+        tier: tierOf(a.priority_score), priority: a.priority_score, icp_score: a.icp_score, why_now: a.why_now,
+        firmo: firmoLine(a), outside_icp: outside, low, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
+        outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
+        last_scanned_at: a.last_scanned_at, found_reason: why.get(a.domain) ?? null,
+        searched: searched.has(a.id), contacts: contactMap.get(a.id) ?? [],
+        signals: low ? [] : mine.slice(0, 3).map((s) => ({
+          kind: s.kind, title: s.title, url: s.url, first_seen: s.detected_at,
+          published: (s.detail as { published?: string } | null)?.published ?? null,
+          is_new: Date.now() - new Date(s.detected_at).getTime() < 7 * DAY,
+        })),
+      };
+    }),
+  };
+}
+
 /** The ICP playbook for the sales team, straight from the live config plus a few counts. */
 async function playbook() {
   const { data: accts } = await sb.from("cp_accounts").select("priority_score,status,last_scanned_at,employees,stage,country,firmo_at");
@@ -206,6 +258,7 @@ serve("queue", async (req) => {
   const admin = await isAdmin(req);
 
   if (body.action === "list") return json({ ...(await list(String(body.view ?? "todo"), admin)), admin });
+  if (body.action === "accounts") return json({ ...(await accountsView(admin)), admin });
   if (body.action === "draft" && typeof body.account_id === "string") return await draft(body.account_id, admin);
   if (body.action === "enrich_companies") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);

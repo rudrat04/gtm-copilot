@@ -25,11 +25,11 @@ Owner: Rudra (rudrat04 on GitHub). Public repo: https://github.com/rudrat04/gtm-
 
 ## Structure
 ```
-docs/index.html            The whole UI (static, GitHub Pages). Tabs: Research, Queue, ICP & Signals
+docs/index.html            The whole UI (static, GitHub Pages). Tabs: Today, Accounts, Research (+ a footer link "How scoring and discovery work" = the old ICP page)
 supabase/functions/
   research-account/        Domain in, dossier out (cached 24h)
   signal-scan/             Weekly scan: signals, score, AI draft for accounts scoring 30+
-  queue/                   Queue list, reject, ICP playbook data, schedule info
+  queue/                   accounts view (every company), today, outcome, draft, ICP playbook data
   people/                  find, enrich, preview, push, rerank, status
   discover/                Weekly: finds new companies (HN Who is hiring), qualifies, adds them
   meeting-brief/           Polls Calendar every minute; emails a private brief to the owner
@@ -42,7 +42,7 @@ backups/                   Local HubSpot backup (gitignored)
 
 ## How it works
 1. **Research**: collects site text, public job boards (Greenhouse/Lever/Ashby), news, Hacker News. One small AI call (`relevance.ts`) drops namesake noise. Haiku writes the dossier JSON, stored in `cp_dossiers`.
-2. **Signal scan**: scores each account 0-100 with fixed weights (hiring 40, funding news 25, community 10, baseline fit 15). Older news counts less. Score 30+ enters the Queue with a plain-English `why_now` (template, no AI). Draft emails are written on demand (`queue` -> `draft`, owner only, about 1 cent, saved). Tiers: 70+ Tier 1, 45+ Tier 2.
+2. **Signal scan**: scores each account 0-100 with fixed weights (hiring 40, funding news 25, community 10, baseline fit 15). Older news counts less. Score 30+ is ready to contact with a plain-English `why_now` (template, no AI). Draft emails are written on demand (`queue` -> `draft`, owner only, about 1 cent, saved). Tiers: 70+ Tier 1, 45+ Tier 2.
 3. **Find relevant people**: one Hunter domain search (1 credit), ranked by job title against the personas. Results are stored in `cp_people`.
 4. **Enrich**: reveals the stored email. Phone is not available on free providers (the button is disabled).
 5. **Push to HubSpot** (owner only): creates or updates the company and the enriched contacts, links them, and attaches a note built from the stored dossier JSON (no AI). Fills the existing `gtm_*` fields (fit, priority, signal, intent, why now, why fit, last scored; contact persona and persona score) plus the native ICP tier. Re-push updates scores only, never lifecycle stage or owner.
@@ -74,9 +74,9 @@ Database changes go through migrations in `supabase/migrations/` and are applied
 - Emails are multipart (plain text + HTML) via `sendMail(to, subject, text, html)`; HTML blocks live in `_shared/emailhtml.ts`, templates in `_shared/templates.ts` and `_shared/brief.ts`. Preview with `scripts/preview-emails.ts`. They only ever go to the owner.
 
 ## UI rules (docs/index.html, one static file)
-- **Today is people-only** for new signals: an account with no contact (relevance 50+) is not shown as a card; it goes to `needs` (footer line, links to Queue "Needs a contact" filter). Follow-ups and meetings always show. `buildToday(admin, {autoFind})` runs the capped Hunter lookup (digest only). Signal ages are coloured: green <14 days, amber 14-30, red older. Follow-up cards show the due line instead of the "Why today" box.
+- **Today is people-only** for new signals: an account with no contact (relevance 50+) is not shown as a card; it goes to `needs` (footer line, links to Accounts "No contact yet" filter). Follow-ups and meetings always show. `buildToday(admin, {autoFind})` runs the capped Hunter lookup (digest only). Signal ages are coloured: green <14 days, amber 14-30, red older. Follow-up cards show the due line instead of the "Why today" box.
 - One primary action per card, chosen from what we know: no contact -> "Find relevant people"; contact known -> "Mark contacted"; parked -> "Reopen". Everything else is in the "More" menu. Never show a button for something the card already shows.
-- Signals are a short list (3 shown, "Show N more"), not badges. Company facts on one line. Feedback is a toast, not inline text. Today leads with the person; Queue leads with the company.
+- Signals are a short list (3 shown, "Show N more"), not badges. Company facts on one line. Feedback is a toast, not inline text. Today leads with the person; Accounts is the one list of every company and leads with the company. Each Accounts card shows ONE next step from what we know (Find people, Enrich <name>, Add to HubSpot, Mark contacted, Reopen); everything else is in More. Filters: All, New (auto-discovered, 14 days), No contact yet, Ready to contact, In progress, Parked, Looked up, Low fit. Low fit (clearly outside size/stage, or score under 30 with no one choosing it) and skipped discovery candidates are hidden by default; skipped ones are never shown.
 - Keep the content security policy meta tag; escape all dynamic text with `esc()`; headings inside panels use `<p class="label">`.
 - Test owner mode in a browser without exposing the key: copy the page to a temp folder, drop the CSP tag, and load the key from a temp `key.json` (see the git history of this change). Delete the temp folder afterwards.
 
@@ -91,7 +91,7 @@ The `signal-scan` cron runs **weekly: Mondays 06:00-06:55 UTC** (every 5 minutes
 - Hunter credits: about 48 of 50 left this month (resets monthly).
 
 ## Next steps (agreed order, revised 13 Oct 2026)
-Vision: the system finds companies and prospects, hands the rep a ready pipeline, and enables them (brief, recap, drafts) so reps spend time on people. Order now: 1) auto-discovery (DONE, first version: HN hiring only), 2) rename Queue to Accounts as a compact table plus board, 3) Meeting debrief + HubSpot status sync (lead status, deals, tasks, read-back) with a Meetings tab, 4) inbound speed to lead, 5) Insights tab, 6) Revival, lookalikes, competitor cards. More discovery sources (funding news, Launch HN) are possible.
+Vision: the system finds companies and prospects, hands the rep a ready pipeline, and enables them (brief, recap, drafts) so reps spend time on people. Order now: 1) auto-discovery (DONE, first version: HN hiring only), 2) DONE: Accounts tab replaces Queue (one list, one next step per company, New filter shows discovery, ICP tab folded into a footer page; still to do: Setup actions such as run discovery now, board view), 3) Meeting debrief + HubSpot status sync (lead status, deals, tasks, read-back) with a Meetings tab, 4) inbound speed to lead, 5) Insights tab, 6) Revival, lookalikes, competitor cards. More discovery sources (funding news, Launch HN) are possible.
 
 Older list:
 Philosophy: outreach stays manual and human; the system finds the right prospect at the right time (speed to lead). The prospect-facing draft email stays AI-written and is only a suggestion. Internal items use templates plus the one cached AI line.

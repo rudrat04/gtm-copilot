@@ -91,6 +91,11 @@
   .status-line.due { color: var(--ink); font-weight: 600; }
   .needs { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border: 1px dashed var(--line); border-radius: 14px; color: var(--soft); font-size: 14px; }
   .sigs-more { margin-top: 4px; }
+  .foot-links { text-align: center; font-size: 13px; margin-top: 28px; } .foot-links a { color: var(--muted); }
+  .contact { margin-top: 12px; font-size: 14px; color: var(--soft); } .contact b { color: var(--ink); } .contact a { color: var(--accent); text-decoration: none; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; } .toolbar .chips { margin: 0; flex: 1 1 auto; }
+  .toolbar input { padding: 6px 12px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 99px; width: 150px; }
+  .chip i { font-style: normal; font-weight: 500; opacity: .75; margin-left: 5px; }
 
   /* ---- panels that open inside a card ---- */
   .panel { margin-top: 14px; padding: 16px; background: var(--raised); border-radius: 11px; }
@@ -175,14 +180,13 @@
 
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="today">Today<span class="count" id="c-today" hidden></span></button>
-    <button role="tab" aria-selected="false" data-tab="queue">Queue<span class="count" id="c-queue" hidden></span></button>
+    <button role="tab" aria-selected="false" data-tab="accounts">Accounts<span class="count" id="c-accounts" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="research">Research</button>
-    <button role="tab" aria-selected="false" data-tab="icp">ICP &amp; Signals</button>
   </nav>
 
   <section id="today"><div id="thead"></div><div id="tlist" aria-live="polite"></div></section>
 
-  <section id="queue" hidden><div id="qhead"></div><div id="qlist" aria-live="polite"></div></section>
+  <section id="accounts" hidden><div id="ahead"></div><div id="alist" aria-live="polite"></div></section>
 
   <section id="research" hidden>
     <form class="search" id="form">
@@ -194,6 +198,7 @@
   </section>
 
   <section id="icp" hidden><div id="icpbody"></div></section>
+  <p class="foot-links"><a href="#" id="howlink">How scoring and discovery work</a></p>
 </main>
 <div class="toast" id="toast" hidden role="status"></div>
 
@@ -279,7 +284,7 @@ async function refreshMode() {
   try { const d = await api("people", { action: "status" }); drawMode(!!d.admin, d.credits); return !!d.admin; }
   catch { drawMode(false); return false; }
 }
-function reloadVisible() { for (const [id, fn] of [["today", loadToday], ["queue", loadQueue]]) if (!$(id).hidden) fn(); }
+function reloadVisible() { for (const [id, fn] of [["today", loadToday], ["accounts", loadAccounts]]) if (!$(id).hidden) fn(); }
 
 /* ============ lifecycle: what happened with each account ============ */
 function lifeLine(a) {
@@ -299,21 +304,23 @@ function lifeLine(a) {
  *  - contact known: Mark contacted (or Contacted again)
  * Everything else lives in the More menu.
  */
-function actionsHtml({ outreach, hasContacts, hasDraft }) {
+function actionsHtml({ outreach, hasContacts, hasDraft, primary: custom, compact }) {
   const parked = outreach === "snoozed" || outreach === "not_now";
-  const primary = parked ? `<button class="btn primary" data-life="reopen">Reopen</button>`
+  const primary = custom ?? (parked ? `<button class="btn primary" data-life="reopen">Reopen</button>`
     : !hasContacts ? `<button class="btn primary" data-act="people">Find relevant people</button>`
-    : `<button class="btn primary" data-life="contacted">${outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>`;
+    : `<button class="btn primary" data-life="contacted">${outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>`);
   const touched = outreach === "contacted" || outreach === "replied" || outreach === "meeting";
+  const markInMenu = !parked && (custom != null || !hasContacts);
   const menu = [
     hasContacts ? `<button data-act="people">See all contacts</button>` : "",
-    !hasContacts && !parked ? `<button data-life="contacted">${outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>` : "",
+    markInMenu ? `<button data-life="contacted">${outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>` : "",
+    compact ? `<button data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>` : "",
     `<button data-act="dossier">View dossier</button>`,
     parked ? "" : `<hr>${touched ? `<button data-life="reopen">Clear status (reopen)</button>` : ""}<button data-life="replied">They replied</button><button data-life="meeting">Meeting booked</button>
       <button data-life="snooze" data-days="7">Snooze 1 week</button><button data-life="snooze" data-days="14">Snooze 2 weeks</button><button data-life="snooze" data-days="30">Snooze 1 month</button>
       <hr><button data-life="not_now">Not now</button>`,
   ].join("");
-  return `<div class="actions">${primary}<button class="btn ghost" data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>
+  return `<div class="actions">${primary}${compact ? "" : `<button class="btn ghost" data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>`}
     <div class="menu"><button class="btn ghost" data-tog aria-haspopup="menu">More ▾</button><div class="menu-list" hidden>${menu}</div></div></div>
     <div class="panel dbox"></div><div class="panel draftbox"></div><div class="panel pbox"></div>`;
 }
@@ -356,54 +363,96 @@ async function loadToday() {
     const mix = Object.entries(d.counts).map(([k, n]) => `${n} ${names[k]}`).join(", ");
     $("thead").innerHTML = `<div class="day"><h2>${esc(new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }))}</h2>
       <span>${d.items.length} to focus on${mix ? ` · ${esc(mix)}` : ""}${d.hidden ? ` · ${d.hidden} more not shown` : ""}</span></div>`;
-    const needs = d.needs?.length ? `<div class="needs"><span><b>${d.needs.length} strong account${d.needs.length > 1 ? "s" : ""}</b> with a fresh signal ${d.needs.length > 1 ? "have" : "has"} no contact yet: ${esc(d.needs.slice(0, 3).map((n) => n.name).join(", "))}${d.needs.length > 3 ? "…" : ""}</span><button class="btn ghost sm" data-goto-needs>Find contacts in Queue</button></div>` : "";
+    const needs = d.needs?.length ? `<div class="needs"><span><b>${d.needs.length} strong account${d.needs.length > 1 ? "s" : ""}</b> with a fresh signal ${d.needs.length > 1 ? "have" : "has"} no contact yet: ${esc(d.needs.slice(0, 3).map((n) => n.name).join(", "))}${d.needs.length > 3 ? "…" : ""}</span><button class="btn ghost sm" data-goto-needs>Find contacts in Accounts</button></div>` : "";
     $("tlist").innerHTML = (d.items.map(tCard).join("") ||
       `<div class="card empty">Nothing ready to contact today.<br>People with a fresh signal and follow-ups due appear here.</div>`) + needs;
     const c = $("c-today"); c.textContent = d.items.length; c.hidden = !d.items.length;
   } catch (e) { $("tlist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 
-/* ============ Queue: companies, ranked ============ */
-let qview = "todo";
-const VIEWS = { todo: "To contact", needs: "Needs a contact", progress: "In progress", parked: "Snoozed & closed" };
+/* ============ Accounts: every company, one list ============ */
+let aview = "all", aq = "";
+const FILTERS = [["all", "All"], ["new", "New"], ["nocontact", "No contact yet"], ["tocontact", "Ready to contact"], ["progress", "In progress"], ["parked", "Parked"], ["looked", "Looked up"], ["low", "Low fit"]];
+const parkedS = (a) => a.outreach_status === "snoozed" || a.outreach_status === "not_now";
+const FILTER_FN = {
+  all: (a) => !a.low && !parkedS(a),
+  new: (a) => a.is_new && !a.low,
+  nocontact: (a) => !a.low && a.outreach_status === "open" && !a.contacts.length,
+  tocontact: (a) => !a.low && a.outreach_status === "open" && a.contacts.length > 0,
+  progress: (a) => ["contacted", "replied", "meeting"].includes(a.outreach_status),
+  parked: parkedS,
+  looked: (a) => a.source === "research",
+  low: (a) => a.low,
+};
 
-function scanBanner(s) {
-  if (!s) return "";
-  return `<div class="banner"><span><b>Signals refresh:</b> ${esc(s.label)}${s.active ? "" : ` <span class="paused">· paused</span>`}</span>
-    <span>Last scan ${s.last_scan ? esc(ago(s.last_scan)) : "never"} · next ${esc(day(s.next_scan))}</span></div>`;
+function stageText(a) {
+  const s = a.outreach_status;
+  if (s === "contacted") return `Contacted · touch ${a.touches}`;
+  if (s === "replied") return "Replied";
+  if (s === "meeting") return "Meeting booked";
+  if (s === "snoozed") return `Snoozed until ${day(a.snoozed_until)}`;
+  if (s === "not_now") return "Parked";
+  if (a.contacts.length) return "Contact found";
+  return (a.priority ?? 0) >= 30 ? "Ready" : "Watching";
 }
 
-function qCard(a) {
-  const contacts = a.contacts || [];
-  const ll = lifeLine(a);
+/** The one next step for this company, from what we already know about it. */
+function nextStep(a) {
+  const s = a.outreach_status, c = a.contacts[0];
+  if (parkedS(a)) return `<button class="btn primary sm" data-life="reopen">Reopen</button>`;
+  if (s === "meeting") return "";
+  if (s === "replied") return `<button class="btn primary sm" data-life="meeting">Meeting booked</button>`;
+  if (!c) return `<button class="btn primary sm" data-act="people"${a.searched ? "" : ` title="Uses 1 search credit"`}>${a.searched ? "See people" : "Find people"}</button>`;
+  if (!c.revealed && c.email) return `<button class="btn primary sm" data-act="enrich1" data-pid="${esc(c.id)}">Enrich ${esc(c.name.split(" ")[0])}</button>`;
+  if (c.revealed && !c.pushed) return `<button class="btn primary sm" data-act="push">Add to HubSpot</button>`;
+  return `<button class="btn primary sm" data-life="contacted">${s === "contacted" ? "Contacted again" : "Mark contacted"}</button>`;
+}
+
+function contactLine(a) {
+  const c = a.contacts[0]; if (!c) return a.searched ? `<div class="contact meta">No relevant person found yet</div>` : "";
+  const mail = c.revealed && c.email ? (c.email.includes("***") ? esc(c.email) : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : c.email ? "email found, not revealed" : "no email";
+  return `<div class="contact"><b>${esc(c.name)}</b> · ${esc(c.title)} · ${mail}${c.pushed ? ` <span class="ptag">In HubSpot</span>` : ""}${a.contacts.length > 1 ? ` <span class="meta">+${a.contacts.length - 1} more</span>` : ""}</div>`;
+}
+
+function aCard(a) {
+  const ll = ["contacted", "replied", "meeting"].includes(a.outreach_status) ? lifeLine(a) : "";
+  const reason = a.is_new && a.found_reason ? `<b>Found automatically</b> from a Hacker News hiring post.` : esc(a.why_now || "");
   return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
     <div class="card-head"><div>
-      <div class="eyebrow">${tierHtml(a.tier)}${a.status === "pushed" ? `<span class="badge good">In HubSpot</span>` : ""}${a.source === "discovered" && Date.now() - Date.parse(a.created_at) < 14 * 864e5 ? `<span class="badge accent" title="Found automatically from a public Hacker News hiring post">Newly found</span>` : ""}${a.icp_score != null ? `<span>ICP fit ${esc(a.icp_score)}</span>` : ""}${a.outside_icp ? `<span class="badge warn">Outside target size</span>` : ""}</div>
+      <div class="eyebrow">${a.tier === "tier_3" ? "" : tierHtml(a.tier)}${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}${a.outside_icp ? `<span class="badge warn">Outside target size</span>` : ""}<span>${esc(stageText(a))}</span></div>
       <h3 class="title">${esc(a.name)}</h3>
-      <div class="sub">${esc(a.segment || a.domain)}</div>
-      ${a.firmo ? `<div class="meta">${esc(a.firmo)}</div>` : ""}
-    </div><div class="score" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority_score)}">${esc(a.priority_score)}</b><span>priority</span></div></div>
+      <div class="meta">${esc(a.firmo || a.segment || a.domain)}</div>
+    </div>${a.priority != null ? `<div class="score" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority)}">${esc(a.priority)}</b><span>priority</span></div>` : ""}</div>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
-    <div class="why">${esc(a.why_now)}</div>
-    ${sigList(a.signals)}
-    ${contacts.length ? `<div class="meta" style="margin-top:12px">Contacts: ${contacts.map((c) => `<b>${esc(c.name)}</b> (${esc(c.title)})`).join(", ")}</div>` : ""}
-    <div class="foot">Scanned ${esc(ago(a.last_scanned_at))}</div>
-    ${actionsHtml({ outreach: a.outreach_status, hasContacts: contacts.length > 0, hasDraft: !!a.draft })}</article>`;
+    ${reason ? `<div class="why">${reason}</div>` : ""}
+    ${sigList(a.signals, 1)}
+    ${contactLine(a)}
+    ${actionsHtml({ outreach: a.outreach_status, hasContacts: a.contacts.length > 0, hasDraft: false, primary: nextStep(a), compact: true })}</article>`;
 }
 
-async function loadQueue() {
-  $("qhead").innerHTML = ""; $("qlist").innerHTML = skeleton(4) + skeleton(3);
-  try {
-    const d = await api("queue", { action: "list", view: qview === "needs" ? "todo" : qview });
-    if (qview === "needs") d.accounts = d.accounts.filter((a) => !(a.contacts || []).length);
-    $("qhead").innerHTML = scanBanner(d.scan) + `<div class="chips">${Object.entries(VIEWS).map(([k, l]) => `<button class="chip${k === qview ? " on" : ""}" data-view="${k}">${l}</button>`).join("")}</div>`;
-    $("qlist").innerHTML = d.accounts.map(qCard).join("") || `<div class="card empty">Nothing in this list.</div>`;
-    if (qview === "todo") { const c = $("c-queue"); c.textContent = d.accounts.length; c.hidden = !d.accounts.length; }
-  } catch (e) { $("qlist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+function drawAccounts() {
+  const d = ACC, q = aq.trim().toLowerCase();
+  const counts = Object.fromEntries(FILTERS.map(([k]) => [k, d.accounts.filter(FILTER_FN[k]).length]));
+  const list = d.accounts.filter(FILTER_FN[aview]).filter((a) => !q || a.name.toLowerCase().includes(q) || a.domain.includes(q))
+    .sort((x, y) => (y.is_new - x.is_new) || ((y.priority ?? -1) - (x.priority ?? -1)));
+  const c = $("c-accounts"); const open = d.accounts.filter((a) => !a.low && a.outreach_status === "open").length; c.textContent = open; c.hidden = !open;
+  $("ahead").innerHTML = `<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""}</span>
+      <span>Signals refresh ${d.scan.active ? esc(d.scan.label) : "(paused)"} · next ${esc(day(d.scan.next_scan))}</span></div>
+    <div class="toolbar"><div class="chips">${FILTERS.filter(([k]) => counts[k] || k === aview || k === "all").map(([k, l]) => `<button class="chip${k === aview ? " on" : ""}" data-view="${k}">${l}<i>${counts[k]}</i></button>`).join("")}</div>
+      <input id="asearch" type="search" placeholder="Search" aria-label="Search companies" value="${esc(aq)}"></div>`;
+  $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${aview === "all" ? "Nothing here yet." : "No companies in this view."}</div>`;
+  const s = $("asearch"); if (aq) { s.focus(); s.setSelectionRange(aq.length, aq.length); }
 }
-$("qhead").addEventListener("click", (e) => { const b = e.target.closest("[data-view]"); if (b) { qview = b.dataset.view; loadQueue(); } });
 
-/* ============ card actions (shared by Today and Queue) ============ */
+async function loadAccounts(quiet) {
+  if (!quiet) { $("ahead").innerHTML = ""; $("alist").innerHTML = skeleton(4) + skeleton(3); }
+  try { ACC = await api("queue", { action: "accounts" }); drawAccounts(); }
+  catch (e) { $("alist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+}
+$("ahead").addEventListener("click", (e) => { const b = e.target.closest("[data-view]"); if (b) { aview = b.dataset.view; drawAccounts(); } });
+$("ahead").addEventListener("input", (e) => { if (e.target.id === "asearch") { aq = e.target.value; drawAccounts(); } });
+
+/* ============ card actions (shared by Today and Accounts) ============ */
 function wireCards(root, reload) {
   root.addEventListener("click", async (e) => {
     const life = e.target.closest("button[data-life]");
@@ -422,6 +471,24 @@ function wireCards(root, reload) {
     const btn = e.target.closest("button[data-act]"); if (!btn) return;
     const card = btn.closest(".card"), act = btn.dataset.act;
     if (act === "people") { mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain, true); return; }
+    if (act === "enrich1") {
+      btn.disabled = true;
+      try {
+        const r = await api("people", { action: "enrich", person_id: btn.dataset.pid, what: "email" });
+        if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
+        say("Email revealed."); reload();
+      } catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
+    if (act === "push") {
+      btn.disabled = true; say("Adding to HubSpot…");
+      try {
+        const r = await api("people", { action: "push", account_id: card.dataset.id });
+        if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
+        say(`Added the company and ${r.contacts.length} contact(s) to HubSpot.`); reload();
+      } catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
     if (act === "draft") {
       btn.disabled = true; say("Getting the draft…");
       try {
@@ -447,8 +514,8 @@ function wireCards(root, reload) {
   });
 }
 wireCards($("tlist"), () => loadToday());
-$("tlist").addEventListener("click", (e) => { if (e.target.closest("[data-goto-needs]")) { qview = "needs"; document.querySelector('nav.tabs [data-tab="queue"]').click(); } });
-wireCards($("qlist"), () => loadQueue());
+$("tlist").addEventListener("click", (e) => { if (e.target.closest("[data-goto-needs]")) { aview = "nocontact"; document.querySelector('nav.tabs [data-tab="accounts"]').click(); } });
+wireCards($("alist"), () => loadAccounts(true));
 
 // "Show more signals" works everywhere
 document.addEventListener("click", (e) => {
@@ -559,7 +626,7 @@ function dossierHtml(d) {
     <article class="card"><div class="cols"><div><p class="label">Likely pains</p>${bullets(x.pains)}</div><div><p class="label">Ways in</p>${tracks || '<p class="meta">None.</p>'}</div></div></article>
     <article class="card"><p class="label">Signals (${(d.signals || []).length})</p>${sigList(d.signals, 5) || '<p class="meta">No public signals found.</p>'}</article>
     <article class="card" id="peoplebox"></article>
-    <p class="foot">Public sources only. Nothing is sent to anyone.</p>`;
+    <p class="foot">Saved to Accounts under <b>Looked up</b>. Public sources only. Nothing is sent to anyone.</p>`;
 }
 
 async function run(domain) {
@@ -586,7 +653,7 @@ async function loadIcp() {
         <div class="tile"><b>${esc(p.stats.companies)}</b><span>companies tracked</span></div>
         <div class="tile"><b style="color:var(--accent)">${esc(p.discovery.added)}</b><span>new companies found this month</span></div>
         <div class="tile"><b>${esc(p.stats.matching)}</b><span>match size and stage (of ${esc(p.stats.enriched)})</span></div>
-        <div class="tile"><b>${esc(p.stats.queued)}</b><span>in the Queue</span></div>
+        <div class="tile"><b>${esc(p.stats.queued)}</b><span>ready to contact</span></div>
         <div class="tile"><b style="color:var(--good)">${esc(p.stats.tier_1)}</b><span>Tier 1</span></div>
         <div class="tile"><b style="color:var(--warn)">${esc(p.stats.tier_2)}</b><span>Tier 2</span></div></div>
       <article class="card"><p class="label">Who we sell to</p><p style="margin:0 0 14px"><b>${esc(p.seller.name)}</b>: ${esc(p.seller.pitch)}</p>
@@ -595,10 +662,8 @@ async function loadIcp() {
             <p class="meta" style="margin:8px 0 0">${esc(c.employeesMin)}–${esc(c.employeesMax)} people · ${esc(c.stages.join(", "))} · ${esc(c.regions.join(", "))}</p></div>
           <div><b>People to contact</b>${p.personas.map((x) => `<div>${esc(x.title)}${x.note ? `<div class="meta">${esc(x.note)}</div>` : ""}</div>`).join("")}</div>
         </div></article>
-      <article class="card"><p class="label">Finding new companies</p>
-        <p style="margin:0 0 12px">${esc(p.discovery.note)} ${p.discovery.last ? `Last run ${esc(ago(p.discovery.last))}: ${esc(p.discovery.added)} added, ${esc(p.discovery.rejected)} turned down this month.` : ""}</p>
-        ${p.discovery.recent.map((d) => `<div class="sigrow"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(d.name)}</b><span class="badge ${d.status === "added" ? "good" : ""}">${d.status === "added" ? "Added" : "Skipped"}</span></div>
-          <div class="why-t">${esc(d.reason || "")}${d.source_url ? ` <a href="${esc(d.source_url)}" target="_blank" rel="noopener noreferrer">source</a>` : ""}</div></div>`).join("") || `<p class="meta">Nothing found yet.</p>`}</article>
+      <article class="card"><p class="label">How new companies are found</p>
+        <p style="margin:0">${esc(p.discovery.note)} ${p.discovery.last ? `Last run ${esc(ago(p.discovery.last))}: ${esc(p.discovery.added)} added this month.` : ""} Found companies appear in Accounts under <b>New</b>.</p></article>
       <article class="card"><p class="label">Signals we watch</p>
         ${p.signals.map((s) => `<div class="sigrow"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(s.label)}</b><span class="badge accent">${esc(s.weight)} pts</span></div>
           <div class="bar"><i style="width:${(s.weight / max) * 100}%"></i></div><div class="why-t">${esc(s.why)}</div><div class="why-t">Source: ${esc(s.source)}</div></div>`).join("")}
@@ -607,7 +672,7 @@ async function loadIcp() {
         <div class="tiers"><div><b style="color:var(--good)">${esc(p.tiers.tier_1)}+</b>Tier 1<br><span class="meta">Contact this week</span></div>
           <div><b style="color:var(--warn)">${esc(p.tiers.tier_2)}+</b>Tier 2<br><span class="meta">Worth a look</span></div>
           <div><b>&lt; ${esc(p.tiers.tier_2)}</b>Tier 3<br><span class="meta">Keep watching</span></div></div>
-        <ul class="plain" style="margin-top:14px"><li><b>Priority</b>: the total of the signals above (0–100). ${esc(p.queue_threshold)}+ enters the Queue.</li>
+        <ul class="plain" style="margin-top:14px"><li><b>Priority</b>: the total of the signals above (0–100). ${esc(p.queue_threshold)}+ is ready to contact.</li>
           <li><b>ICP fit</b>: how well the company matches the profile, from its dossier.</li>
           <li><b>Persona score</b>: how closely a person's title matches a target buyer.</li></ul></article>
       <article class="card"><p class="label">The daily rhythm</p>
@@ -621,14 +686,20 @@ async function loadIcp() {
 /* ============ tabs and start ============ */
 document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll("nav.tabs [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  for (const t of ["today", "research", "queue", "icp"]) $(t).hidden = b.dataset.tab !== t;
-  ({ today: loadToday, queue: loadQueue, icp: loadIcp }[b.dataset.tab] || (() => {}))();
+  for (const t of ["today", "research", "accounts", "icp"]) $(t).hidden = b.dataset.tab !== t;
+  ({ today: loadToday, accounts: loadAccounts }[b.dataset.tab] || (() => {}))();
 }));
 
 drawMode(false);
 refreshMode();
 loadToday();
-api("queue", { action: "list", view: "todo" }).then((d) => { const c = $("c-queue"); c.textContent = d.accounts.length; c.hidden = !d.accounts.length; }).catch(() => {});
+$("howlink").addEventListener("click", (e) => {
+  e.preventDefault();
+  document.querySelectorAll("nav.tabs [data-tab]").forEach((x) => x.setAttribute("aria-selected", "false"));
+  for (const t of ["today", "research", "accounts"]) $(t).hidden = true;
+  $("icp").hidden = false; loadIcp(); window.scrollTo(0, 0);
+});
+api("queue", { action: "accounts" }).then((d) => { ACC = d; const c = $("c-accounts"), n = d.accounts.filter((a) => !a.low && a.outreach_status === "open").length; c.textContent = n; c.hidden = !n; }).catch(() => {});
 </script>
 </body>
 </html>

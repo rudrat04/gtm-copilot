@@ -8,7 +8,7 @@ A small, demo-able GTM system for B2B SaaS teams. It finds the right accounts at
 |---|---|
 | **Today** | A capped daily list (8) that leads with **the person to contact** (name, title, email) and shows the company as context: meetings, follow-ups due (day 3/7/14), hot new signals, accounts worth a second look. Each item has a one-line "Why today". |
 | **Research** | Type any company domain, get a dossier in about 10 seconds (what they do, hiring, news, pains, talk tracks, risks, ICP fit). |
-| **Queue** | Companies ranked 0-100 by buying signals with tiers, real size and funding (headcount, stage, money raised, HQ), signal ages, a draft-email button, and lifecycle buttons (contacted, replied, meeting, snooze, not now). |
+| **Accounts** | Every company in one list, ranked 0-100 by buying signals with tiers, real size and funding (headcount, stage, money raised, HQ), signal ages, a draft-email button, and lifecycle buttons (contacted, replied, meeting, snooze, not now). |
 | **People** | On any account: Find relevant people, Enrich the email, preview what will go to HubSpot, Push. No AI is used for the push. |
 | **ICP & Signals** | The playbook for the sales team: target profile, personas, signals and weights, how to read the scores. |
 | **Meeting briefs** | When a meeting with an outside guest is booked in Google Calendar, a private brief is emailed to the owner within about a minute. It is never written into the invite, because guests can read it. |
@@ -32,7 +32,7 @@ Supabase (Postgres, Edge Functions, pg_cron), HubSpot Free, Hunter free plan (pe
 
 ## Company facts and the ICP
 
-Headcount, funding stage, funds raised and HQ come from Hunter's company data (about 0.2 credit per company, saved once). They make up the fit part of the priority score: size inside the target range, stage Seed to Series B, and region. Companies clearly outside the size range are left out of Today and of automatic contact lookups, but stay visible in the Queue.
+Headcount, funding stage, funds raised and HQ come from Hunter's company data (about 0.2 credit per company, saved once). They make up the fit part of the priority score: size inside the target range, stage Seed to Series B, and region. Companies clearly outside the size range are left out of Today and of automatic contact lookups, but stay visible under Low fit in Accounts.
 
 ## Who to contact
 
