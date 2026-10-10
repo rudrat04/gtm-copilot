@@ -87,7 +87,9 @@
   .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--soft); }
   .t a { text-decoration: none; } .t a:hover { text-decoration: underline; }
   .when { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
-  .when.fresh { color: var(--accent); font-weight: 600; }
+  .when.fresh { color: var(--good); font-weight: 600; } .when.mid { color: var(--warn); } .when.old { color: var(--bad); }
+  .status-line.due { color: var(--ink); font-weight: 600; }
+  .needs { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border: 1px dashed var(--line); border-radius: 14px; color: var(--soft); font-size: 14px; }
   .sigs-more { margin-top: 4px; }
 
   /* ---- panels that open inside a card ---- */
@@ -240,10 +242,11 @@ function sigRow(s, hidden = false) {
   const k = s.kind === "hn" ? ["HN", "hn"] : s.kind === "news" ? ["News", "news"] : ["Hiring", "hiring"];
   let text = s.title.replace(/^Hiring:\s*/i, "").replace(/^Hacker News:\s*/i, "").trim();
   if (summary) text = `Currently ${text}`;
-  const when = summary ? "" : (s.published ? ago(s.published) : ago(s.first_seen));
-  const fresh = !summary && s.is_new && !s.published;
+  const stamp = s.published || s.first_seen, days = (Date.now() - Date.parse(stamp)) / 864e5;
+  const when = summary ? "" : ago(stamp);
+  const fresh = !summary && !Number.isNaN(days) && (days < 14 ? " fresh" : days <= 30 ? " mid" : " old");
   const body = s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>` : esc(text);
-  return `<li${hidden ? " hidden data-more" : ""}><span class="k ${k[1]}">${k[0]}</span><span class="t" title="${esc(s.title)}">${body}</span><span class="when${fresh ? " fresh" : ""}">${esc(when)}</span></li>`;
+  return `<li${hidden ? " hidden data-more" : ""}><span class="k ${k[1]}">${k[0]}</span><span class="t" title="${esc(s.title)}">${body}</span><span class="when${fresh || ""}">${esc(when)}</span></li>`;
 }
 function sigList(signals, max = 3) {
   const sorted = [...(signals || [])].sort((a, b) => (/\d+ open roles/.test(a.title) ? 1 : 0) - (/\d+ open roles/.test(b.title) ? 1 : 0));
@@ -326,22 +329,22 @@ function tCard(i) {
       <div class="score"><b style="font-size:20px">${esc(new Date(i.meeting.starts_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }))}</b><span>${esc(day(i.meeting.starts_at))}</span></div></div></article>`;
   }
   const [c, c2] = i.contacts || [];
-  const fresh = newCount(i.signals);
-  const verb = i.type === "follow_up" ? "Follow up with " : "";
-  const title = c ? `${verb}${esc(c.name)}` : esc(a.name);
-  const sub = c ? `${esc(c.title)} at <b>${esc(a.name)}</b> · ${tierHtml(a.tier)}` : `${tierHtml(a.tier)} · no contact found yet`;
-  const mail = c?.email ? (c.email.includes("***") ? `<span>${esc(c.email)}</span>` : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) + (c.persona ? ` · ${esc(c.persona)}` : "") : "";
+  const fu = i.type === "follow_up";
+  const title = c ? `${fu ? "Follow up with " : ""}${esc(c.name)}` : esc(a.name);
+  const sub = c ? `${esc(c.title)} at <b>${esc(a.name)}</b> · ${tierHtml(a.tier)}` : `${tierHtml(a.tier)}`;
+  const mail = c?.email ? (c.email.includes("***") ? `<span>${esc(c.email)}</span>` : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : "";
+  const facts = a.firmo ? `<div class="meta">${esc(a.firmo)}</div>` : "";
+  const note = fu ? `<div class="status-line due">${esc(i.headline)}</div>` : `<div class="why"><b>Why today.</b> ${esc(i.why || i.reason)}</div>`;
   return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
     <div class="card-head"><div>
-      <div class="eyebrow"><span class="badge ${TODAY_BADGE[i.type] || ""}">${esc(i.label)}</span>${fresh ? `<span>${fresh} new signal${fresh > 1 ? "s" : ""}</span>` : ""}${i.type === "follow_up" ? `<span>${esc(i.headline)}</span>` : ""}</div>
+      <div class="eyebrow"><span class="badge ${TODAY_BADGE[i.type] || ""}">${esc(i.label)}</span></div>
       <h3 class="title">${title}</h3><div class="sub">${sub}</div>
-      ${mail ? `<div class="meta">${mail}</div>` : ""}
-      ${a.firmo ? `<div class="meta">${c ? `${esc(a.name)} · ` : ""}${esc(a.firmo)}</div>` : ""}
+      ${mail ? `<div class="meta">${mail}</div>` : ""}${facts}
     </div>${a.priority != null ? `<div class="score" title="Priority: the total of all buying signals, 0 to 100"><b style="color:${scoreColor(a.priority)}">${esc(a.priority)}</b><span>priority</span></div>` : ""}</div>
-    <div class="why"><b>Why today.</b> ${esc(i.why || i.reason)}</div>
-    ${sigList(i.signals)}
+    ${note}
+    ${sigList(i.signals, 2)}
     ${c2 ? `<div class="meta" style="margin-top:12px">Also consider <b>${esc(c2.name)}</b>, ${esc(c2.title)}</div>` : ""}
-    ${i.last_action ? `<div class="meta" style="margin-top:6px">Last action: ${esc(i.last_action)}</div>` : ""}
+    ${i.last_action && !fu ? `<div class="meta" style="margin-top:6px">Last action: ${esc(i.last_action)}</div>` : ""}
     ${actionsHtml({ outreach: a.outreach, hasContacts: !!c, hasDraft: false })}</article>`;
 }
 
@@ -353,15 +356,16 @@ async function loadToday() {
     const mix = Object.entries(d.counts).map(([k, n]) => `${n} ${names[k]}`).join(", ");
     $("thead").innerHTML = `<div class="day"><h2>${esc(new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }))}</h2>
       <span>${d.items.length} to focus on${mix ? ` · ${esc(mix)}` : ""}${d.hidden ? ` · ${d.hidden} more not shown` : ""}</span></div>`;
-    $("tlist").innerHTML = d.items.map(tCard).join("") ||
-      `<div class="card empty">Nothing urgent today.<br>New signals and follow-ups appear here when they are due.</div>`;
+    const needs = d.needs?.length ? `<div class="needs"><span><b>${d.needs.length} strong account${d.needs.length > 1 ? "s" : ""}</b> with a fresh signal ${d.needs.length > 1 ? "have" : "has"} no contact yet: ${esc(d.needs.slice(0, 3).map((n) => n.name).join(", "))}${d.needs.length > 3 ? "…" : ""}</span><button class="btn ghost sm" data-goto-needs>Find contacts in Queue</button></div>` : "";
+    $("tlist").innerHTML = (d.items.map(tCard).join("") ||
+      `<div class="card empty">Nothing ready to contact today.<br>People with a fresh signal and follow-ups due appear here.</div>`) + needs;
     const c = $("c-today"); c.textContent = d.items.length; c.hidden = !d.items.length;
   } catch (e) { $("tlist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 
 /* ============ Queue: companies, ranked ============ */
 let qview = "todo";
-const VIEWS = { todo: "To contact", progress: "In progress", parked: "Snoozed & closed" };
+const VIEWS = { todo: "To contact", needs: "Needs a contact", progress: "In progress", parked: "Snoozed & closed" };
 
 function scanBanner(s) {
   if (!s) return "";
@@ -390,7 +394,8 @@ function qCard(a) {
 async function loadQueue() {
   $("qhead").innerHTML = ""; $("qlist").innerHTML = skeleton(4) + skeleton(3);
   try {
-    const d = await api("queue", { action: "list", view: qview });
+    const d = await api("queue", { action: "list", view: qview === "needs" ? "todo" : qview });
+    if (qview === "needs") d.accounts = d.accounts.filter((a) => !(a.contacts || []).length);
     $("qhead").innerHTML = scanBanner(d.scan) + `<div class="chips">${Object.entries(VIEWS).map(([k, l]) => `<button class="chip${k === qview ? " on" : ""}" data-view="${k}">${l}</button>`).join("")}</div>`;
     $("qlist").innerHTML = d.accounts.map(qCard).join("") || `<div class="card empty">Nothing in this list.</div>`;
     if (qview === "todo") { const c = $("c-queue"); c.textContent = d.accounts.length; c.hidden = !d.accounts.length; }
@@ -442,6 +447,7 @@ function wireCards(root, reload) {
   });
 }
 wireCards($("tlist"), () => loadToday());
+$("tlist").addEventListener("click", (e) => { if (e.target.closest("[data-goto-needs]")) { qview = "needs"; document.querySelector('nav.tabs [data-tab="queue"]').click(); } });
 wireCards($("qlist"), () => loadQueue());
 
 // "Show more signals" works everywhere
