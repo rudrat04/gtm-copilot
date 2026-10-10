@@ -53,6 +53,7 @@ export type CalEvent = {
   summary?: string;
   updated: string;
   start?: { dateTime?: string; date?: string; timeZone?: string };
+  end?: { dateTime?: string; date?: string };
   attendees?: { email: string; displayName?: string; self?: boolean; resource?: boolean; responseStatus?: string }[];
 };
 

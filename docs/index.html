@@ -102,6 +102,8 @@
   .toggles { display: grid; gap: 8px; } .toggle { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer; } .toggle input { margin-top: 4px; accent-color: var(--accent); } .toggle span small { display: block; color: var(--muted); font-size: 12.5px; }
   .chip.sel { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
   details.how { margin-top: 6px; } details.how > summary { font-size: 14px; font-weight: 600; color: var(--soft); cursor: pointer; margin: 10px 0 14px; }
+  textarea.notes { width: 100%; min-height: 76px; resize: vertical; padding: 10px 12px; font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; margin-top: 12px; }
+  .recap p { margin: 0 0 8px; } .recap .label { margin: 12px 0 4px; } .recap pre { white-space: pre-wrap; font: inherit; font-size: 14px; margin: 8px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; }
   .hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
   .badge.hot { --c: var(--bad); } .badge.warm { --c: var(--warn); }
   .fit { margin-top: 3px; font-size: 13.5px; color: var(--muted); } .fit b.good { color: var(--good); } .fit b.warn { color: var(--warn); } .fit b.bad { color: var(--bad); }
@@ -194,6 +196,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="today">Today<span class="count" id="c-today" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="accounts">Accounts<span class="count" id="c-accounts" hidden></span></button>
+    <button role="tab" aria-selected="false" data-tab="meetings">Meetings<span class="count" id="c-meetings" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="research">Research</button>
     <button role="tab" aria-selected="false" data-tab="setup">Setup</button>
   </nav>
@@ -210,6 +213,8 @@
     <p class="hint">Try <a data-d="linear.app">linear.app</a><a data-d="posthog.com">posthog.com</a><a data-d="attio.com">attio.com</a></p>
     <div id="out" aria-live="polite"></div>
   </section>
+
+  <section id="meetings" hidden><div id="meetbody" aria-live="polite"></div></section>
 
   <section id="setup" hidden><div id="setupbody"></div></section>
 </main>
@@ -300,7 +305,7 @@ async function refreshMode() {
   try { const d = await api("people", { action: "status" }); drawMode(!!d.admin, d.credits); return !!d.admin; }
   catch { drawMode(false); return false; }
 }
-function reloadVisible() { for (const [id, fn] of [["today", loadToday], ["accounts", loadAccounts]]) if (!$(id).hidden) fn(); }
+function reloadVisible() { for (const [id, fn] of [["today", loadToday], ["accounts", loadAccounts], ["meetings", loadMeetings]]) if (!$(id).hidden) fn(); }
 
 /* ============ lifecycle: what happened with each account ============ */
 function lifeLine(a) {
@@ -380,7 +385,8 @@ async function loadToday() {
     $("thead").innerHTML = `<div class="day"><h2>${esc(new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }))}</h2>
       <span>${d.items.length} to focus on${mix ? ` · ${esc(mix)}` : ""}${d.hidden ? ` · ${d.hidden} more not shown` : ""}</span></div>`;
     const needs = d.needs?.length ? `<div class="needs"><span><b>${d.needs.length} strong account${d.needs.length > 1 ? "s" : ""}</b> with a fresh signal ${d.needs.length > 1 ? "have" : "has"} no contact yet: ${esc(d.needs.slice(0, 3).map((n) => n.name).join(", "))}${d.needs.length > 3 ? "…" : ""}</span><button class="btn ghost sm" data-goto-needs>Find contacts in Accounts</button></div>` : "";
-    $("tlist").innerHTML = (d.items.map(tCard).join("") ||
+    const deb = d.debriefs ? `<div class="needs" style="margin-bottom:14px"><span><b>${d.debriefs} meeting${d.debriefs > 1 ? "s" : ""}</b> waiting for your debrief</span><button class="btn ghost sm" data-goto-meetings>Open Meetings</button></div>` : "";
+    $("tlist").innerHTML = deb + (d.items.map(tCard).join("") ||
       `<div class="card empty">Nothing ready to contact today.<br>People with a fresh signal and follow-ups due appear here.</div>`) + needs;
     const c = $("c-today"); c.textContent = d.items.length; c.hidden = !d.items.length;
   } catch (e) { $("tlist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
@@ -540,7 +546,7 @@ function wireCards(root, reload) {
   });
 }
 wireCards($("tlist"), () => loadToday());
-$("tlist").addEventListener("click", (e) => { if (e.target.closest("[data-goto-needs]")) { aview = "nocontact"; document.querySelector('nav.tabs [data-tab="accounts"]').click(); } });
+$("tlist").addEventListener("click", (e) => { if (e.target.closest("[data-goto-meetings]")) document.querySelector('nav.tabs [data-tab="meetings"]').click(); if (e.target.closest("[data-goto-needs]")) { aview = "nocontact"; document.querySelector('nav.tabs [data-tab="accounts"]').click(); } });
 wireCards($("alist"), () => loadAccounts(true));
 
 // "Show more signals" works everywhere
@@ -706,6 +712,96 @@ async function loadIcp() {
   } catch (e) { $("icpbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 
+/* ============ Meetings: briefs before, debriefs after ============ */
+let MT = null, sigPending = null; const picked = {};
+const OUT_LABEL = { went_well: "Went well", follow_up: "Needs a follow-up", no_show: "No-show", not_fit: "Not a fit" };
+const OUT_BADGE = { went_well: "good", follow_up: "accent", no_show: "warn", not_fit: "" };
+const when = (iso) => new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+function crmLine(m) {
+  const a = m.crm?.actions;
+  if (a?.length) return `<p class="meta" style="margin:10px 0 0"><b>HubSpot updated:</b> ${esc(a.join(" · "))}</p>`;
+  return m.crm ? `<p class="meta" style="margin:10px 0 0">${esc(m.crm.skipped || "Nothing to update in HubSpot.")}</p>` : "";
+}
+function recapBlock(m) {
+  const r = m.recap; if (!r) return m.notes ? `<p class="meta" style="margin:10px 0 0">Notes: ${esc(m.notes)}</p>` : "";
+  const ul = (t, a) => a?.length ? `<p class="label">${t}</p><ul class="plain">${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+  return `<div class="recap panel"><p>${esc(r.summary)}</p>${ul("Pains", r.pains)}${ul("Objections", r.objections)}${ul("Next steps", r.next_steps)}
+    ${r.follow_up?.body ? `<details><summary>Follow-up email draft</summary><pre><b>${esc(r.follow_up.subject)}</b>\n\n${esc(r.follow_up.body)}</pre><p class="meta" style="margin:8px 0 0">A starting point. Edit it and send it yourself; nothing is sent for you.</p></details>` : ""}</div>`;
+}
+const head = (m) => `<div class="card-head"><div><h3 class="title" style="margin-top:0">${esc(m.attendee)}${m.company ? ` <span class="sub" style="font-weight:400">· ${esc(m.company)}</span>` : ""}</h3>
+  <div class="meta">${esc(m.title || "Meeting")} · ${esc(when(m.starts_at))}</div></div></div>`;
+
+function mNeed(m) {
+  const sel = picked[m.id];
+  return `<article class="card" data-mid="${esc(m.id)}"><div class="eyebrow" style="margin-bottom:6px"><span class="badge warn">Needs your debrief</span>${m.in_hubspot ? `<span class="badge good">In HubSpot</span>` : ""}</div>${head(m)}
+    <div class="chips" style="margin:14px 0 0">${Object.entries(OUT_LABEL).map(([k, l]) => `<button class="chip${sel === k ? " sel" : ""}" data-pick="${k}">${l}</button>`).join("")}</div>
+    <textarea class="notes" data-notes placeholder="Optional: two lines on what you heard. Used for a recap and a follow-up email draft."></textarea>
+    <div class="actions" style="margin-top:12px"><button class="btn primary" data-savedebrief>Save debrief</button><span class="meta">Updates HubSpot${m.in_hubspot ? "" : " (once the company is pushed)"}. Notes cost about 1 cent for the recap.</span></div></article>`;
+}
+function mUp(m) {
+  return `<article class="card"><div class="eyebrow" style="margin-bottom:6px"><span class="badge accent">Upcoming</span><span>Brief emailed to you</span></div>${head(m)}
+    ${m.brief ? `<details><summary>View the brief</summary><pre class="draft" style="margin:6px 0 0">${esc(m.brief)}</pre></details>` : ""}</article>`;
+}
+function mDone(m) {
+  const addNotes = !m.recap && !m.notes ? `<details data-mid="${esc(m.id)}"><summary>Add notes for a recap</summary><textarea class="notes" data-notes placeholder="Two lines on what you heard."></textarea>
+      <div class="actions" style="margin-top:10px"><button class="btn ghost sm" data-addnotes="${esc(m.outcome)}">Write recap</button></div></details>` : "";
+  return `<article class="card"><div class="eyebrow" style="margin-bottom:6px"><span class="badge ${OUT_BADGE[m.outcome] || ""}">${esc(OUT_LABEL[m.outcome])}</span><span>${esc(ago(m.debriefed_at))}</span></div>${head(m)}${crmLine(m)}${recapBlock(m)}${addNotes}</article>`;
+}
+
+function drawMeetings() {
+  const d = MT, sec = (t, list, fn) => list.length ? `<p class="label" style="margin:22px 0 10px">${t}</p>${list.map(fn).join("")}` : "";
+  const c = $("c-meetings"); c.textContent = d.needs.length; c.hidden = !d.needs.length;
+  $("meetbody").innerHTML = (sec("Needs a debrief", d.needs, mNeed) + sec("Upcoming", d.upcoming, mUp) + sec("Done", d.done, mDone)).replace(/^<p class="label" style="margin:22px 0 10px">/, '<p class="label" style="margin:0 0 10px">')
+    || `<div class="card empty">No meetings yet.<br>When someone outside books a meeting with you, a private brief is emailed and the meeting shows up here. After it ends you get a one-tap "how did it go?" email.</div>`;
+}
+
+async function loadMeetings(quiet) {
+  if (!quiet) $("meetbody").innerHTML = skeleton(4);
+  try { MT = await api("queue", { action: "meetings" }); drawMeetings(); }
+  catch (e) { $("meetbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+}
+
+async function saveDebrief(mid, outcome, notes, btn) {
+  if (btn) btn.disabled = true; say(notes ? "Saving and writing the recap…" : "Saving…");
+  try {
+    const sig = sigPending && sigPending.id === mid && sigPending.outcome === outcome ? sigPending.sig : undefined;
+    const r = await api("queue", { action: "debrief", meeting_id: mid, outcome, notes: notes || undefined, sig });
+    if (r.mode === "dry_run") { say(r.message); if (btn) btn.disabled = false; return false; }
+    say(`Saved: ${OUT_LABEL[outcome]}.${r.crm?.actions?.length ? " HubSpot updated." : ""}`);
+    delete picked[mid]; await loadMeetings(true); return true;
+  } catch (err) { say(err.message); if (btn) btn.disabled = false; return false; }
+}
+
+$("meetbody").addEventListener("click", async (e) => {
+  const card = e.target.closest("[data-mid]"); if (!card) return;
+  const mid = card.dataset.mid;
+  const pick = e.target.closest("[data-pick]");
+  if (pick) { picked[mid] = pick.dataset.pick; card.querySelectorAll("[data-pick]").forEach((b) => b.classList.toggle("sel", b === pick)); return; }
+  const notes = card.querySelector("[data-notes]")?.value.trim() || "";
+  if (e.target.closest("[data-savedebrief]")) {
+    if (!picked[mid]) { say("Pick how it went first."); return; }
+    await saveDebrief(mid, picked[mid], notes, e.target.closest("button"));
+  }
+  const add = e.target.closest("[data-addnotes]");
+  if (add) { if (!notes) { say("Write a line or two first."); return; } await saveDebrief(mid, add.dataset.addnotes, notes, add); }
+});
+
+// The one-tap link in the "how did it go?" email opens the page with #debrief=<meeting>&o=<outcome>&s=<signature>
+async function handleDebriefLink() {
+  const m = /^#debrief=([0-9a-f-]+)&o=([a-z_]+)&s=([0-9a-f]+)$/.exec(location.hash); if (!m) return false;
+  history.replaceState(null, "", location.pathname);
+  const [, id, outcome, sig] = m;
+  document.querySelector('nav.tabs [data-tab="meetings"]').click();
+  sigPending = { id, outcome, sig };
+  try {
+    const r = await api("queue", { action: "debrief", meeting_id: id, outcome, sig });
+    say(r.mode === "dry_run" ? r.message : `Recorded: ${OUT_LABEL[outcome]}.${r.crm?.actions?.length ? " HubSpot updated." : ""} Add notes below for a recap.`);
+    if (r.mode !== "dry_run") await loadMeetings(true);
+  } catch (err) { say(err.message); }
+  return true;
+}
+
 /* ============ Setup: the profile, discovery and costs ============ */
 let P = null, SETUP = null;
 const getPath = (o, path) => path.split(".").reduce((x, k) => x?.[k], o);
@@ -825,13 +921,14 @@ async function loadSetup() {
 /* ============ tabs and start ============ */
 document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll("nav.tabs [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  for (const t of ["today", "research", "accounts", "setup"]) $(t).hidden = b.dataset.tab !== t;
-  ({ today: loadToday, accounts: loadAccounts, setup: loadSetup }[b.dataset.tab] || (() => {}))();
+  for (const t of ["today", "research", "accounts", "meetings", "setup"]) $(t).hidden = b.dataset.tab !== t;
+  ({ today: loadToday, accounts: loadAccounts, meetings: loadMeetings, setup: loadSetup }[b.dataset.tab] || (() => {}))();
 }));
 
 drawMode(false);
 refreshMode();
 loadToday();
+handleDebriefLink().then((handled) => { if (!handled) api("queue", { action: "meetings" }).then((d) => { MT = d; const c = $("c-meetings"); c.textContent = d.needs.length; c.hidden = !d.needs.length; }).catch(() => {}); });
 api("queue", { action: "accounts" }).then((d) => { ACC = d; const c = $("c-accounts"), n = d.accounts.filter((a) => !a.low && a.outreach_status === "open").length; c.textContent = n; c.hidden = !n; }).catch(() => {});
 </script>
 </body>

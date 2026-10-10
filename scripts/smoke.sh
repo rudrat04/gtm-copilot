@@ -43,5 +43,13 @@ python3 - <<'PY' 2>/dev/null && ok "digest preview has a plain-text and an HTML 
 import json; d=json.load(open('/tmp/smoke_body')); assert d.get('html','').startswith('<!doctype html>') and 'Good morning' in d['body']
 PY
 
+expect "meetings list loads" "$(post queue '{"action":"meetings"}')" "200"
+expect "  ...public view carries no emails or notes" "$(field "any(m.get('email') or m.get('notes') or m.get('brief') for k in ('needs','upcoming','done') for m in d[k])")" "False"
+expect "public cannot save a debrief" "$(post queue '{"action":"debrief","meeting_id":"00000000-0000-0000-0000-000000000000","outcome":"went_well","sig":"bad"}')" "200"
+expect "  ...it is a dry run" "$(field "d.get('mode')")" "dry_run"
+expect "setup view loads" "$(post queue '{"action":"setup"}')" "200"
+expect "public cannot save the profile" "$(post queue '{"action":"profile_save","profile":{}}')" "200"
+expect "  ...it is a dry run" "$(field "d.get('mode')")" "dry_run"
+
 echo; echo "Result: $PASS passed, $FAIL failed"; rm -f /tmp/smoke_body
 [ "$FAIL" = "0" ]

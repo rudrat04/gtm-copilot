@@ -12,6 +12,7 @@ import { BudgetError } from "../_shared/claude.ts";
 import { tierOf } from "../_shared/score.ts";
 import { clean, loadProfile, REGIONS, saveProfile, STAGES } from "../_shared/profile.ts";
 import { runDiscovery } from "../_shared/discover.ts";
+import { applyDebrief, endsAt, OUTCOME_LABEL, OUTCOMES, type Outcome, verify } from "../_shared/debrief.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
 const DAY = 86_400_000;
@@ -144,6 +145,37 @@ async function accountsView(admin: boolean) {
         })),
       };
     }),
+  };
+}
+
+const shortName = (n: string | null) => { const p = (n ?? "").trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[p.length - 1][0]}.` : p[0] || "Attendee"; };
+
+/** Meetings: what needs a debrief, what is coming up, and what already happened. Public viewers see no names, emails or notes. */
+async function meetingsView(admin: boolean) {
+  const now = Date.now();
+  const { data } = await sb.from("cp_meetings")
+    .select("id,title,starts_at,ends_at,attendee_name,attendee_email,attendee_domain,account_id,brief,outcome,debriefed_at,notes,recap,crm_sync")
+    .eq("status", "briefed").order("starts_at", { ascending: false }).limit(60);
+  const ids = [...new Set((data ?? []).map((m) => m.account_id).filter(Boolean))] as string[];
+  const { data: accts } = ids.length ? await sb.from("cp_accounts").select("id,name,domain,hubspot_company_id").in("id", ids) : { data: [] };
+  const byId = new Map((accts ?? []).map((a) => [a.id, a]));
+  const view = (m: NonNullable<typeof data>[number]) => {
+    const a = m.account_id ? byId.get(m.account_id) : null;
+    return {
+      id: m.id, title: m.title, starts_at: m.starts_at, ends_at: new Date(endsAt(m)).toISOString(),
+      attendee: admin ? m.attendee_name : shortName(m.attendee_name), email: admin ? m.attendee_email : null,
+      company: a?.name ?? m.attendee_domain, domain: m.attendee_domain, in_hubspot: !!a?.hubspot_company_id,
+      outcome: m.outcome, debriefed_at: m.debriefed_at,
+      brief: admin ? m.brief : null, notes: admin ? m.notes : null, recap: admin ? m.recap : null, crm: admin ? m.crm_sync : null,
+    };
+  };
+  const rows = (data ?? []).map(view);
+  const ended = (m: { ends_at: string }) => Date.parse(m.ends_at) <= now;
+  return {
+    labels: OUTCOME_LABEL,
+    needs: rows.filter((m) => ended(m) && !m.outcome && Date.parse(m.starts_at) > now - 14 * DAY),
+    upcoming: rows.filter((m) => !ended(m)).reverse(),
+    done: rows.filter((m) => m.outcome).slice(0, 12),
   };
 }
 
@@ -286,6 +318,16 @@ serve("queue", async (req) => {
 
   if (body.action === "list") return json({ ...(await list(String(body.view ?? "todo"), admin)), admin });
   if (body.action === "accounts") return json({ ...(await accountsView(admin)), admin });
+  if (body.action === "meetings") return json({ ...(await meetingsView(admin)), admin });
+  if (body.action === "debrief" && typeof body.meeting_id === "string") {
+    const outcome = String(body.outcome) as Outcome;
+    if (!(OUTCOMES as readonly string[]).includes(outcome)) return json({ error: "Unknown outcome" }, 400);
+    const signed = typeof body.sig === "string" && (await verify(body.meeting_id, outcome, body.sig)); // the one-tap link from the email
+    if (!admin && !signed) return json({ mode: "dry_run", message: "Demo mode: nothing was saved. Unlock to record a debrief." });
+    const r = await applyDebrief(body.meeting_id, outcome, typeof body.notes === "string" ? body.notes : undefined);
+    if ("error" in r) return json({ error: r.error }, 404);
+    return json({ mode: "live", outcome, recap: r.recap, crm: r.crm, notes: (r.meeting as { notes?: string }).notes ?? null });
+  }
   if (body.action === "setup") return json({ ...(await setupView()), admin });
   if (body.action === "profile_save") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to save changes." });
@@ -313,7 +355,7 @@ serve("queue", async (req) => {
     if (!["contacted", "replied", "meeting", "snooze", "not_now", "reopen"].includes(kind)) return json({ error: "Unknown outcome" }, 400);
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed. Unlock to record actions." });
     const r = await applyOutcome(body.account_id, kind, { days: Number(body.days), note: typeof body.note === "string" ? body.note : undefined });
-    return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", ...r.update });
+    return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", ...r.update, crm: r.crm });
   }
   if (body.action === "icp") return json(await playbook());
   return json({ error: "Unknown action" }, 400);

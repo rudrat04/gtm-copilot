@@ -289,3 +289,37 @@ export async function createTask(t: TaskInput): Promise<string> {
   if (!r.ok) throw new Error(`HubSpot task ${r.status}`);
   return r.body.id;
 }
+
+// ---- Status sync: lead status, notes, deals (only ever on records Account Copilot created) ----
+
+export type LeadStatus = "NEW" | "OPEN" | "IN_PROGRESS" | "OPEN_DEAL" | "UNQUALIFIED" | "ATTEMPTED_TO_CONTACT" | "CONNECTED" | "BAD_TIMING";
+export type DealStage = "appointmentscheduled" | "qualifiedtobuy" | "closedlost";
+
+export async function setLeadStatus(contactId: string, status: LeadStatus): Promise<boolean> {
+  const r = await hs(`/crm/v3/objects/contacts/${contactId}`, { method: "PATCH", body: JSON.stringify({ properties: { hs_lead_status: status } }) });
+  return r.ok;
+}
+
+/** A note on the company (and optionally the contact), as plain HTML. */
+export async function logNote(html: string, ids: { companyId?: string | null; contactId?: string | null }): Promise<boolean> {
+  let ok = true;
+  if (ids.companyId) ok = (await addNote(html, ids.companyId, 190)) && ok;
+  if (ids.contactId) ok = (await addNote(html, ids.contactId, 202)) && ok;
+  return ok;
+}
+
+export async function createDeal(d: { name: string; stage: DealStage; companyId: string; contactId?: string | null; ownerId: string }): Promise<string> {
+  const associations = [{ to: { id: d.companyId }, types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 341 }] }] as { to: { id: string }; types: { associationCategory: string; associationTypeId: number }[] }[];
+  if (d.contactId) associations.push({ to: { id: d.contactId }, types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 3 }] });
+  const r = await hs("/crm/v3/objects/deals", {
+    method: "POST",
+    body: JSON.stringify({ properties: { dealname: d.name.slice(0, 200), dealstage: d.stage, pipeline: "default", hubspot_owner_id: d.ownerId }, associations }),
+  });
+  if (!r.ok) throw new Error(`HubSpot deal ${r.status}`);
+  return r.body.id;
+}
+
+export async function moveDeal(dealId: string, stage: DealStage): Promise<boolean> {
+  const r = await hs(`/crm/v3/objects/deals/${dealId}`, { method: "PATCH", body: JSON.stringify({ properties: { dealstage: stage } }) });
+  return r.ok;
+}

@@ -5,6 +5,7 @@ import { type CalEvent, getEvent, googleConfigured, listChangedEvents, ownerEmai
 import { lookupForBrief, tierLabel } from "../_shared/hubspot.ts";
 import { buildBrief, buildBriefHtml } from "../_shared/brief.ts";
 import { tierOf } from "../_shared/score.ts";
+import { sendDueDebriefs } from "../_shared/debrief.ts";
 
 // Polled by pg_cron every minute. It reads Calendar changes since the last poll, and for each new
 // meeting with an outside attendee it emails a private brief to the owner. The brief is NOT written
@@ -84,6 +85,7 @@ async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry"> {
     calendar_event_id: ev.id,
     title: ev.summary ?? "(no title)",
     starts_at: new Date(startIso).toISOString(),
+    ends_at: ev.end?.dateTime ? new Date(ev.end.dateTime).toISOString() : null,
     attendee_email: email,
     attendee_domain: domain,
     attendee_name: attendeeName,
@@ -196,8 +198,14 @@ serve("meeting-brief", async (req) => {
   // Keep a one-minute overlap so an event updated during this poll is never missed.
   await setState("calendar_cursor", new Date(Date.parse(polledAt) - 60_000).toISOString());
 
+  // After a meeting ends, ask the owner how it went (once per meeting).
+  const debriefs = await sendDueDebriefs().catch(async (e) => {
+    await log("error", "debrief_step_failed", { message: (e as Error).message });
+    return 0;
+  });
+
   const briefed = results.filter((r) => r === "briefed").length;
-  if (!briefed && !results.includes("failed") && !results.includes("retry")) return idle({ checked: events.length });
-  await log("info", "calendar_poll", { detail: { events: events.length, briefed, results } });
-  return json({ processed: events.length, briefed });
+  if (!debriefs && !briefed && !results.includes("failed") && !results.includes("retry")) return idle({ checked: events.length });
+  await log("info", "calendar_poll", { detail: { events: events.length, briefed, debriefs, results } });
+  return json({ processed: events.length, briefed, debriefs });
 });

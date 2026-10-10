@@ -1,6 +1,7 @@
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import { tierOf } from "./score.ts";
+import { type SyncResult, syncOutcome } from "./crmsync.ts";
 import icp from "./icp.json" with { type: "json" };
 
 export type OutcomeKind = "contacted" | "replied" | "meeting" | "snooze" | "not_now" | "reopen";
@@ -69,5 +70,7 @@ export async function applyOutcome(accountId: string, kind: OutcomeKind, opts: {
     priority: a.priority_score, tier: tierOf(a.priority_score), signals: sigs ?? [],
   });
   await log("info", "outcome", { account: a.domain, detail: { kind, touches: update.touches ?? a.touches, next: update.next_followup_at ?? null } });
-  return { ok: true as const, update };
+  let crm: SyncResult = { synced: false, actions: [] };
+  if (kind !== "reopen") crm = await syncOutcome(accountId, kind).catch(() => crm); // HubSpot trouble never blocks the action
+  return { ok: true as const, update, crm };
 }

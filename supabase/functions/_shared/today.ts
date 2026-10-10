@@ -134,7 +134,11 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     };
     let it: Omit<TodayItem, "why"> & { why: string | null } | null = null;
 
-    if (a.outreach_status === "contacted" && a.next_followup_at && Date.parse(a.next_followup_at) <= now) {
+    if (a.outreach_status === "meeting" && a.next_followup_at && Date.parse(a.next_followup_at) <= now) {
+      const overdue = Math.floor((now - Date.parse(a.next_followup_at)) / DAY);
+      it = { ...base, key: `post-${a.id}`, type: "follow_up", label: "After the meeting", urgency: 650 + Math.min(overdue, 30) * 3 + (a.priority_score ?? 0) / 10,
+        headline: `Send the recap and agree the next step${overdue > 0 ? `, ${overdue}d overdue` : ""}`, due: a.next_followup_at };
+    } else if (a.outreach_status === "contacted" && a.next_followup_at && Date.parse(a.next_followup_at) <= now) {
       const overdue = Math.floor((now - Date.parse(a.next_followup_at)) / DAY);
       const n = a.touches ?? 1;
       it = { ...base, key: `fu-${a.id}`, type: "follow_up", label: "Follow-up due", urgency: 600 + Math.min(overdue, 30) * 3 + (a.priority_score ?? 0) / 10,
@@ -202,10 +206,12 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     }
   }
 
+  const { count: debriefs } = await sb.from("cp_meetings").select("id", { count: "exact", head: true })
+    .eq("status", "briefed").is("outcome", null).lt("starts_at", new Date(now).toISOString()).gt("starts_at", new Date(now - 7 * DAY).toISOString());
   const counts: Record<string, number> = {};
   for (const it of shown) counts[it.type] = (counts[it.type] ?? 0) + 1;
   await log("info", "today_built", { detail: { shown: shown.length, hidden: ready.length - shown.length, needs: needs.length, counts, admin } });
-  return { generated_at: new Date().toISOString(), cap: cfg.cap, counts, hidden: Math.max(0, ready.length - shown.length), needs, items: shown };
+  return { generated_at: new Date().toISOString(), cap: cfg.cap, counts, hidden: Math.max(0, ready.length - shown.length), needs, debriefs: debriefs ?? 0, items: shown };
 }
 
 
