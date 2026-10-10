@@ -1,10 +1,19 @@
 import { json, sb } from "../_shared/db.ts";
 import { isAdmin } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
+import { applyOutcome, type OutcomeKind } from "../_shared/lifecycle.ts";
+import { buildToday } from "../_shared/today.ts";
 import { tierOf } from "../_shared/score.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
 const DAY = 86_400_000;
+
+// Queue views: what still needs a first touch, what is in progress, and what is parked.
+const VIEWS: Record<string, string[]> = {
+  todo: ["open"],
+  progress: ["contacted", "replied", "meeting"],
+  parked: ["snoozed", "not_now"],
+};
 
 /** Next Monday 06:00 UTC strictly after now (the weekly scan window opens then). */
 function nextScan(now = new Date()): string {
@@ -29,10 +38,11 @@ async function scanInfo() {
   };
 }
 
-async function list() {
+async function list(view = "todo") {
   const { data: accounts } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at")
+    .select("id,name,domain,segment,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until")
     .in("status", ["queued", "pushed"])
+    .in("outreach_status", VIEWS[view] ?? VIEWS.todo)
     .order("priority_score", { ascending: false })
     .limit(30);
   const ids = (accounts ?? []).map((a) => a.id);
@@ -83,6 +93,8 @@ async function playbook() {
     tiers: icp.tiers,
     queue_threshold: 30,
     schedule: icp.schedule.label,
+    follow_up: { days: icp.followUp.days, note: icp.followUp.note },
+    today: { cap: icp.today.cap, hot_hours: icp.today.hotHours },
     stats: {
       companies: rows.length,
       scanned: rows.filter((r) => r.last_scanned_at).length,
@@ -92,27 +104,28 @@ async function playbook() {
   };
 }
 
-async function reject(accountId: string, admin: boolean) {
-  const { data: a } = await sb.from("cp_accounts").select("id,domain,status").eq("id", accountId).maybeSingle();
-  if (!a) return json({ error: "Account not found" }, 404);
-  if (a.status !== "queued") return json({ error: `Account is already ${a.status}` }, 409);
-  if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed. Unlock to persist decisions." });
-
-  await sb.from("cp_accounts").update({ status: "rejected" }).eq("id", a.id);
-  await sb.from("cp_outreach_drafts").update({ status: "rejected" }).eq("account_id", a.id).eq("status", "pending");
-  await log("info", "decision", { account: a.domain, detail: { action: "reject", mode: "live" } });
-  return json({ mode: "live", status: "rejected" });
-}
-
 serve("queue", async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
   const body = (await req.json().catch(() => null)) ?? {};
   const admin = await isAdmin(req);
 
-  if (body.action === "list") return json({ ...(await list()), admin });
+  if (body.action === "list") return json({ ...(await list(String(body.view ?? "todo"))), admin });
+  if (body.action === "today") return json({ ...(await buildToday(admin)), admin });
+  if (body.action === "outcome" && typeof body.account_id === "string") {
+    const kind = String(body.kind) as OutcomeKind;
+    if (!["contacted", "replied", "meeting", "snooze", "not_now", "reopen"].includes(kind)) return json({ error: "Unknown outcome" }, 400);
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed. Unlock to record actions." });
+    const r = await applyOutcome(body.account_id, kind, { days: Number(body.days), note: typeof body.note === "string" ? body.note : undefined });
+    return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", ...r.update });
+  }
   if (body.action === "icp") return json(await playbook());
   if (body.action === "check") return json({ admin });
-  if (body.action === "reject" && typeof body.account_id === "string") return await reject(body.account_id, admin);
+  if (body.action === "reject" && typeof body.account_id === "string") {
+    // Kept for older pages: "reject" now means "not now".
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed. Unlock to record actions." });
+    const r = await applyOutcome(body.account_id, "not_now");
+    return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", status: "not_now" });
+  }
   return json({ error: "Unknown action" }, 400);
 });

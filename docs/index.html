@@ -90,6 +90,8 @@
   .menu-list button:hover:not(:disabled) { background: var(--bg); }
   .menu-list button:disabled { color: var(--muted); cursor: not-allowed; opacity: .7; }
   .pbox, .dbox { margin-top: 12px; }
+  .ghost.on { border-color: var(--accent); color: var(--accent); }
+  .menu-list { z-index: 20; }
   .pbox:empty, .dbox:empty { margin: 0; }
   .pv table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
   .pv td { padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: top; }
@@ -125,12 +127,18 @@
   </div>
 
   <nav role="tablist">
-    <button role="tab" aria-selected="true" data-tab="research">Research</button>
+    <button role="tab" aria-selected="true" data-tab="today">Today</button>
+    <button role="tab" aria-selected="false" data-tab="research">Research</button>
     <button role="tab" aria-selected="false" data-tab="queue">Queue</button>
     <button role="tab" aria-selected="false" data-tab="icp">ICP &amp; Signals</button>
   </nav>
 
-  <section id="research">
+  <section id="today">
+    <div id="tbanner"></div>
+    <div id="tlist" aria-live="polite"><p class="skeleton">Building today's list…</p></div>
+  </section>
+
+  <section id="research" hidden>
     <form id="form">
       <input id="domain" placeholder="linear.app" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Company domain">
       <button id="go" type="submit">Research</button>
@@ -254,7 +262,7 @@ function chip(s) {
 }
 
 function qCard(a) {
-  const d = a.draft, done = a.status !== "queued";
+  const d = a.draft;
   const newest = (a.signals || []).map((s) => Date.parse(s.first_seen)).filter(Boolean).sort((x, y) => y - x)[0];
   return `<div class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}"><div class="qrow">
     <div class="rank"><b style="color:${scoreColor(a.priority_score)}">${esc(a.priority_score)}</b><span>priority</span></div>
@@ -262,7 +270,8 @@ function qCard(a) {
       <div class="head"><div><p class="name">${esc(a.name)} ${tierTag(a.tier)}</p>
         <span class="domain">${esc(a.domain)} · ${esc(a.segment || "")}${a.icp_score != null ? ` · ICP fit ${esc(a.icp_score)}` : ""}</span><br>
         <span class="domain">Scanned ${esc(ago(a.last_scanned_at))}${newest ? ` · newest signal first seen ${esc(ago(new Date(newest).toISOString()))}` : ""}</span></div>
-        ${done ? `<span class="pill ok">${a.status === "pushed" ? "In HubSpot" : esc(a.status)}</span>` : ""}</div>
+        ${a.status === "pushed" ? `<span class="pill ok">In HubSpot</span>` : ""}</div>
+      ${lifeLine(a) ? `<p class="toast" style="margin:6px 0 0"><b>${esc(lifeLine(a))}</b></p>` : ""}
       <div class="whynow">${esc(a.why_now)}</div>
       <div class="chips">${(a.signals || []).map(chip).join("")}</div>
       ${d ? `<details><summary>Draft email to ${esc(d.persona)}</summary><div class="draft"><b>${esc(d.subject)}</b>\n\n${esc(d.body)}</div></details>` : ""}
@@ -271,43 +280,126 @@ function qCard(a) {
       <div class="actions qactions">
         <button data-act="people">Find relevant people</button>
         <button class="ghost" data-act="dossier">${a.has_dossier ? "View dossier" : "Generate dossier"}</button>
-        ${done ? "" : `<button class="ghost" data-act="reject">Reject</button>`}
+        ${lifeButtons(a)}
         <span class="toast"></span></div>
     </div></div></div>`;
 }
 
+let qview = "todo";
+const VIEW_LABELS = { todo: "To contact", progress: "In progress", parked: "Snoozed & closed" };
+
 async function loadQueue() {
   $("qbanner").innerHTML = ""; $("qlist").innerHTML = `<p class="skeleton">Loading…</p>`;
   try {
-    const d = await api("queue", { action: "list" });
-    $("qbanner").innerHTML = banner(d.scan) + `<p class="toast" style="margin:0 0 12px">${d.accounts.length} accounts ranked by buying signals · ${d.scanned} companies scanned</p>`;
-    $("qlist").innerHTML = d.accounts.map(qCard).join("") || "<p>Nothing queued yet.</p>";
+    const d = await api("queue", { action: "list", view: qview });
+    const views = `<div class="actions" style="margin:0 0 12px">${Object.entries(VIEW_LABELS).map(([k, l]) =>
+      `<button class="ghost ${k === qview ? "on" : ""}" data-view="${k}">${l}</button>`).join("")}</div>`;
+    $("qbanner").innerHTML = banner(d.scan) + views + `<p class="toast" style="margin:0 0 12px">${d.accounts.length} accounts here · ${d.scanned} companies scanned</p>`;
+    $("qlist").innerHTML = d.accounts.map(qCard).join("") || `<p>Nothing in this list.</p>`;
   } catch (e) { $("qlist").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
 }
+$("qbanner").addEventListener("click", (e) => { const b = e.target.closest("[data-view]"); if (b) { qview = b.dataset.view; loadQueue(); } });
 
-$("qlist").addEventListener("click", async (e) => {
-  const btn = e.target.closest("button[data-act]"); if (!btn) return;
+// ---------- lifecycle: what happened with each account ----------
+function lifeLine(a) {
+  const s = a.outreach_status;
+  if (s === "contacted") return `Contacted ${ago(a.contacted_at)} · touch ${a.touches}${a.next_followup_at ? ` · next follow-up ${day(a.next_followup_at)}` : " · no more follow-ups planned"}`;
+  if (s === "replied") return "They replied. Take it from here";
+  if (s === "meeting") return "Meeting booked";
+  if (s === "snoozed") return `Snoozed until ${day(a.snoozed_until)}`;
+  if (s === "not_now") return "Marked not now";
+  return "";
+}
+function lifeButtons(a) {
+  const s = a.outreach_status || a.outreach;
+  if (s === "snoozed" || s === "not_now") return `<button data-life="reopen">Reopen</button>`;
+  const main = s === "open" || s === "contacted" ? `<button data-life="contacted">${s === "open" ? "Mark contacted" : "Contacted again"}</button>` : "";
+  return main + `<div class="menu"><button class="ghost" data-tog>More ▾</button><div class="menu-list" hidden>
+    <button data-life="replied">They replied</button>
+    <button data-life="meeting">Meeting booked</button>
+    <button data-life="snooze" data-days="7">Snooze 1 week</button>
+    <button data-life="snooze" data-days="14">Snooze 2 weeks</button>
+    <button data-life="snooze" data-days="30">Snooze 1 month</button>
+    <button data-life="not_now">Not now</button></div></div>`;
+}
+async function doLife(btn, reload) {
   const card = btn.closest(".card"), toast = card.querySelector(".qactions .toast");
-  const act = btn.dataset.act;
-  if (act === "people") { btn.hidden = true; mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain); return; }
-  btn.disabled = true;
+  btn.disabled = true; toast.textContent = "Saving…";
   try {
-    if (act === "dossier") {
-      toast.textContent = "Loading dossier…";
-      const d = await api("research-account", { domain: card.dataset.domain });
-      const x = d.dossier;
-      card.querySelector(".dbox").innerHTML = `<div class="card" style="margin:0"><h2>Dossier${d.cached ? "" : " (just generated)"}</h2>
-        <p style="margin-top:0">${esc(x.summary)}</p><p><b>ICP fit ${esc(x.icp_fit?.score ?? "–")}</b></p>${list(x.icp_fit?.reasons)}
-        <h2 style="margin-top:12px">Likely pains</h2>${list(x.pains)}</div>`;
-      toast.textContent = ""; btn.textContent = "Refresh view"; btn.disabled = false;
-    } else {
-      toast.textContent = "Working…";
-      const r = await api("queue", { action: act, account_id: card.dataset.id });
-      if (r.mode === "dry_run") { toast.textContent = r.message; btn.disabled = false; return; }
-      loadQueue();
-    }
+    const r = await api("queue", { action: "outcome", account_id: card.dataset.id, kind: btn.dataset.life, days: btn.dataset.days ? Number(btn.dataset.days) : undefined });
+    if (r.mode === "dry_run") { toast.textContent = r.message; btn.disabled = false; return; }
+    reload();
   } catch (err) { toast.textContent = err.message; btn.disabled = false; }
-});
+}
+function menuToggle(e) {
+  const t = e.target.closest("[data-tog]");
+  if (!t || t.closest(".pbox")) return false; // the people panel has its own menus
+  t.nextElementSibling.hidden = !t.nextElementSibling.hidden; return true;
+}
+document.addEventListener("click", (e) => { if (!e.target.closest(".menu")) document.querySelectorAll(".menu-list").forEach((m) => (m.hidden = true)); });
+
+// One click handler for any list of account cards (Queue and Today).
+function wireCards(root, reload) {
+  root.addEventListener("click", async (e) => {
+    if (menuToggle(e)) return;
+    const lb = e.target.closest("button[data-life]"); if (lb) { doLife(lb, reload); return; }
+    const btn = e.target.closest("button[data-act]"); if (!btn) return;
+    const card = btn.closest(".card"), toast = card.querySelector(".qactions .toast");
+    const act = btn.dataset.act;
+    if (act === "people") { btn.hidden = true; mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain); return; }
+    if (act === "dossier") {
+      btn.disabled = true;
+      try {
+        toast.textContent = "Loading dossier…";
+        const d = await api("research-account", { domain: card.dataset.domain });
+        const x = d.dossier;
+        card.querySelector(".dbox").innerHTML = `<div class="card" style="margin:0"><h2>Dossier${d.cached ? "" : " (just generated)"}</h2>
+          <p style="margin-top:0">${esc(x.summary)}</p><p><b>ICP fit ${esc(x.icp_fit?.score ?? "–")}</b></p>${list(x.icp_fit?.reasons)}
+          <h2 style="margin-top:12px">Likely pains</h2>${list(x.pains)}</div>`;
+        toast.textContent = ""; btn.textContent = "Refresh view"; btn.disabled = false;
+      } catch (err) { toast.textContent = err.message; btn.disabled = false; }
+    }
+  });
+}
+wireCards($("qlist"), loadQueue);
+wireCards($("tlist"), () => loadToday());
+
+// ---------- Today ----------
+const TODAY_CLS = { meeting: "accent", follow_up: "warn", hot: "good", new: "", revive: "" };
+
+function tCard(i) {
+  const a = i.account;
+  const right = i.meeting
+    ? `<div class="score"><b style="font-size:18px">${esc(new Date(i.meeting.starts_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }))}</b><span>${esc(day(i.meeting.starts_at))}</span></div>`
+    : a?.priority != null ? `<div class="score"><b style="color:${scoreColor(a.priority)}">${esc(a.priority)}</b><span>priority</span></div>` : "";
+  const head = `<div class="head"><div><span class="tag ${TODAY_CLS[i.type] || ""}">${esc(i.label)}</span>
+    <p class="name" style="font-size:18px;margin-top:6px">${a && i.type !== "meeting" ? esc(a.name) + " " + tierTag(a.tier) : esc(i.headline)}</p>
+    ${a && i.type !== "meeting" ? `<span class="domain">${esc(i.headline)}</span>` : ""}</div>${right}</div>`;
+  if (i.type === "meeting") return `<div class="card">${head}<div class="whynow">${esc(i.reason)}</div></div>`;
+
+  const contact = i.contact
+    ? `<p class="domain" style="margin:8px 0 0">Suggested contact: <b>${esc(i.contact.name)}</b>, ${esc(i.contact.title)}</p>`
+    : `<p class="domain" style="margin:8px 0 0">No contact yet. Use "Find relevant people".</p>`;
+  return `<div class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">${head}
+    <div class="whynow">${esc(i.why || i.reason)}</div>
+    <div class="chips">${(i.signals || []).map(chip).join("")}</div>
+    ${contact}${i.last_action ? `<p class="domain" style="margin:4px 0 0">Last action: ${esc(i.last_action)}</p>` : ""}
+    <div class="pbox"></div>
+    <div class="actions qactions"><button data-act="people">Find relevant people</button>${lifeButtons({ outreach_status: a.outreach })}<span class="toast"></span></div></div>`;
+}
+
+async function loadToday() {
+  $("tbanner").innerHTML = ""; $("tlist").innerHTML = `<p class="skeleton">Building today's list…</p>`;
+  try {
+    const d = await api("queue", { action: "today" });
+    const names = { meeting: "meeting", follow_up: "follow-up", hot: "hot", new: "new", revive: "revisit" };
+    const mix = Object.entries(d.counts).map(([k, n]) => `${n} ${names[k]}`).join(", ");
+    $("tbanner").innerHTML = `<div class="banner"><span><b>${esc(new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }))}</b></span>
+      <span>${d.items.length} to focus on${mix ? ` (${esc(mix)})` : ""}${d.hidden ? ` · ${d.hidden} more not shown` : ""}</span></div>`;
+    $("tlist").innerHTML = d.items.map(tCard).join("") ||
+      `<div class="card"><p style="margin:0">Nothing urgent today. New signals and follow-ups appear here when they are due.</p></div>`;
+  } catch (e) { $("tlist").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
 
 // ---------- ICP & signals playbook ----------
 async function loadIcp() {
@@ -337,6 +429,13 @@ async function loadIcp() {
         <ul style="margin-top:12px"><li><b>Priority</b>: the total of the signals above (0–100). Accounts at ${esc(p.queue_threshold)}+ enter the Queue.</li>
           <li><b>ICP fit</b>: how well the company matches the profile, from its dossier.</li>
           <li><b>Persona score</b>: how closely a person's job title matches a target buyer.</li></ul></div>
+      <div class="card"><h2>Follow-up rhythm and the Today list</h2>
+        <p style="margin-top:0">${esc(p.follow_up.note)} Outreach is always manual: the system only tells you who to contact and why.</p>
+        <ul><li><b>Hot now</b>: a new signal in the last ${esc(p.today.hot_hours)} hours</li>
+          <li><b>Follow-up due</b>: an account you contacted, on its day 3, 7 or 14</li>
+          <li><b>Meeting</b>: booked for the next day and a half, with a private brief emailed to you</li>
+          <li><b>Snooze ended</b> or <b>worth another look</b>: parked accounts that are ready again</li></ul>
+        <p class="toast" style="margin-bottom:0">The list is capped at ${esc(p.today.cap)} items so the focus stays on quality.</p></div>
       <div class="card"><h2>Right now</h2>
         <div class="grid"><div><b>${esc(p.stats.companies)}</b>companies tracked</div><div><b>${esc(p.stats.queued)}</b>in the Queue</div>
           <div><b style="color:var(--good)">${esc(p.stats.tier_1)}</b>Tier 1</div><div><b style="color:var(--warn)">${esc(p.stats.tier_2)}</b>Tier 2</div></div>
@@ -346,7 +445,8 @@ async function loadIcp() {
 
 document.querySelectorAll("nav [data-tab]").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll("nav [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  for (const t of ["research", "queue", "icp"]) $(t).hidden = b.dataset.tab !== t;
+  for (const t of ["today", "research", "queue", "icp"]) $(t).hidden = b.dataset.tab !== t;
+  if (b.dataset.tab === "today") loadToday();
   if (b.dataset.tab === "queue") loadQueue();
   if (b.dataset.tab === "icp") loadIcp();
 }));
@@ -440,6 +540,7 @@ function mountPeople(box, accountName, domain) {
 }
 
 refreshMode();
+loadToday();
 </script>
 </body>
 </html>

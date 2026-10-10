@@ -47,7 +47,8 @@ backups/                   Local HubSpot backup (gitignored)
 4. **Enrich**: reveals the stored email. Phone is not available on free providers (the button is disabled).
 5. **Push to HubSpot** (owner only): creates or updates the company and the enriched contacts, links them, and attaches a note built from the stored dossier JSON (no AI). Fills the existing `gtm_*` fields (fit, priority, signal, intent, why now, why fit, last scored; contact persona and persona score) plus the native ICP tier. Re-push updates scores only, never lifecycle stage or owner.
 6. **Meeting Brief**: `meeting-brief` polls Google Calendar (cursor in `cp_state`); for a new future event with an outside attendee it reuses the cached dossier (researches a new company once), checks HubSpot (read-only), builds a plain template brief (no AI beyond the dossier) and emails it to the owner. Briefs are **never written into the calendar event** because guests can read the description. Personal-email attendees get a short note. Failed briefs retry up to 3 times.
-7. **Public vs owner**: public visitors see "First L." names, masked emails, and dry runs. The owner key (`ADMIN_KEY` in `.env`, sent as the `x-admin-key` header, entered via "unlock" on the page) reveals emails and writes to HubSpot.
+7. **Lifecycle and Today**: accounts have `outreach_status` (open, contacted, replied, meeting, snoozed, not_now), `touches`, `contacted_at` (first contact), `next_followup_at` (day 3/7/14 after first contact, then stop) and `snoozed_until`. Actions go through `queue` -> `outcome` (`_shared/lifecycle.ts`) and are logged in `cp_outcomes`. `queue` -> `today` (`_shared/today.ts`) builds the capped Today list by rules; the one AI line ("Why today") is cached in `cp_why_today` per signal set and only generated in owner mode. The Today tab is the landing tab.
+8. **Public vs owner**: public visitors see "First L." names, masked emails, and dry runs. The owner key (`ADMIN_KEY` in `.env`, sent as the `x-admin-key` header, entered via "unlock" on the page) reveals emails and writes to HubSpot.
 
 ## Commands
 ```bash
@@ -71,16 +72,16 @@ The `signal-scan` cron runs **weekly: Mondays 06:00-06:55 UTC** (every 5 minutes
 - Hunter credits: about 48 of 50 left this month (resets monthly).
 
 ## Next steps (agreed order)
-Philosophy: outreach stays manual and human; the system finds the right prospect at the right time (speed to lead). The prospect-facing draft email stays AI-written and is only a suggestion. Internal items use templates plus one AI line, "Why contact today" (cached per account, only regenerated when signals change).
-1. **Account lifecycle**: statuses (contacted, replied, meeting, snoozed, not now), next follow-up date, one-click buttons on cards, and outcome logging.
-2. **Today engine and "Today" tab**: capped daily list (5-8): new and hot, follow-ups due (day 3/7/14, max 3 touches), meetings today, worth reviving. Rules only, no AI except the "Why today" line.
-3. **Daily light check and "Hot now"**: cheap daily look at Tier 1/2 accounts; signals first seen in the last 48h become Hot.
-4. **HubSpot tasks and morning email digest** (to the owner only, via the Google sign-in). Check the HubSpot key can create tasks first. Formats are agreed: morning email, task title/body, instant hot alert (see conversation history if needed: sections NEW AND HOT, FOLLOW-UPS DUE, MEETINGS).
-5. **Inbound speed to lead** (form submit enriched and routed in about a minute), **outcome feedback page**, **Revival** (closed-lost deals plus fresh signals).
+Philosophy: outreach stays manual and human; the system finds the right prospect at the right time (speed to lead). The prospect-facing draft email stays AI-written and is only a suggestion. Internal items use templates plus the one cached AI line.
+1. DONE: account lifecycle and the Today list and tab.
+2. **Daily light check and "Hot now"**: cheap daily look at Tier 1/2 accounts (signals only; AI only when something new appears), so Hot is real-time-ish instead of weekly.
+3. **HubSpot tasks and morning email digest** (to the owner only, via the Google sign-in). Check the HubSpot key can create tasks first. Agreed formats: morning email (sections NEW AND HOT, FOLLOW-UPS DUE, MEETINGS, with "Why today"), HubSpot task (title "Contact X at Y: reason", due today, body with why-today, signals, angles), instant hot alert email. Also sync outcomes (contacted, replied) to HubSpot.
+4. **Inbound speed to lead** (form submit enriched and routed in about a minute), **outcome feedback page** (which signals convert, from `cp_outcomes`), **Revival** (closed-lost deals plus fresh signals).
 Also optional: team-page fallback for people search, Apollo adapter when the plan allows.
 
 ## Known gaps
 - Each push adds a new dossier note to the company (history builds up).
+- Namesake companies (Orb, Linear, Default) can still leak wrong news despite the relevance check; it was tightened once, watch for more.
 - Brief questions come from dossier talk tracks; the prompt forbids "you mentioned"-style claims, but old cached dossiers may still contain them (refresh the dossier to regenerate).
 - Companies with very generic names can still pull in some unrelated news despite the relevance check.
 - Phone numbers are not available (needs a paid provider).

@@ -29,6 +29,7 @@ Headlines:
 ${headlines.map((h, i) => `${i}: ${h.title}`).join("\n") || "(none)"}
 ${jobSample?.length ? `\nSample job titles from a job board that may belong to a different company with the same name:\n${jobSample.join("; ")}` : ""}
 
+Keep a headline ONLY if it clearly refers to this company's own product, funding, hiring or customers in its field. If the name could belong to a different organisation (a clinic, charity, agency, band, place, or a company in another industry), DROP it. When in doubt, drop.
 Return JSON: {"keep": [indices of headlines clearly about THIS company, not a namesake], "jobs_ok": ${jobSample?.length ? "true unless the job titles clearly belong to a different kind of business (for example mortgage, retail or food); software, GTM and engineering roles are consistent with a software company" : "true"}}`,
     });
     const r = parseJson<{ keep?: number[]; jobs_ok?: boolean }>(raw);

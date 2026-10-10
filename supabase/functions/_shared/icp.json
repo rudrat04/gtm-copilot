@@ -116,5 +116,19 @@
     "label": "Every Monday at 06:00 UTC",
     "cron": "*/5 6 * * 1",
     "staleDays": 6
+  },
+  "followUp": {
+    "days": [
+      3,
+      7,
+      14
+    ],
+    "note": "Follow-ups fall on day 3, 7 and 14 after the first contact, then stop."
+  },
+  "today": {
+    "cap": 8,
+    "hotHours": 48,
+    "newDays": 7,
+    "meetingHours": 36
   }
 }

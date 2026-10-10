@@ -64,3 +64,9 @@ On a dossier (or a Queue card), **Find relevant people** searches a contact data
 ## Weekly scan and signal freshness
 
 The scan runs every Monday 06:00-06:55 UTC (12 runs of 6 companies). Accounts count as stale after 6 days. Each Queue card shows when the company was last scanned and how old each signal is (published date for news, first-seen date otherwise), with a NEW badge for anything first seen in the last 7 days. Older evidence counts for less: news after 30 days counts half, after 60 days nothing.
+
+## Today list and outreach lifecycle
+
+The **Today** tab is the daily landing page: a capped list (8) of who to focus on, built by rules from the data. Types: meeting (next 36 hours, brief already emailed), follow-up due (day 3, 7, 14 after first contact), hot now (new signal in the last 48 hours), new this week, and snooze ended or worth another look. The only AI is one cached "Why today" sentence per account and signal set (written when the owner opens the page, free for everyone after that). Outreach itself is always manual.
+
+Each account carries a status: open, contacted (touch count and next follow-up), replied, meeting, snoozed, or not now. Every action is stored in `cp_outcomes` with a snapshot of the scores and signals, which is the data for a future "which signals convert" page. Buttons are on Queue and Today cards and work in owner mode only.
