@@ -5,7 +5,7 @@ import { applyOutcome, type OutcomeKind } from "../_shared/lifecycle.ts";
 import { buildToday, reasonLine } from "../_shared/today.ts";
 import { draftNoteHtml, noteToHubSpot } from "../_shared/hsnotes.ts";
 import { writeDraft } from "../_shared/draft.ts";
-import { fetchFirmo, firmoLine, fitBreakdown, fitPoints, saveFirmo } from "../_shared/firmo.ts";
+import { fetchFirmo, firmoLine, fitBreakdown, fitPoints, fitReasons, saveFirmo } from "../_shared/firmo.ts";
 import { fitState, heatOf, priorityScore } from "../_shared/score.ts";
 import { contactsFor } from "../_shared/contacts.ts";
 import { fetchSite } from "../_shared/signals.ts";
@@ -61,7 +61,7 @@ async function scanInfo() {
 
 async function list(view = "todo", admin = false) {
   const { data: accounts } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at")
+    .select("id,name,domain,segment,source,created_at,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as")
     .in("status", ["queued", "pushed"])
     .in("outreach_status", VIEWS[view] ?? VIEWS.todo)
     .order("priority_score", { ascending: false })
@@ -110,7 +110,7 @@ async function list(view = "todo", admin = false) {
  */
 async function accountsView(admin: boolean) {
   const { data: all } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at")
+    .select("id,name,domain,segment,source,created_at,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as")
     .order("priority_score", { ascending: false, nullsFirst: false }).limit(400);
   const rows = (all ?? []).map((a) => {
     const f = fitBreakdown(a);
@@ -142,7 +142,7 @@ async function accountsView(admin: boolean) {
       return {
         id: a.id, name: a.name, domain: a.domain, segment: a.segment, source: a.source, created_at: a.created_at,
         tier: tierOf(a.priority_score), priority: a.priority_score, icp_score: a.icp_score, why_now: a.why_now,
-        firmo: firmoLine(a), outside_icp: outside, fit: fitState(a),
+        firmo: firmoLine(a), outside_icp: outside, fit: fitState(a), fit_reasons: fitReasons(a), excluded: fitBreakdown(a).excluded,
         heat: heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)),
         firmo_known: !!a.firmo_at, low, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
@@ -199,7 +199,7 @@ async function setupView(admin = false) {
     sb.from("cp_discovered").select("status,found_at").order("found_at", { ascending: false }).limit(60),
     sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("firmo_at", null),
     sb.from("cp_ai_spend_today").select("usd").single(),
-    sb.from("cp_accounts").select("employees,stage,country,firmo_at,source,lost_at,outreach_status").limit(1000),
+    sb.from("cp_accounts").select("employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,domain,name,source,lost_at,outreach_status").limit(1000),
   ]);
   const fitCounts = { matches: 0, close: 0, unknown: 0, outside: 0 };
   for (const r of fitRows ?? []) fitCounts[fitState(r)]++;
@@ -293,7 +293,7 @@ async function enrichCompanies(rescoreAll = false, only?: string[]) {
   const ids = rescoreAll ? ((await sb.from("cp_accounts").select("id")).data ?? []).map((a) => a.id) : accounts.map((a) => a.id);
   if (ids.length) {
     const [{ data: rows }, { data: sigs }] = await Promise.all([
-      sb.from("cp_accounts").select("id,status,employees,stage,country,firmo_at").in("id", ids),
+      sb.from("cp_accounts").select("id,status,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,domain,name").in("id", ids),
       sb.from("cp_signals").select("account_id,kind,title,detail,detected_at").in("account_id", ids),
     ]);
     for (const r of rows ?? []) {

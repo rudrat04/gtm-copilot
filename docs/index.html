@@ -90,6 +90,8 @@
   .when.fresh { color: var(--good); font-weight: 600; } .when.mid { color: var(--warn); } .when.old { color: var(--bad); }
   .status-line.due { color: var(--ink); font-weight: 600; }
   .attn .flag { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); } .attn .flag:first-of-type { border-top: 0; } .attn b.bad { color: var(--bad); }
+  .fitwhy { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; font-size: 12.5px; color: var(--muted); } .fitwhy .fw b { font-weight: 700; } .fitwhy .good b { color: var(--good); } .fitwhy .warn b { color: var(--warn); } .fitwhy .bad b { color: var(--bad); }
+  .weights { display: flex; flex-wrap: wrap; gap: 10px 16px; } .weights label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); } .weights input { width: 84px; padding: 8px 10px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; }
   .needs { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border: 1px dashed var(--line); border-radius: 14px; color: var(--soft); font-size: 14px; }
   .sigs-more { margin-top: 4px; }
   .field { margin: 0 0 16px; } .field > label, .field > .lbl { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
@@ -456,6 +458,14 @@ function contactLine(a) {
   return `<div class="contact"><b>${esc(c.name)}</b> · ${esc(c.title)} · ${mail}${c.pushed ? ` <span class="ptag">In HubSpot</span>` : ""}${a.contacts.length > 1 ? ` <span class="meta">+${a.contacts.length - 1} more</span>` : ""}</div>`;
 }
 
+const MARK = { ok: ["✓", "good"], partly: ["~", "warn"], no: ["✗", "bad"], unknown: ["?", "muted"] };
+/** One line saying why a company fits or not: a mark per criterion. Hover or tap a mark for the detail. */
+function fitWhy(a) {
+  const r = a.fit_reasons || [];
+  if (!r.length) return "";
+  return `<div class="fitwhy" aria-label="Why this fit">${r.map((x) => `<span class="fw ${MARK[x.state][1]}" title="${esc(x.label)}: ${esc(x.text)}"><b>${MARK[x.state][0]}</b> ${esc(x.label)}${x.state === "no" && x.key === "excluded" ? `: ${esc(x.text)}` : ""}</span>`).join("")}</div>`;
+}
+
 function aCard(a) {
   const ll = ["contacted", "replied", "meeting"].includes(a.outreach_status) ? lifeLine(a) : "";
   const reason = a.is_new && a.found_reason ? `<b>Found automatically</b> from a Hacker News hiring post.` : esc(a.why_now || "");
@@ -463,7 +473,7 @@ function aCard(a) {
     <div class="card-head"><div>
       <div class="eyebrow"><span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}${a.outside_icp ? `<span class="badge warn">Outside target size</span>` : ""}<span>${esc(stageText(a))}</span></div>
       <h3 class="title">${esc(a.name)}</h3>
-      <div class="meta">${esc(a.segment || a.domain)}</div>${fitLine(a.fit, a.firmo)}
+      <div class="meta">${esc(a.segment || a.domain)}</div>${fitLine(a.fit, a.firmo)}${fitWhy(a)}
     </div></div>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
     ${a.lost_at ? `<div class="status-line">Closed-lost in HubSpot ${esc(ago(a.lost_at))}${a.lost_reason ? `: ${esc(a.lost_reason)}` : ""}</div>` : ""}
@@ -989,6 +999,16 @@ function drawSetup() {
       </div>
       <hr class="hr">
       ${tagField("hiringRoles", "Job titles that count as a hiring signal", "A company hiring for any of these is treated as scaling its sales team.")}
+    </article>
+    <article class="card"><p class="label">What makes a good company</p>
+      <p class="help" style="margin:0 0 12px">Size, stage and region are set above. Here you decide how much each thing counts toward a company's fit (0 means ignore it, 10 means it matters most), plus the tools, sales style and exclusions that make a company a better or worse fit. Data comes from the company lookup (industry, tools) and the company's website (sales style).</p>
+      <div class="field"><span class="lbl">How much each counts</span><div class="weights">${[["size", "Size"], ["stage", "Funding stage"], ["region", "Region"], ["industry", "Industry"], ["tools", "Tools they use"], ["motion", "Sales style"]].map(([k, l]) => `<label>${l}<input type="number" min="0" max="10" data-num="fitWeights.${k}" value="${esc(P.fitWeights[k])}" aria-label="${l} weight"></label>`).join("")}</div></div>
+      ${tagField("toolsGood", "Tools that are a good sign", "For example: hubspot, salesforce. A company using one scores higher on Tools. Used only if Tools counts above 0.")}
+      ${tagField("toolsAvoid", "Tools that are a poor sign", "For example a competitor's product. A company using one scores zero on Tools.")}
+      <div class="field"><label for="motion">Sales style you want</label><select id="motion" data-sel="motion">${[["any", "No preference"], ["sales_led", "Sales-led (demo and contact-sales pages)"], ["self_serve", "Self-serve (start free, sign up)"]].map(([v, t]) => `<option value="${v}"${P.motion === v ? " selected" : ""}>${t}</option>`).join("")}</select></div>
+      <hr class="hr">
+      ${tagField("excludeWords", "Never show companies whose industry, tags, description or name contain", "For example: agency, consultancy, staffing. They move to Low fit and show why.")}
+      ${tagField("excludeDomains", "Never show these companies", "Competitors or partners, as domains, for example competitor.com.")}
     </article>
     <article class="card"><p class="label">Which companies to show</p>
       <div class="field"><label for="minfit">Lowest fit to show</label>

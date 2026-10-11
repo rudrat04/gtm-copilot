@@ -20,7 +20,12 @@
       "US",
       "UK",
       "EU"
-    ]
+    ],
+    "toolsGood": [],
+    "toolsAvoid": [],
+    "motion": "any",
+    "excludeWords": [],
+    "excludeDomains": []
   },
   "personas": [
     {
@@ -222,5 +227,13 @@
   },
   "predictleads": {
     "auto": true
+  },
+  "fitWeights": {
+    "size": 10,
+    "stage": 10,
+    "region": 5,
+    "industry": 0,
+    "tools": 0,
+    "motion": 0
   }
 }

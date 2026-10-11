@@ -1,6 +1,6 @@
 import icp from "./icp.json" with { type: "json" };
 import type { Signal } from "./signals.ts";
-import { fitBreakdown } from "./firmo.ts";
+import { fitBreakdown, type FitRow } from "./firmo.ts";
 
 const FUNDING = /\b(raises?|raised|funding|series [a-d]|seed round|valuation|acquir|acquisition)\b/i;
 const REVOPS = /revops|revenue operations|sales operations|sales ops/i;
@@ -91,11 +91,11 @@ export function tierOf(priority: number | null | undefined): "tier_1" | "tier_2"
 export type FitState = "matches" | "close" | "unknown" | "outside";
 export type Heat = "hot" | "warm" | "watching";
 
-type FitRow = { employees?: number | null; stage?: string | null; country?: string | null; firmo_at?: string | null };
 
 /** Is this the right kind of company? Needs the company facts; "unknown" until they are looked up. */
 export function fitState(a: FitRow): FitState {
   const f = fitBreakdown(a);
+  if (f.excluded) return "outside"; // a competitor, an agency, an existing customer: never a prospect, whatever its size
   if (!f.known) return "unknown";
   if (f.size === 0 || f.stage === 0) return "outside";
   return f.matches ? "matches" : "close";

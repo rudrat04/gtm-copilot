@@ -8,7 +8,7 @@ Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test");
 
 const { normalizeDomain } = await import("../_shared/db.ts");
 const { redact } = await import("../_shared/log.ts");
-const { extraFacts, fitBreakdown } = await import("../_shared/firmo.ts");
+const { exclusion, extraFacts, fitBreakdown, fitReasons, industryScore, industryWords, motionScore, toolsScore } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, isFundingSignal, priorityScore, tierOf } = await import("../_shared/score.ts");
 const { buildHiring, isListing, rolesFromSnippet } = await import("../_shared/signals.ts");
 const { USEFUL_NEWS } = await import("../_shared/relevance.ts");
@@ -514,4 +514,60 @@ Deno.test("hunter facts: industry, tools, tags and description are read from the
   assertEquals([empty.industry, empty.tags, empty.tech, empty.blurb, empty.linkedin], [null, [], [], null, null]);
   assertEquals(extraFacts({ tech: "not a list", description: 5 }).tech, []);
   assertEquals(extraFacts({ description: "x".repeat(500) }).blurb!.length, 300);
+});
+
+Deno.test("fit model: the default weights give exactly the old size + stage + region points", () => {
+  apply(clean({}));
+  const a = { employees: 100, stage: "Series A", country: "US", firmo_at: "2026-01-01" };
+  assertEquals(fitBreakdown(a).points, 25); // a perfect match
+  assertEquals(fitBreakdown({ ...a, employees: 22 * 100 }).points, 15); // size 0, stage 10, region 5
+  assertEquals(fitBreakdown({ ...a, stage: "Series D" }).points, 15);
+  assertEquals(fitBreakdown({ firmo_at: null }).points, 15); // nothing looked up: the neutral baseline
+  // Industry, tools and motion carry no weight until the owner gives them one.
+  assertEquals(fitBreakdown({ ...a, tech: ["salesforce"], industry: "Retail" }).points, 25);
+});
+
+Deno.test("fit model: industry, tools and sales style score 0 to 1 and the weights decide", () => {
+  const profile = clean({ fitWeights: { size: 10, stage: 10, region: 5, industry: 5, tools: 5, motion: 5 }, toolsGood: ["HubSpot"], toolsAvoid: ["Clay"], motion: "sales_led", industries: ["B2B SaaS"], excludeWords: ["agency"], excludeDomains: ["rival.com"] });
+  assertEquals(profile.fitWeights.industry, 5);
+  assertEquals(profile.excludeDomains, ["rival.com"]);
+  apply(profile);
+  try {
+    assertEquals(industryScore({ industry: "Information Technology / Software" }), 1);
+    assertEquals(industryScore({ industry: "Retail / Apparel", tags: ["fashion"] }), 0);
+    assertEquals(industryScore({}), 0.5); // no data yet: neutral
+    assertEquals(toolsScore({ tech: ["HubSpot", "stripe"] }), 1);
+    assertEquals(toolsScore({ tech: ["hub spot", "clay"] }), 0); // an avoided tool wins
+    assertEquals(toolsScore({ tech: ["stripe"] }), 0.5);
+    assertEquals(toolsScore({}), 0.5);
+    assertEquals(motionScore({ sales_motion: "sales_led" }), 1);
+    assertEquals(motionScore({ sales_motion: "both" }), 0.75);
+    assertEquals(motionScore({ sales_motion: "self_serve" }), 0);
+    assertEquals(motionScore({}), 0.5);
+    const base = { employees: 100, stage: "Series A", country: "US", firmo_at: "2026-01-01" };
+    const good = fitBreakdown({ ...base, industry: "Software", tech: ["hubspot"], sales_motion: "sales_led" }).points;
+    const bad = fitBreakdown({ ...base, industry: "Retail", tech: ["clay"], sales_motion: "self_serve" }).points;
+    assert(good > 24.9 && bad < 16 && good - bad > 9); // right on every criterion vs wrong on the three new ones (25 x 25/40 = 15.6)
+    // Exclusions: a word, a domain and a customer are never prospects, and fitState says so.
+    assertEquals(exclusion({ blurb: "A digital marketing agency", name: "Pixel" }), 'Matches "agency"');
+    assertEquals(exclusion({ domain: "RIVAL.com" }), "On your never-show list");
+    assertEquals(exclusion({ known_as: "customer" }), "Already a customer");
+    assertEquals(exclusion({ blurb: "Software for agencies' clients" }), null); // "agencies" is not the word "agency"... a word must start the match
+    assertEquals(fitState({ ...base, domain: "rival.com" }), "outside");
+    assertEquals(fitState({ firmo_at: null, domain: "rival.com" }), "outside"); // even before its size is known
+    const r = fitReasons({ ...base, industry: "Software", tech: ["hubspot"], sales_motion: "self_serve" });
+    assertEquals(r.map((x) => `${x.key}:${x.state}`), ["size:ok", "stage:ok", "region:ok", "industry:ok", "tools:ok", "motion:no"]);
+  } finally {
+    apply(clean({}));
+  }
+  assertEquals(fitReasons({ employees: 100, stage: "Series A", country: "US", firmo_at: "2026-01-01" }).map((x) => x.key), ["size", "stage", "region"]); // only what counts
+});
+
+Deno.test("fit model: settings from the page are cleaned", () => {
+  assertEquals(industryWords("B2B SaaS").includes("software"), true);
+  assertEquals(clean({ fitWeights: { size: 0, stage: 0, region: 0, industry: 0, tools: 0, motion: 0 } }).fitWeights.size, 10); // at least one criterion has to count
+  assertEquals(clean({ fitWeights: { size: 99, industry: -4 } }).fitWeights.size, 10);
+  assertEquals(clean({ fitWeights: { industry: -4 } }).fitWeights.industry, 0);
+  assertEquals(clean({ motion: "weird" }).motion, "any");
+  assertEquals(clean({ excludeDomains: ["https://www.Rival.com/pricing", ""] }).excludeDomains, ["rival.com"]);
 });

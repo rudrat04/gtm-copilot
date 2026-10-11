@@ -61,7 +61,7 @@ export async function contactsFor(accountIds: string[], admin: boolean, limit = 
 export async function autoFindContacts(a: { id: string; domain: string; priority_score: number | null }): Promise<boolean> {
   if (tierOf(a.priority_score) === "tier_3") return false;
   // Do not spend a search credit on a company that clearly misses the target size or stage.
-  const { data: firm } = await sb.from("cp_accounts").select("employees,stage,country,firmo_at").eq("id", a.id).maybeSingle();
+  const { data: firm } = await sb.from("cp_accounts").select("employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,domain,name").eq("id", a.id).maybeSingle();
   if (firm) {
     if (!meetsFit(fitState(firm))) {
       await log("info", "auto_contact_skipped", { account: a.domain, message: "Below the fit bar set in Setup" });

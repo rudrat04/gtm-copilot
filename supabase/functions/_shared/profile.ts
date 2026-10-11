@@ -34,6 +34,12 @@ export type Profile = {
   minFit: MinFit;                           // the fit bar: companies below it are hidden everywhere
   minScore: number;                         // the score needed to count as ready
   watch: Watch;                             // pipeline watch: which checks run and their limits
+  fitWeights: Record<"size" | "stage" | "region" | "industry" | "tools" | "motion", number>; // how much each fit criterion counts (0-10)
+  toolsGood: string[];                      // tools a good-fit company uses
+  toolsAvoid: string[];                     // tools that make a company a poor fit
+  motion: "any" | "sales_led" | "self_serve";
+  excludeWords: string[];                   // never show a company whose industry, tags, description or name has one of these
+  excludeDomains: string[];                 // never show these companies (competitors, partners)
   plAuto: boolean;                          // let the daily watch spend a few PredictLeads calls on the best accounts
 };
 
@@ -52,6 +58,12 @@ const DEFAULT: Profile = {
   minFit: icp.fit.minFit as MinFit,
   minScore: icp.fit.minScore,
   watch: JSON.parse(JSON.stringify(icp.watch)),
+  fitWeights: { ...icp.fitWeights },
+  toolsGood: [...(icp.company.toolsGood as string[])],
+  toolsAvoid: [...(icp.company.toolsAvoid as string[])],
+  motion: icp.company.motion as Profile["motion"],
+  excludeWords: [...(icp.company.excludeWords as string[])],
+  excludeDomains: [...(icp.company.excludeDomains as string[])],
   plAuto: icp.predictleads.auto !== false,
 };
 
@@ -89,6 +101,14 @@ function cleanPersonas(raw: unknown, legacyFounderBelow: number): Persona[] {
   return out.length ? out : DEFAULT.personas.map((p) => ({ ...p, match: [...p.match] }));
 }
 
+function cleanWeights(raw: unknown): Profile["fitWeights"] {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const out = {} as Profile["fitWeights"];
+  for (const k of Object.keys(DEFAULT.fitWeights) as (keyof Profile["fitWeights"])[]) out[k] = r[k] === undefined ? DEFAULT.fitWeights[k] : num(r[k], DEFAULT.fitWeights[k], 0, 10);
+  if (!Object.values(out).some((v) => v > 0)) return { ...DEFAULT.fitWeights }; // at least one criterion has to count
+  return out;
+}
+
 function cleanWatch(raw: unknown): Watch {
   const w = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const given = (w.checks && typeof w.checks === "object" ? w.checks : {}) as Record<string, { on?: unknown; n?: unknown }>;
@@ -124,6 +144,12 @@ export function clean(input: unknown): Profile {
     minFit: MIN_FITS.find((m) => m === i.minFit) ?? DEFAULT.minFit,
     minScore: num(i.minScore, DEFAULT.minScore, 0, 90),
     watch: cleanWatch(i.watch),
+    fitWeights: cleanWeights(i.fitWeights),
+    toolsGood: list(i.toolsGood, [], 20, true),
+    toolsAvoid: list(i.toolsAvoid, [], 20, true),
+    motion: (["any", "sales_led", "self_serve"] as const).find((m) => m === i.motion) ?? "any",
+    excludeWords: list(i.excludeWords, [], 20, true),
+    excludeDomains: list(i.excludeDomains, [], 30, true).map((d) => d.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")).filter(Boolean),
     plAuto: i.plAuto !== false,
   };
 }
@@ -145,6 +171,9 @@ export function apply(p: Profile) {
   icp.fit.minScore = p.minScore;
   Object.assign(icp.watch, JSON.parse(JSON.stringify(p.watch)));
   icp.predictleads.auto = p.plAuto;
+  Object.assign(icp.fitWeights, p.fitWeights);
+  const c = icp.company as { toolsGood: string[]; toolsAvoid: string[]; motion: string; excludeWords: string[]; excludeDomains: string[] };
+  c.toolsGood = p.toolsGood; c.toolsAvoid = p.toolsAvoid; c.motion = p.motion; c.excludeWords = p.excludeWords; c.excludeDomains = p.excludeDomains;
 }
 
 export async function loadProfile(): Promise<Profile> {

@@ -55,7 +55,7 @@ export const thinPipeline = (readyWithContact: number, min: number) => readyWith
 
 // ---- Gathering the facts ----
 
-const ACCT = "id,name,domain,source,status,outreach_status,next_followup_at,last_touch_at,contacted_at,hubspot_company_id,hubspot_deal_id,deal_stage,priority_score,employees,stage,country,firmo_at,lost_at,won_at";
+const ACCT = "id,name,domain,source,status,outreach_status,next_followup_at,last_touch_at,contacted_at,hubspot_company_id,hubspot_deal_id,deal_stage,priority_score,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,lost_at,won_at";
 
 export async function collect(mode: "daily" | "urgent"): Promise<Candidate[]> {
   const now = Date.now();
