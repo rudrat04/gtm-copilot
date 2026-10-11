@@ -1,5 +1,7 @@
 # Account Copilot
 
+[![CI](https://github.com/rudrat04/gtm-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/rudrat04/gtm-copilot/actions/workflows/ci.yml)
+
 **A sales team shouldn't spend its day researching and hunting for leads. This system does that, and hands the rep a ready pipeline, so they can spend their time on conversations.**
 
 It finds companies that match a target profile, watches public buying signals, finds the right person to contact, briefs the rep before a meeting, helps with the debrief afterwards, and keeps HubSpot in step the whole way. **Outreach stays manual: nothing is ever sent to a prospect.**
@@ -107,9 +109,12 @@ To use it for a client's own form, post JSON (`name`, `email`, `company`, `role`
 ## Checks and debugging
 
 ```bash
+cd supabase/functions && deno lint && deno test --no-lock --allow-env --allow-read tests/   # unit tests for scoring, fit, labels, parsing, validation and log redaction
+node scripts/check-page.mjs && bash scripts/secret-scan.sh                               # the page parses and keeps its security policy; no secrets committed
 bash scripts/smoke.sh        # 39 security and behaviour checks against the live project, no credits used
-cd supabase/functions && deno lint . && deno check <function>/index.ts
 ```
+
+Lint, type checks, unit tests, the page check and the secret scan run on every push in GitHub Actions. The lead webhook and the permission model are documented in [API.md](API.md).
 
 Every function run writes structured rows to `cp_logs` with a `run_id` that failed requests return:
 

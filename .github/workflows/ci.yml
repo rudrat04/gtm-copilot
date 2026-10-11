@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Lint the functions
+        working-directory: supabase/functions
+        run: deno lint
+
+      - name: Type-check every function (the deploy bundler does not)
+        working-directory: supabase/functions
+        run: |
+          for f in */index.ts; do
+            echo "checking $f"
+            deno check --no-lock "$f"
+          done
+
+      - name: Unit tests (scoring, fit, labels, parsing, validation, log redaction)
+        working-directory: supabase/functions
+        run: deno test --no-lock --allow-env --allow-read tests/
+
+      - name: The page script parses and keeps its content security policy
+        run: node scripts/check-page.mjs
+
+      - name: No secrets in the repository
+        run: bash scripts/secret-scan.sh

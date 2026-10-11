@@ -6,8 +6,8 @@ type Level = "info" | "warn" | "error";
 
 // Defence in depth: whatever ends up in a log line, secrets are masked first.
 const SECRET_PATTERNS: [RegExp, string][] = [
-  [/(api[_-]?key|token|secret|password|authorization)(["']?\s*[=:]\s*["']?)[^&\s"')]+/gi, "$1$2[redacted]"],
   [/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]"],
+  [/(api[_-]?key|token|secret|password|authorization)(["']?\s*[=:]\s*["']?)[^&\s"')]+/gi, "$1$2[redacted]"],
   [/sk-ant-[A-Za-z0-9_-]+/g, "[redacted]"],
   [/eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, "[redacted-jwt]"],
   [/\b[a-f0-9]{40,}\b/gi, "[redacted-hex]"],
