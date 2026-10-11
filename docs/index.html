@@ -887,6 +887,19 @@ $("meetbody").addEventListener("click", async (e) => {
 });
 
 // The one-tap link in the "how did it go?" email opens the page with #debrief=<meeting>&o=<outcome>&s=<signature>
+async function handleLossLink() {
+  const m = /^#loss=([0-9a-f-]+)&r=([a-z_]+)&s=([0-9a-f]+)$/.exec(location.hash); if (!m) return false;
+  history.replaceState(null, "", location.pathname);
+  const [, account_id, reason, sig] = m;
+  document.querySelector('nav.tabs [data-tab="accounts"]').click();
+  try {
+    const r = await api("queue", { action: "loss_reason", account_id, reason, sig });
+    say(r.mode === "dry_run" ? r.message : `Recorded: ${r.label}.${r.hubspot ? " HubSpot deal updated." : ""}`);
+    if (r.mode !== "dry_run") ACC = null;
+  } catch (err) { say(err.message); }
+  return true;
+}
+
 async function handleDebriefLink() {
   const m = /^#debrief=([0-9a-f-]+)&o=([a-z_]+)&s=([0-9a-f]+)$/.exec(location.hash); if (!m) return false;
   history.replaceState(null, "", location.pathname);
@@ -1054,7 +1067,7 @@ document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListen
 drawMode(false);
 refreshMode();
 loadToday();
-handleDebriefLink().then((handled) => { if (!handled) api("queue", { action: "meetings" }).then((d) => { MT = d; const c = $("c-meetings"); c.textContent = d.needs.length; c.hidden = !d.needs.length; }).catch(() => {}); });
+handleLossLink().then((lost) => lost || handleDebriefLink()).then((handled) => { if (!handled) api("queue", { action: "meetings" }).then((d) => { MT = d; const c = $("c-meetings"); c.textContent = d.needs.length; c.hidden = !d.needs.length; }).catch(() => {}); });
 api("inbound", { action: "list" }).then((d) => { const c = $("c-inbound"); c.textContent = d.stats.waiting; c.hidden = !d.stats.waiting; }).catch(() => {});
 api("queue", { action: "accounts" }).then((d) => { ACC = d; const c = $("c-accounts"), n = d.accounts.filter((a) => !a.low && a.outreach_status === "open").length; c.textContent = n; c.hidden = !n; }).catch(() => {});
 </script>

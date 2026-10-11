@@ -324,6 +324,12 @@ export async function moveDeal(dealId: string, stage: DealStage): Promise<boolea
   return r.ok;
 }
 
+/** Records why a deal we opened was lost. Only ever called for deals we created. */
+export async function setDealLostReason(dealId: string, reason: string): Promise<boolean> {
+  const r = await hs(`/crm/v3/objects/deals/${dealId}`, { method: "PATCH", body: JSON.stringify({ properties: { closed_lost_reason: reason.slice(0, 200) } }) }, [400]);
+  return r.ok;
+}
+
 // ---- Reading HubSpot back ----
 
 /** Status of our to-dos: id -> NOT_STARTED, IN_PROGRESS, COMPLETED... Deleted tasks are simply missing. */

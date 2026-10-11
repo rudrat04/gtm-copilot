@@ -25,13 +25,14 @@ async function key() {
   const { data } = await sb.from("cp_state").select("value").eq("key", "cron_secret").maybeSingle();
   return data?.value ?? "";
 }
-async function sign(id: string, outcome: string): Promise<string> {
+/** `ns` keeps link types apart: a debrief signature can never be used as a loss-reason signature. */
+export async function sign(id: string, outcome: string, ns = "debrief"): Promise<string> {
   const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(await key()), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(`debrief|${id}|${outcome}`));
+  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(`${ns}|${id}|${outcome}`));
   return [...new Uint8Array(sig)].slice(0, 12).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-export async function verify(id: string, outcome: string, sig: string): Promise<boolean> {
-  const want = await sign(id, outcome);
+export async function verify(id: string, outcome: string, sig: string, ns = "debrief"): Promise<boolean> {
+  const want = await sign(id, outcome, ns);
   if (!sig || sig.length !== want.length) return false;
   let diff = 0;
   for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ sig.charCodeAt(i);

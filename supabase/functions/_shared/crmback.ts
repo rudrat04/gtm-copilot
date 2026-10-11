@@ -2,14 +2,15 @@ import { normalizeDomain, sb } from "./db.ts";
 import { log } from "./log.ts";
 import { readDeals, readTaskStatuses, searchLostDeals } from "./hubspot.ts";
 import { applyOutcome } from "./lifecycle.ts";
+import { askLossReasons } from "./lossreason.ts";
 
 // Reads HubSpot back so the app follows what happens there: to-dos the rep completes, the deal stage, and deals
-// closed as lost (which become Revival candidates). It never writes to HubSpot.
+// closed as lost (which become Revival candidates). It never writes to HubSpot itself; the only related write is the lost reason the owner picks (see lossreason.ts).
 
 const DAY = 86_400_000;
 const OPEN_STAGES = new Set(["appointmentscheduled", "qualifiedtobuy", "presentationscheduled", "decisionmakerboughtin", "contractsent"]);
 
-export type BackSummary = { tasks_done: number; marked_contacted: number; deals_changed: number; lost_found: number; imported: number; skipped?: string };
+export type BackSummary = { tasks_done: number; marked_contacted: number; deals_changed: number; lost_found: number; imported: number; asked?: number; skipped?: string };
 
 export async function syncFromHubSpot(): Promise<BackSummary> {
   const out: BackSummary = { tasks_done: 0, marked_contacted: 0, deals_changed: 0, lost_found: 0, imported: 0 };
@@ -94,6 +95,9 @@ export async function syncFromHubSpot(): Promise<BackSummary> {
       await sb.from("cp_accounts").update({ lost_at: when, lost_reason: l.reason, hubspot_company_id: l.companyId }).eq("id", a.id);
     }
   }
-  if (out.tasks_done || out.deals_changed || out.imported) await log("info", "crm_read_back", { detail: out });
+  // 4) Lost deals of ours with no reason: one email with five one-tap choices (once per deal).
+  out.asked = await askLossReasons().catch(() => 0);
+
+  if (out.tasks_done || out.deals_changed || out.imported || out.asked) await log("info", "crm_read_back", { detail: out });
   return out;
 }

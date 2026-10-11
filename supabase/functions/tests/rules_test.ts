@@ -10,6 +10,7 @@ const { normalizeDomain } = await import("../_shared/db.ts");
 const { redact } = await import("../_shared/log.ts");
 const { fitBreakdown } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, priorityScore, tierOf } = await import("../_shared/score.ts");
+const { isLossReason, LOSS_LABEL, LOSS_REASONS } = await import("../_shared/lossreason.ts");
 const { cleanContext, contextLine, labelFor, validate } = await import("../_shared/inbound.ts");
 const { companyDomain, parsePost } = await import("../_shared/discover.ts");
 const { rank } = await import("../_shared/people.ts");
@@ -195,4 +196,11 @@ Deno.test("lead context: keeps UTM words, host and path only; builds one sentenc
   assertEquals(contextLine({}), "");
   assertEquals(cleanContext({ referrer: "not a url", page: "" }), {});
   assertFalse(JSON.stringify(c).includes("SECRET"));
+});
+
+Deno.test("loss reasons: a fixed list, each with a label; anything else is refused", () => {
+  assertEquals(LOSS_REASONS.length, 5);
+  for (const r of LOSS_REASONS) assert(isLossReason(r) && LOSS_LABEL[r].length > 0);
+  assertFalse(isLossReason("because"));
+  assertFalse(isLossReason(undefined));
 });

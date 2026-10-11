@@ -12,6 +12,7 @@ import { BudgetError } from "../_shared/claude.ts";
 import { tierOf } from "../_shared/score.ts";
 import { clean, loadProfile, REGIONS, saveProfile, STAGES } from "../_shared/profile.ts";
 import { runDiscovery } from "../_shared/discover.ts";
+import { applyLossReason, isLossReason, verifyLoss } from "../_shared/lossreason.ts";
 import { applyDebrief, endsAt, OUTCOME_LABEL, OUTCOMES, type Outcome, verify } from "../_shared/debrief.ts";
 import { checkConnections, healthView } from "../_shared/health.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
@@ -331,6 +332,13 @@ serve("queue", async (req) => {
     const r = await applyDebrief(body.meeting_id, outcome, typeof body.notes === "string" ? body.notes : undefined);
     if ("error" in r) return json({ error: r.error }, 404);
     return json({ mode: "live", outcome, recap: r.recap, crm: r.crm, notes: (r.meeting as { notes?: string }).notes ?? null });
+  }
+  if (body.action === "loss_reason" && typeof body.account_id === "string") {
+    if (!isLossReason(body.reason)) return json({ error: "Unknown reason" }, 400);
+    const signed = typeof body.sig === "string" && (await verifyLoss(body.account_id, body.reason, body.sig)); // the one-tap link from the email
+    if (!admin && !signed) return json({ mode: "dry_run", message: "Demo mode: nothing was saved. Unlock to record a loss reason." });
+    const r = await applyLossReason(body.account_id, body.reason);
+    return "error" in r ? json({ error: r.error }, 404) : json({ mode: "live", ...r });
   }
   if (body.action === "setup") return json({ ...(await setupView()), admin });
   if (body.action === "profile_save") {

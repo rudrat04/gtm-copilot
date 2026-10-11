@@ -4,11 +4,11 @@ import { serve } from "../_shared/log.ts";
 import { syncFromHubSpot } from "../_shared/crmback.ts";
 
 // Every 30 minutes (cron): reads HubSpot back. Completed to-dos, deal stages and closed-lost deals update the
-// app. It only reads HubSpot, so a run is harmless.
+// app. It only reads HubSpot (plus one email to the owner asking why a lost deal was lost), so a run is harmless.
 serve("crm-sync", async (req) => {
   if (!(await jobAllowed(req))) return json({ error: "Not allowed" }, 401);
   const r = await syncFromHubSpot();
   const res = json(r);
-  if (!r.tasks_done && !r.deals_changed && !r.imported) res.headers.set("x-noop", "1"); // quiet runs are not logged
+  if (!r.tasks_done && !r.deals_changed && !r.imported && !r.asked) res.headers.set("x-noop", "1"); // quiet runs are not logged
   return res;
 });
