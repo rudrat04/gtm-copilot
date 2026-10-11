@@ -32,7 +32,9 @@
         "cro",
         "vp revenue"
       ],
-      "hubspot": "sales_leader"
+      "weight": 100,
+      "hubspot": "sales_leader",
+      "onlyBelow": null
     },
     {
       "title": "Head of RevOps",
@@ -42,7 +44,9 @@
         "sales operations",
         "sales ops"
       ],
-      "hubspot": "revops"
+      "weight": 95,
+      "hubspot": "revops",
+      "onlyBelow": null
     },
     {
       "title": "Founder / CEO",
@@ -51,8 +55,9 @@
         "ceo",
         "co-founder"
       ],
-      "onlyIfEmployeesBelow": 30,
-      "hubspot": "Founder"
+      "weight": 70,
+      "hubspot": "Founder",
+      "onlyBelow": 30
     }
   ],
   "signals": {

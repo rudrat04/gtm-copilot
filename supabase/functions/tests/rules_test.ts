@@ -15,7 +15,7 @@ const { isLossReason, LOSS_LABEL, LOSS_REASONS } = await import("../_shared/loss
 const { cleanContext, contextLine, labelFor, validate } = await import("../_shared/inbound.ts");
 const { companyDomain, parsePost } = await import("../_shared/discover.ts");
 const { rank } = await import("../_shared/people.ts");
-const { clean } = await import("../_shared/profile.ts");
+const { apply, clean } = await import("../_shared/profile.ts");
 const { meetsFit, worthShowing } = await import("../_shared/fitgate.ts");
 
 const DAY = 86_400_000;
@@ -346,4 +346,39 @@ Deno.test("watch settings: validated, limited and complete", () => {
   assertEquals(w.checks.followupOverdue, { on: true, n: 2 }); // untouched defaults fill in
   assertFalse("bogus" in w.checks);
   assertEquals(Object.keys(w.checks).length, 10);
+});
+
+Deno.test("personas: fully editable, validated, and used by the ranking", () => {
+  // The defaults survive an empty or old-format profile, including weights, HubSpot values and the founder size limit.
+  const d = clean({}).personas;
+  assertEquals(d.map((p) => p.title), ["Head of Sales / VP Sales", "Head of RevOps", "Founder / CEO"]);
+  assertEquals(d[2].onlyBelow, 30);
+  const old = clean({ personas: [{ title: "Founder / CEO", match: ["founder"] }], founderBelow: 45 }).personas;
+  assertEquals(old.length, 1);
+  assertEquals(old[0].weight, 70);
+  assertEquals(old[0].hubspot, "Founder");
+  assertEquals(old[0].onlyBelow, 45);
+  // Validation: no words or no name means the type is dropped; duplicates and extras are trimmed; bad numbers are clamped.
+  const p = clean({ personas: [
+    { title: "  Marketing   lead ", match: ["CMO", "head of marketing"], weight: 500, hubspot: "  ", onlyBelow: 1 },
+    { title: "marketing lead", match: ["x"] },
+    { title: "No words", match: [] },
+    { title: "", match: ["y"] },
+  ] }).personas;
+  assertEquals(p.length, 1);
+  assertEquals(p[0], { title: "Marketing lead", match: ["CMO", "head of marketing"], weight: 100, hubspot: null, onlyBelow: null });
+  assertEquals(clean({ personas: Array.from({ length: 20 }, (_, i) => ({ title: `T${i}`, match: ["w"] })) }).personas.length, 8);
+  assertEquals(clean({ personas: [{ title: "Nothing", match: [] }] }).personas.length, 3); // nothing valid: back to the defaults
+  // Ranking follows the owner's list: the best-weighted match wins, and the sales fallbacks switch off with the sales personas.
+  apply(clean({ personas: [{ title: "Marketing lead", match: ["head of marketing", "cmo"], weight: 90, hubspot: null, onlyBelow: null }, { title: "Founder", match: ["founder"], weight: 70, hubspot: "Founder", onlyBelow: 20 }] }));
+  try {
+    assertEquals(rank("CMO", 80).persona, "Marketing lead");
+    assertEquals(rank("Head of Marketing", 80).relevance, 93);
+    assertEquals(rank("VP Sales", 80).relevance, 0);
+    assertEquals(rank("Founder", 10).relevance, 74);
+    assertEquals(rank("Founder", 50).relevance, 54); // capped at 50, plus the seniority bonus
+  } finally {
+    apply(clean({}));
+  }
+  assertEquals(rank("VP of Sales", 80).persona, "Head of Sales / VP Sales"); // the defaults are back
 });

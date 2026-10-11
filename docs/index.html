@@ -93,6 +93,7 @@
   .needs { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border: 1px dashed var(--line); border-radius: 14px; color: var(--soft); font-size: 14px; }
   .sigs-more { margin-top: 4px; }
   .field { margin: 0 0 16px; } .field > label, .field > .lbl { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .persona { border: 1px solid var(--line); border-radius: 12px; padding: 14px 14px 12px; margin: 0 0 14px; } .persona .phead { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; } .persona .phead input { flex: 1; min-width: 0; padding: 9px 11px; font: inherit; font-weight: 600; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; }
   .field .help { color: var(--muted); font-size: 12.5px; margin: 5px 0 0; }
   .tagbox { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 7px 9px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
   .tagbox:focus-within { border-color: var(--accent); }
@@ -959,9 +960,15 @@ function drawSetup() {
       ${chipField("regions", "Where they are based", d.options.regions, "Companies outside these show as Outside range and are hidden under Low fit.")}
     </article>
     <article class="card"><p class="label">Who we contact</p>
-      <p class="help" style="margin:0 0 12px">A person whose job title contains one of these words is a good contact. Add your own, such as "chief revenue officer".</p>
-      ${P.personas.map((x, i) => tagField(`personas.${i}.match`, x.title)).join("")}
-      <div class="field"><span class="lbl">Founders count as the buyer only under</span><div class="numrow"><input type="number" min="2" data-num="founderBelow" value="${esc(P.founderBelow)}" aria-label="Founder size limit"> people</div></div>
+      <p class="help" style="margin:0 0 12px">The kinds of buyer you want to reach. A person whose job title contains one of a type's words is matched to it. Rename, change, add or remove types as you like. Contacts you already have are re-ranked when you save.</p>
+      ${P.personas.map((x, i) => `<div class="persona" data-pi="${i}">
+        <div class="phead"><input type="text" maxlength="40" data-text="personas.${i}.title" value="${esc(x.title)}" aria-label="Name of this buyer type" placeholder="Name, for example Head of Sales"><button type="button" class="btn ghost sm" data-premove="${i}"${P.personas.length <= 1 ? " disabled" : ""}>Remove</button></div>
+        ${tagField(`personas.${i}.match`, "Job title words", "For example: vp sales, chief revenue officer. Matching ignores of, the, and punctuation.")}
+        <div class="field"><span class="lbl">How good a contact is this?</span><div class="numrow"><input type="number" min="10" max="100" step="5" data-num="personas.${i}.weight" value="${esc(x.weight)}" aria-label="Weight"> out of 100<span class="help" style="margin:0">100 is the person you most want; below 50 stays out of Today.</span></div></div>
+        <div class="field"><span class="lbl">Only for small companies?</span><div class="numrow">under <input type="number" min="0" data-num="personas.${i}.onlyBelow" value="${esc(x.onlyBelow ?? "")}" placeholder="any" aria-label="Only below this many people"> people<span class="help" style="margin:0">Leave empty for any size. At bigger companies this type drops to 50.</span></div></div>
+        <div class="field" style="margin-bottom:0"><label for="ph${i}">HubSpot "Scored persona" value</label><select id="ph${i}" data-sel="personas.${i}.hubspot">${[{ value: "", label: "None (leave blank in HubSpot)" }, ...(d.options.hubspot_personas || [])].map((o) => `<option value="${esc(o.value)}"${(x.hubspot || "") === o.value ? " selected" : ""}>${esc(o.label)}</option>`).join("")}${x.hubspot && !(d.options.hubspot_personas || []).some((o) => o.value === x.hubspot) ? `<option value="${esc(x.hubspot)}" selected>${esc(x.hubspot)}</option>` : ""}</select></div>
+      </div>`).join("")}
+      <div class="actions" style="margin:6px 0 0"><button type="button" class="btn ghost" data-padd${P.personas.length >= 8 ? " disabled" : ""}>Add a buyer type</button><span class="meta">Up to 8. Saving applies it everywhere: search ranking, Today and HubSpot.</span></div>
     </article>
     <article class="card"><p class="label">What counts as a buying signal</p>
       <div class="toggles">
@@ -1050,8 +1057,9 @@ async function loadSetup() {
   box.addEventListener("focusout", (e) => { if (e.target.matches?.("[data-add]") && e.target.value.trim()) addTag(e.target); });
   box.addEventListener("change", (e) => {
     const t = e.target;
-    if (t.dataset.num) setPath(P, t.dataset.num, Number(t.value));
-    if (t.dataset.sel) setPath(P, t.dataset.sel, t.value);
+    if (t.dataset.num) setPath(P, t.dataset.num, t.value === "" && t.dataset.num.endsWith(".onlyBelow") ? null : Number(t.value));
+    if (t.dataset.sel) setPath(P, t.dataset.sel, t.dataset.sel.endsWith(".hubspot") ? (t.value || null) : t.value);
+    if (t.dataset.text) setPath(P, t.dataset.text, t.value.trim());
     if (t.dataset.chk) setPath(P, t.dataset.chk, t.checked);
     if (t.dataset.sig) setPath(P, `signals.${t.dataset.sig}`, t.checked);
     if (t.matches("[data-disc]")) P.discovery = t.checked;
@@ -1059,10 +1067,15 @@ async function loadSetup() {
   box.addEventListener("click", async (e) => {
     const rm = e.target.closest("[data-rm]");
     if (rm) { const path = rm.closest("[data-tags]").dataset.tags, list = getPath(P, path); setPath(P, path, list.filter((x) => x !== rm.dataset.rm)); drawSetup(); return; }
+    const pr = e.target.closest("[data-premove]");
+    if (pr) { P.personas.splice(Number(pr.dataset.premove), 1); drawSetup(); return; }
+    if (e.target.closest("[data-padd]")) { P.personas.push({ title: "", match: [], weight: 70, hubspot: null, onlyBelow: null }); drawSetup(); box.querySelector(`[data-pi="${P.personas.length - 1}"] input[type=text]`)?.focus(); return; }
     const tg = e.target.closest("[data-toggle]");
     if (tg) { const l = P[tg.dataset.toggle], v = tg.dataset.val; P[tg.dataset.toggle] = l.includes(v) ? l.filter((x) => x !== v) : [...l, v]; drawSetup(); return; }
     const btn = e.target.closest("button"); if (!btn) return;
     if (btn.matches("[data-save]")) {
+      const bad = P.personas.findIndex((x) => !x.title.trim() || !x.match.length);
+      if (bad >= 0) { say("Each buyer type needs a name and at least one job title word."); box.querySelector(`[data-pi="${bad}"]`)?.scrollIntoView({ block: "center" }); return; }
       btn.disabled = true; say("Saving…");
       try {
         const r = await api("queue", { action: "profile_save", profile: P });

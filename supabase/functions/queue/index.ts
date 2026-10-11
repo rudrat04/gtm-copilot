@@ -14,10 +14,12 @@ import { tierOf } from "../_shared/score.ts";
 import { activeFlags, flagAction } from "../_shared/flags.ts";
 import { meetsFit, queueThreshold, worthShowing } from "../_shared/fitgate.ts";
 import { clean, loadProfile, REGIONS, saveProfile, STAGES } from "../_shared/profile.ts";
+import { rerankPeople } from "../_shared/people.ts";
 import { runDiscovery } from "../_shared/discover.ts";
 import { applyLossReason, isLossReason, verifyLoss } from "../_shared/lossreason.ts";
 import { applyDebrief, endsAt, OUTCOME_LABEL, OUTCOMES, type Outcome, verify } from "../_shared/debrief.ts";
 import { refreshAllFields } from "../_shared/hsfields.ts";
+import { getPropertyOptions } from "../_shared/hubspot.ts";
 import { checkConnections, healthView } from "../_shared/health.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
@@ -189,7 +191,7 @@ async function meetingsView(admin: boolean) {
 }
 
 /** Everything the Setup tab needs: the editable profile, discovery status and a few counts. */
-async function setupView() {
+async function setupView(admin = false) {
   const [profile, { data: disc }, { count: unknown }, { data: ai }, { data: fitRows }] = await Promise.all([
     loadProfile(),
     sb.from("cp_discovered").select("status,found_at").order("found_at", { ascending: false }).limit(60),
@@ -202,7 +204,7 @@ async function setupView() {
   const month = Date.now() - 30 * DAY;
   return {
     profile,
-    options: { stages: STAGES, regions: REGIONS },
+    options: { stages: STAGES, regions: REGIONS, hubspot_personas: await hubspotPersonaOptions(admin) },
     discovery: {
       schedule: "Mondays at 10:30 IST, an hour before the signal scan",
       last: disc?.[0]?.found_at ?? null,
@@ -212,6 +214,13 @@ async function setupView() {
     fit_counts: fitCounts,
     ai: { today_usd: Number(ai?.usd ?? 0), cap_usd: icp.ai.dailyBudgetUsd },
   };
+}
+
+/** The values HubSpot accepts for "Scored persona", so each buyer type can be matched to one. The portal is only asked for the owner. */
+async function hubspotPersonaOptions(admin: boolean): Promise<{ value: string; label: string }[]> {
+  const fallback = [{ value: "sales_leader", label: "Sales leader" }, { value: "revops", label: "Revenue operations" }, { value: "Founder", label: "Founder" }];
+  if (!admin || !Deno.env.get("HUBSPOT_TOKEN")) return fallback;
+  try { const o = await getPropertyOptions("contacts", "gtm_persona"); return o.length ? o : fallback; } catch { return fallback; }
 }
 
 /** The ICP playbook for the sales team, straight from the live config plus a few counts. */
@@ -233,7 +242,7 @@ async function playbook() {
     },
     seller: icp.seller,
     company: icp.company,
-    personas: icp.personas.map((p) => ({ title: p.title, note: "onlyIfEmployeesBelow" in p ? `Only when the company has under ${p.onlyIfEmployeesBelow} people` : null })),
+    personas: icp.personas.map((p) => ({ title: p.title, note: p.onlyBelow ? `Only when the company has under ${p.onlyBelow} people` : null })),
     signals: icp.signals.catalog,
     tiers: icp.tiers,
     queue_threshold: 30,
@@ -349,13 +358,14 @@ serve("queue", async (req) => {
     const r = await applyLossReason(body.account_id, body.reason);
     return "error" in r ? json({ error: r.error }, 404) : json({ mode: "live", ...r });
   }
-  if (body.action === "setup") return json({ ...(await setupView()), admin });
+  if (body.action === "setup") return json({ ...(await setupView(admin)), admin });
   if (body.action === "profile_save") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to save changes." });
     await saveProfile(clean(body.profile));
     const rescored = await enrichCompanies(true); // fit and weights changed: recompute every score (no credits)
+    await rerankPeople(); // the buyer types may have changed: re-rank the people we already have (no credits)
     await log("info", "profile_saved", { detail: { rescored: rescored.rescored } });
-    return json({ mode: "live", ...(await setupView()), rescored: rescored.rescored });
+    return json({ mode: "live", ...(await setupView(true)), rescored: rescored.rescored });
   }
   if (body.action === "hubspot_refresh") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);

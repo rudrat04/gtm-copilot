@@ -17,6 +17,10 @@ export const WATCH_LIMITS: Record<string, [number, number]> = {
 export type WatchCheck = { on: boolean; n: number };
 export type Watch = { urgent: boolean; todoForUrgent: boolean; checks: Record<string, WatchCheck> };
 
+/** One kind of buyer. `weight` is how good a contact this is (100 = the person we most want). `onlyBelow` limits it to small companies. */
+export type Persona = { title: string; match: string[]; weight: number; hubspot: string | null; onlyBelow: number | null };
+export const MAX_PERSONAS = 8;
+
 export type Profile = {
   industries: string[];
   employeesMin: number;
@@ -25,8 +29,7 @@ export type Profile = {
   regions: string[];
   hiringRoles: string[];                    // job titles that count as a sales or RevOps hiring signal
   signals: { hiring: boolean; news: boolean; community: boolean };
-  personas: { title: string; match: string[] }[]; // job titles we want to contact
-  founderBelow: number;                     // a founder is the buyer only under this many people
+  personas: Persona[];                      // the kinds of buyer we look for, fully editable
   discovery: boolean;                       // weekly auto-discovery on or off
   minFit: MinFit;                           // the fit bar: companies below it are hidden everywhere
   minScore: number;                         // the score needed to count as ready
@@ -43,23 +46,46 @@ const DEFAULT: Profile = {
   regions: [...icp.company.regions],
   hiringRoles: [...icp.signals.hiringRoles],
   signals: { hiring: true, news: true, community: true },
-  personas: icp.personas.map((p) => ({ title: p.title, match: [...p.match] })),
-  founderBelow: (icp.personas.find((p) => "onlyIfEmployeesBelow" in p) as { onlyIfEmployeesBelow?: number } | undefined)?.onlyIfEmployeesBelow ?? 30,
+  personas: icp.personas.map((p) => ({ title: p.title, match: [...p.match], weight: p.weight, hubspot: p.hubspot, onlyBelow: p.onlyBelow })),
   discovery: true,
   minFit: icp.fit.minFit as MinFit,
   minScore: icp.fit.minScore,
   watch: JSON.parse(JSON.stringify(icp.watch)),
 };
 
-const list = (v: unknown, fallback: string[], max = 25): string[] => {
+const list = (v: unknown, fallback: string[], max = 25, allowEmpty = false): string[] => {
   if (!Array.isArray(v)) return fallback;
   const out = [...new Set(v.map((x) => String(x).trim().replace(/\s+/g, " ").slice(0, 40)).filter(Boolean))].slice(0, max);
-  return out.length ? out : fallback;
+  return out.length || allowEmpty ? out : fallback;
 };
 const num = (v: unknown, fallback: number, lo: number, hi: number) => {
   const n = Math.round(Number(v));
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
 };
+
+/**
+ * The owner's own list of buyer types. A saved list from before personas were editable (title and words only) keeps its
+ * original weights, HubSpot values and size limit by matching on the title. Personas with no words are dropped.
+ */
+function cleanPersonas(raw: unknown, legacyFounderBelow: number): Persona[] {
+  if (!Array.isArray(raw)) return DEFAULT.personas.map((p) => ({ ...p, match: [...p.match] }));
+  const out: Persona[] = [];
+  const seen = new Set<string>();
+  for (const g of raw.slice(0, MAX_PERSONAS * 2) as Record<string, unknown>[]) {
+    const title = String(g?.title ?? "").replace(/\s+/g, " ").trim().slice(0, 40);
+    const base = DEFAULT.personas.find((d) => d.title === title);
+    const match = list(g?.match, base?.match ?? [], 20, true);
+    if (!title || !match.length || seen.has(title.toLowerCase())) continue;
+    seen.add(title.toLowerCase());
+    let below = 0; // 0 = any company size
+    if (g && "onlyBelow" in g) below = num(g.onlyBelow, 0, 0, 100000);
+    else if (base?.onlyBelow) below = legacyFounderBelow || base.onlyBelow; // a profile saved before personas were editable
+    const hubspot = g && "hubspot" in g ? (typeof g.hubspot === "string" && g.hubspot.trim() ? g.hubspot.trim().slice(0, 60) : null) : (base?.hubspot ?? null);
+    out.push({ title, match, weight: g && "weight" in g ? num(g.weight, 70, 10, 100) : (base?.weight ?? 70), hubspot, onlyBelow: below >= 2 ? below : null });
+    if (out.length >= MAX_PERSONAS) break;
+  }
+  return out.length ? out : DEFAULT.personas.map((p) => ({ ...p, match: [...p.match] }));
+}
 
 function cleanWatch(raw: unknown): Watch {
   const w = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
@@ -82,7 +108,7 @@ export function clean(input: unknown): Profile {
   const hiring = sig.hiring !== false || (!news && !community); // at least one signal has to count
   const stages = (Array.isArray(i.stages) ? i.stages : []).map(String).filter((s) => STAGES.includes(s));
   const regions = (Array.isArray(i.regions) ? i.regions : []).map(String).filter((s) => REGIONS.includes(s));
-  const given = Array.isArray(i.personas) ? i.personas as { title?: string; match?: unknown }[] : [];
+  const personas = cleanPersonas(i.personas, num(i.founderBelow, 0, 0, 1000));
   return {
     industries: list(i.industries, DEFAULT.industries, 12),
     employeesMin: min,
@@ -91,8 +117,7 @@ export function clean(input: unknown): Profile {
     regions: regions.length ? regions : DEFAULT.regions,
     hiringRoles: list(i.hiringRoles, DEFAULT.hiringRoles, 30),
     signals: { hiring, news, community },
-    personas: DEFAULT.personas.map((p) => ({ title: p.title, match: list(given.find((g) => g.title === p.title)?.match, p.match, 20) })),
-    founderBelow: num(i.founderBelow, DEFAULT.founderBelow, 2, 1000),
+    personas,
     discovery: i.discovery !== false,
     minFit: MIN_FITS.find((m) => m === i.minFit) ?? DEFAULT.minFit,
     minScore: num(i.minScore, DEFAULT.minScore, 0, 90),
@@ -111,11 +136,7 @@ export function apply(p: Profile) {
   icp.signals.weights.hiring = p.signals.hiring ? BASE_WEIGHTS.hiring : 0;
   icp.signals.weights.news = p.signals.news ? BASE_WEIGHTS.news : 0;
   icp.signals.weights.tech = p.signals.community ? BASE_WEIGHTS.tech : 0;
-  for (const persona of icp.personas) {
-    const mine = p.personas.find((x) => x.title === persona.title);
-    if (mine) persona.match = mine.match;
-    if ("onlyIfEmployeesBelow" in persona) (persona as { onlyIfEmployeesBelow: number }).onlyIfEmployeesBelow = p.founderBelow;
-  }
+  (icp.personas as Persona[]).splice(0, icp.personas.length, ...p.personas.map((x) => ({ ...x, match: [...x.match] }))); // the list itself is replaced, so every module sees it
   (icp.discovery as { enabled?: boolean }).enabled = p.discovery;
   icp.fit.minFit = p.minFit;
   icp.fit.minScore = p.minScore;

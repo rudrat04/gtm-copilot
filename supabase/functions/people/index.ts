@@ -2,7 +2,7 @@ import { json, normalizeDomain, sb } from "../_shared/db.ts";
 import { isAdmin } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
 import { refreshAccountFields } from "../_shared/hsfields.ts";
-import { hunterBalance, rank, searchAndStore } from "../_shared/people.ts";
+import { hunterBalance, rerankPeople, searchAndStore } from "../_shared/people.ts";
 import {
   type CompanyScores,
   companyFields,
@@ -222,14 +222,7 @@ serve("people", async (req) => {
     case "rerank": {
       // Recompute persona/relevance from stored titles after an ICP change. Costs no credits.
       if (!admin) return json({ error: "Owner only" }, 403);
-      const { data } = await sb.from("cp_people").select("id,title,account_id");
-      const { data: accts } = await sb.from("cp_accounts").select("id,employees");
-      const size = new Map((accts ?? []).map((a) => [a.id, a.employees as number | null]));
-      for (const p of data ?? []) {
-        const r = rank(p.title ?? "", size.get(p.account_id));
-        await sb.from("cp_people").update({ persona: r.persona, relevance: r.relevance, seniority: r.seniority }).eq("id", p.id);
-      }
-      return json({ reranked: data?.length ?? 0 });
+      return json({ reranked: await rerankPeople() });
     }
     case "status":
       return json({ admin, credits: admin ? await hunterBalance() : null });

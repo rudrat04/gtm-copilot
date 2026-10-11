@@ -368,6 +368,12 @@ async function applyExtras(kind: "companies" | "contacts", id: string, x: Extras
 export const applyCompanyExtras = (id: string, x: Extras, domain: string) => applyExtras("companies", id, x, domain);
 export const applyContactExtras = (id: string, x: Extras, domain: string) => applyExtras("contacts", id, x, domain);
 
+/** The dropdown options of a HubSpot property, for the Setup page. */
+export async function getPropertyOptions(object: "contacts" | "companies", name: string): Promise<{ value: string; label: string }[]> {
+  const r = await hs(`/crm/v3/properties/${object}/${name}`, {}, [404]);
+  return (r.ok ? r.body.options ?? [] : []).filter((o: { hidden?: boolean }) => !o.hidden).map((o: { value: string; label: string }) => ({ value: o.value, label: o.label }));
+}
+
 /** Records why a deal we opened was lost. Only ever called for deals we created. */
 export async function setDealLostReason(dealId: string, reason: string): Promise<boolean> {
   const r = await hs(`/crm/v3/objects/deals/${dealId}`, { method: "PATCH", body: JSON.stringify({ properties: { closed_lost_reason: reason.slice(0, 200) } }) }, [400]);

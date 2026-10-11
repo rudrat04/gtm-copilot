@@ -42,26 +42,39 @@ export function seniorityOf(title: string): string {
 const norm = (s: string) =>
   s.toLowerCase().replace(/[,&/|\-]/g, " ").replace(/\b(of|the|and|for)\b/g, " ").replace(/\s+/g, " ").trim();
 
+/** The loose "other senior sales titles" fallbacks only make sense while one of the owner's personas is a sales or revenue buyer. */
+const salesBuyer = () => icp.personas.some((p) => p.match.some((m) => /sales|revenue|revops|cro/i.test(m)));
+
 export function rank(title: string, employees?: number | null): { persona: string | null; relevance: number; seniority: string } {
   const t = norm(title);
   const seniority = seniorityOf(title);
-  const matched = icp.personas.find((p) => p.match.some((m) => t.includes(norm(m))));
+  // The best-weighted persona whose words appear in the title wins.
+  const matched = icp.personas.filter((p) => p.match.some((m) => t.includes(norm(m)))).sort((a, b) => b.weight - a.weight)[0];
   let relevance = 0;
   if (matched) {
-    // Sales and RevOps leaders are the buyers; founders only count when they are the buyer.
-    relevance = /sales|revenue|revops|cro/.test(matched.match.join(" ")) ? 100 : 70;
-    if (matched.title.startsWith("Head of RevOps")) relevance = 95;
-    // A founder is only the buyer at a small company; at a bigger one a sales leader should be found first.
-    const cap = (matched as { onlyIfEmployeesBelow?: number }).onlyIfEmployeesBelow;
-    if (cap && employees != null && employees >= cap) relevance = 50;
-  } else if (seniority !== "ic" && /sales|revenue|growth|business development|partnerships/.test(t)) {
+    relevance = matched.weight;
+    // A persona limited to small companies (a founder, say) counts for less at a bigger one, where someone else should be found first.
+    if (matched.onlyBelow && employees != null && employees >= matched.onlyBelow) relevance = Math.min(relevance, 50);
+  } else if (salesBuyer() && seniority !== "ic" && /sales|revenue|growth|business development|partnerships/.test(t)) {
     relevance = 60;
-  } else if (/sales|revenue|account executive|sdr|bdr/.test(t)) {
+  } else if (salesBuyer() && /sales|revenue|account executive|sdr|bdr/.test(t)) {
     relevance = 25;
   }
   // Within a persona, more senior wins.
   const bonus = { c_suite: 4, vp: 3, head: 3, director: 2, manager: 1, ic: 0 }[seniority] ?? 0;
   return { persona: matched?.title ?? null, relevance: relevance ? relevance + bonus : 0, seniority };
+}
+
+/** Recomputes persona and relevance for every stored person after the persona list changes. No credits. */
+export async function rerankPeople(): Promise<number> {
+  const { data } = await sb.from("cp_people").select("id,title,account_id");
+  const { data: accts } = await sb.from("cp_accounts").select("id,employees");
+  const size = new Map((accts ?? []).map((a) => [a.id, a.employees as number | null]));
+  for (const p of data ?? []) {
+    const r = rank(p.title ?? "", size.get(p.account_id));
+    await sb.from("cp_people").update({ persona: r.persona, relevance: r.relevance, seniority: r.seniority }).eq("id", p.id);
+  }
+  return data?.length ?? 0;
 }
 
 // ---- Hunter adapter ----
