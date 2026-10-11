@@ -247,8 +247,17 @@ async function setupView() {
     unknown_fit: unknown ?? 0,
     fit_counts: fitCounts,
     predictleads: { configured: plConfigured(), used: plConfigured() ? await plUsed() : 0, cap: plCap() },
+    digest_time_ist: await digestTimeIst(),
     ai: { today_usd: Number(ai?.usd ?? 0), cap_usd: icp.ai.dailyBudgetUsd },
   };
+}
+
+/** The daily email time as IST "HH:MM", read from the schedule. */
+async function digestTimeIst(): Promise<string> {
+  const { data } = await sb.rpc("cp_digest_time");
+  const m = /^(\d{2}):(\d{2})$/.exec(String(data ?? ""));
+  const mins = m ? ((Number(m[1]) * 60 + Number(m[2]) + 330) % 1440) : 8 * 60;
+  return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
 }
 
 /** The ICP playbook for the sales team, straight from the live config plus a few counts. */
@@ -408,6 +417,12 @@ serve("queue", async (req) => {
       for (const p of next.personas) p.hubspot = await ensurePersonaOption(p.title, p.hubspot).catch(() => p.hubspot);
     }
     await saveProfile(next);
+    // The daily email time is kept in the schedule itself (IST in, UTC stored). Not part of the profile.
+    const t = /^(\d{1,2}):(\d{2})$/.exec(String(body.digest_time_ist ?? ""));
+    if (t) {
+      const utc = (Number(t[1]) * 60 + Number(t[2]) - 330 + 1440) % 1440;
+      await sb.rpc("cp_set_digest_time", { h: Math.floor(utc / 60), m: utc % 60 }).then((r) => { if (r.error) return log("warn", "digest_time_failed", { message: r.error.message }); });
+    }
     const rescored = await enrichCompanies(true); // fit and weights changed: recompute every score (no credits)
     await rerankPeople(); // the buyer types may have changed: re-rank the people we already have (no credits)
     await log("info", "profile_saved", { detail: { rescored: rescored.rescored } });

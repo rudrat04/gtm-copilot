@@ -181,6 +181,10 @@
     "allPerDay": 100
   },
   "watch": {
+    "alertsPerDay": 3,
+    "watchlistAlerts": true,
+    "todayCap": 8,
+    "digestFlags": true,
     "urgent": true,
     "todoForUrgent": true,
     "checks": {

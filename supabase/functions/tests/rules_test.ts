@@ -23,6 +23,7 @@ const { personaTitles, rank } = await import("../_shared/people.ts");
 const { guardStatus } = await import("../_shared/guard.ts");
 const { pickTop } = await import("../_shared/bulkfind.ts");
 const { apply, clean } = await import("../_shared/profile.ts");
+const { default: icp } = await import("../_shared/icp.json", { with: { type: "json" } });
 const { meetsFit, worthShowing } = await import("../_shared/fitgate.ts");
 const { alertEmail } = await import("../_shared/templates.ts");
 
@@ -732,4 +733,19 @@ Deno.test("watchlist: a followed company is never hidden by the fit bar, and its
   const mail = alertEmail({ name: "Acme", tier: "tier_3", domain: "acme.com", watched: true }, { title: "Acme raises $10M" }, "why", []);
   assertEquals(mail.subject.startsWith("Watchlist: Acme"), true);
   assertEquals(alertEmail({ name: "Acme", tier: "tier_1", domain: "acme.com" }, { title: "x" }, "why", []).subject.startsWith("Hot: "), true);
+});
+
+Deno.test("alert and email settings are clamped and reach the shared config", () => {
+  const w = clean({ watch: { alertsPerDay: 99, todayCap: 1, watchlistAlerts: false, digestFlags: false } }).watch;
+  assertEquals([w.alertsPerDay, w.todayCap, w.watchlistAlerts, w.digestFlags], [10, 3, false, false]);
+  assertEquals(clean({ watch: { alertsPerDay: 0 } }).watch.alertsPerDay, 0); // 0 turns instant alerts off
+  const d = clean({}).watch;
+  assertEquals([d.alertsPerDay, d.todayCap, d.watchlistAlerts, d.digestFlags], [3, 8, true, true]);
+  apply(clean({ watch: { alertsPerDay: 5, todayCap: 12 } }));
+  try {
+    assertEquals([icp.alerts.maxPerDay, icp.today.cap], [5, 12]);
+  } finally {
+    apply(clean({}));
+  }
+  assertEquals([icp.alerts.maxPerDay, icp.today.cap], [3, 8]);
 });

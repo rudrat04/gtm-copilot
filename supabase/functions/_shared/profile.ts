@@ -16,7 +16,7 @@ export const WATCH_LIMITS: Record<string, [number, number]> = {
   dealStuck: [3, 180], thinPipeline: [1, 50], mismatch: [0, 0], drift: [1, 90], system: [0, 0],
 };
 export type WatchCheck = { on: boolean; n: number };
-export type Watch = { urgent: boolean; todoForUrgent: boolean; checks: Record<string, WatchCheck> };
+export type Watch = { urgent: boolean; todoForUrgent: boolean; alertsPerDay: number; watchlistAlerts: boolean; todayCap: number; digestFlags: boolean; checks: Record<string, WatchCheck> };
 
 /**
  * One kind of buyer. The list order is the priority (first = the person we most want), which sets `weight` (100 down to 60).
@@ -155,7 +155,11 @@ function cleanWatch(raw: unknown): Watch {
     const base = DEFAULT.watch.checks[k];
     checks[k] = { on: given[k] ? given[k].on !== false : base.on, n: lo === hi ? base.n : num(given[k]?.n, base.n, lo, hi) };
   }
-  return { urgent: w.urgent !== false, todoForUrgent: w.todoForUrgent !== false, checks };
+  return {
+    urgent: w.urgent !== false, todoForUrgent: w.todoForUrgent !== false, checks,
+    alertsPerDay: num(w.alertsPerDay, DEFAULT.watch.alertsPerDay, 0, 10), watchlistAlerts: w.watchlistAlerts !== false,
+    todayCap: num(w.todayCap, DEFAULT.watch.todayCap, 3, 15), digestFlags: w.digestFlags !== false,
+  };
 }
 
 /** Validates anything coming from the page. Unknown or invalid values fall back to the defaults. */
@@ -218,6 +222,8 @@ export function apply(p: Profile) {
   icp.fit.minFit = p.minFit;
   icp.fit.minScore = p.minScore;
   Object.assign(icp.watch, JSON.parse(JSON.stringify(p.watch)));
+  icp.alerts.maxPerDay = p.watch.alertsPerDay; // the same number the alert emails and the daily limit read
+  icp.today.cap = p.watch.todayCap;
   icp.predictleads.auto = p.plAuto;
   Object.assign(icp.fitWeights, p.fitWeights);
   icp.timing.roundWindowDays = [p.roundWindow[0], p.roundWindow[1]];

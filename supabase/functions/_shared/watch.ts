@@ -89,7 +89,7 @@ export async function lightCheck(admin: boolean) {
     const { data: sentToday } = await sb.from("cp_alerts").select("account_id").gte("sent_at", dayStart.toISOString());
     const { data: followed } = sentToday?.length ? await sb.from("cp_accounts").select("id").in("id", sentToday.map((r) => r.account_id)).not("watched_at", "is", null) : { data: [] };
     const followedIds = new Set((followed ?? []).map((r) => r.id));
-    const left = { followed: Math.max(0, WATCHLIST_ALERTS_PER_DAY - followedIds.size), other: Math.max(0, icp.alerts.maxPerDay - ((sentToday?.length ?? 0) - followedIds.size)) };
+    const left = { followed: icp.watch.watchlistAlerts === false ? 0 : Math.max(0, WATCHLIST_ALERTS_PER_DAY - followedIds.size), other: Math.max(0, icp.alerts.maxPerDay - ((sentToday?.length ?? 0) - followedIds.size)) };
     for (const c of candidates.sort((x, y) => (Number(!!y.a.watched_at) - Number(!!x.a.watched_at)) || (y.score - x.score))) {
       const lane = c.a.watched_at ? "followed" : "other";
       if (left[lane] <= 0) continue;

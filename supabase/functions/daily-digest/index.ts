@@ -36,7 +36,7 @@ serve("daily-digest", async (req) => {
 
   // The full pipeline watch runs just before the email, so the email carries what needs attention.
   if (!preview) await runWatch("daily").catch(async (e) => { await log("error", "watch_failed", { message: (e as Error).message }); });
-  const attention = await activeFlags(6);
+  const attention = icp.watch.digestFlags === false ? { items: [], total: 0 } : await activeFlags(6); // the owner can leave the "needs attention" section out of the email
 
   if (!preview) await sb.from("cp_state").upsert({ key: "digest_last", value: new Date().toISOString(), updated_at: new Date().toISOString() });
   if (!today.items.length && !attention.total) {

@@ -1190,7 +1190,12 @@ function tagField(path, label, help) {
 }
 const chipField = (key, label, options, help) => `<div class="field"><span class="lbl">${esc(label)}</span><div class="chips" style="margin:0">${options.map((o) => `<button type="button" class="chip${P[key].includes(o) ? " sel" : ""}" data-toggle="${key}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div>${help ? `<p class="help">${esc(help)}</p>` : ""}</div>`;
 
-let SUGGEST_NOTE = "", MS_OPEN = null;
+let SUGGEST_NOTE = "", MS_OPEN = null, DIGEST_TIME = null;
+const PRESETS = {
+  quiet: { alertsPerDay: 1, watchlistAlerts: true, todayCap: 5, digestFlags: true, urgent: true, todoForUrgent: false, checks: { hotUntouched: 96, followupOverdue: 4, leadPastTarget: 60, meetingNoDebrief: 4, repliedNoNext: 10, dealStuck: 30, thinPipeline: 1, drift: 14 }, off: ["thinPipeline", "drift"] },
+  normal: { alertsPerDay: 3, watchlistAlerts: true, todayCap: 8, digestFlags: true, urgent: true, todoForUrgent: true, checks: { hotUntouched: 48, followupOverdue: 2, leadPastTarget: 30, meetingNoDebrief: 2, repliedNoNext: 5, dealStuck: 14, thinPipeline: 3, drift: 7 }, off: [] },
+  busy: { alertsPerDay: 6, watchlistAlerts: true, todayCap: 12, digestFlags: true, urgent: true, todoForUrgent: true, checks: { hotUntouched: 24, followupOverdue: 1, leadPastTarget: 15, meetingNoDebrief: 1, repliedNoNext: 3, dealStuck: 7, thinPipeline: 5, drift: 3 }, off: [] },
+};
 /** A searchable multi-select: chosen items show as chips, "Add" opens a list with a search box. */
 function msField(path, label, options, help, groups) {
   return `<div class="field"><label>${esc(label)}</label><div class="ms" data-ms="${esc(path)}"${groups ? ` data-groups="${groups}"` : ""}></div>${help ? `<p class="help">${esc(help)}</p>` : ""}</div>`;
@@ -1279,12 +1284,27 @@ function drawSetup() {
       <div class="field"><span class="lbl">Lowest score to count as ready</span><div class="numrow"><input type="number" min="0" max="90" step="5" data-num="minScore" value="${esc(P.minScore)}" aria-label="Lowest score to count as ready"> out of 100</div>
         <p class="help">A company needs at least this score to enter the queue. Lower it to see more companies, raise it to see fewer.</p></div>
     </article>
-    <article class="card"><p class="label">Watch and flags</p>
-      <p class="help" style="margin:0 0 12px">The watch looks for things that are off and shows them under <b>Needs attention</b> on Today, in the morning email and, for urgent ones, as a HubSpot to-do. Each problem is flagged once and clears itself when it is fixed. Times are IST.</p>
+    <article class="card"><p class="label">Alerts, daily email and flags</p>
+      <p class="help" style="margin:0 0 12px">Everything here is about being told the right thing at the right time. Pick a style to fill in sensible numbers, then change anything you like. Times are IST.</p>
+      <div class="chips" style="margin:0 0 6px">${[["quiet", "Quiet", "Few emails, only big problems"], ["normal", "Normal", "The defaults"], ["busy", "Busy", "More alerts, quicker nudges"]].map(([k, l, t]) => `<button type="button" class="chip" data-preset="${k}" title="${esc(t)}">${l}</button>`).join("")}</div>
+      <p class="help" style="margin:0 0 4px">A style only fills the boxes below. Nothing changes until you press Save.</p>
+
+      <hr class="hr"><p class="lbl" style="font-weight:600;font-size:14px;margin:0 0 8px">1. When to alert me</p>
+      <div class="field" style="margin-bottom:10px"><div class="numrow">Send up to <input type="number" min="0" max="10" data-num="watch.alertsPerDay" value="${esc(P.watch.alertsPerDay)}" aria-label="Hot alerts a day" style="width:72px"> instant hot-alert emails a day<span class="help" style="margin:0">When a company in your queue shows a new signal. 0 turns them off.</span></div></div>
       <div class="toggles">
-        <label class="toggle"><input type="checkbox" data-chk="watch.urgent" ${P.watch.urgent ? "checked" : ""}><span>Run the urgent checks every 3 hours<small>Hot accounts left untouched and leads past their reply target. The full pass runs every morning before the email.</small></span></label>
-        <label class="toggle"><input type="checkbox" data-chk="watch.todoForUrgent" ${P.watch.todoForUrgent ? "checked" : ""}><span>Create a HubSpot to-do for urgent flags<small>Only for companies already in HubSpot, at most 3 a run.</small></span></label>
-      </div><hr class="hr">
+        <label class="toggle"><input type="checkbox" data-chk="watch.watchlistAlerts" ${P.watch.watchlistAlerts ? "checked" : ""}><span>Alert me about companies I follow<small>Up to 5 a day, separate from the number above. Any new signal counts, whatever the score.</small></span></label>
+        <label class="toggle"><input type="checkbox" data-chk="watch.urgent" ${P.watch.urgent ? "checked" : ""}><span>Check for urgent problems every 3 hours<small>A hot company left untouched, or a lead past its reply target. Everything else is checked once a day.</small></span></label>
+        <label class="toggle"><input type="checkbox" data-chk="watch.todoForUrgent" ${P.watch.todoForUrgent ? "checked" : ""}><span>Add a HubSpot to-do for urgent problems<small>Only for companies already in HubSpot, at most 3 a run.</small></span></label>
+      </div>
+
+      <hr class="hr"><p class="lbl" style="font-weight:600;font-size:14px;margin:0 0 8px">2. Daily email</p>
+      <div class="field" style="margin-bottom:10px"><div class="numrow">Arrives at <input type="time" data-dtime value="${esc(DIGEST_TIME ?? d.digest_time_ist)}" aria-label="Time the daily email arrives (IST)" style="width:120px"> IST<span class="help" style="margin:0">Companies are re-checked 90 minutes before, so the email is fresh.</span></div></div>
+      <div class="field" style="margin-bottom:10px"><div class="numrow">Show up to <input type="number" min="3" max="15" data-num="watch.todayCap" value="${esc(P.watch.todayCap)}" aria-label="Most people in the email" style="width:72px"> people on Today and in the email</div></div>
+      <div class="toggles"><label class="toggle"><input type="checkbox" data-chk="watch.digestFlags" ${P.watch.digestFlags ? "checked" : ""}><span>Include a "Needs attention" section<small>The problems found by the checks below.</small></span></label></div>
+      ${own ? `<div class="actions" style="margin:10px 0 0"><button type="button" class="btn ghost" data-digestpreview>Preview today's email</button><span class="meta">Shows it here. Nothing is sent. Uses about a cent of AI.</span></div>` : ""}
+
+      <hr class="hr"><p class="lbl" style="font-weight:600;font-size:14px;margin:0 0 4px">3. What counts as a problem</p>
+      <p class="help" style="margin:0 0 10px">Each problem is flagged once, shown under <b>Needs attention</b> on Today and in the email, and clears itself when it is fixed.</p>
       ${WATCH_ROWS.map(([k, before, unit, after]) => `<div class="field" style="margin-bottom:10px"><label class="toggle" style="margin:0"><input type="checkbox" data-chk="watch.checks.${k}.on" ${P.watch.checks[k].on ? "checked" : ""}><span>${esc(before)}${unit ? ` <input type="number" min="0" data-num="watch.checks.${k}.n" value="${esc(P.watch.checks[k].n)}" style="width:72px" aria-label="${esc(before)} ${esc(unit)}"> ${esc(unit)}` : ""}${after ? ` ${esc(after)}` : ""}</span></label></div>`).join("")}
     </article>
     <div class="actions" style="margin:0 0 18px"><button class="btn primary" data-save>Save changes</button><span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : "Demo mode: unlock to save changes."}</span></div>
@@ -1357,6 +1377,7 @@ async function loadSetup() {
     if (t.dataset.sel) setPath(P, t.dataset.sel, t.value);
     if (t.dataset.text) setPath(P, t.dataset.text, t.value.trim());
     if (t.dataset.chk) setPath(P, t.dataset.chk, t.checked);
+    if (t.matches("[data-dtime]")) DIGEST_TIME = t.value;
     if (t.dataset.sig) setPath(P, `signals.${t.dataset.sig}`, t.checked);
     if (t.matches("[data-disc]")) P.discovery = t.checked;
   });
@@ -1391,6 +1412,26 @@ async function loadSetup() {
       } catch (err) { say(err.message); sg.disabled = false; sg.textContent = "Suggest my settings"; }
       return;
     }
+    const pre = e.target.closest("[data-preset]");
+    if (pre) {
+      const x = PRESETS[pre.dataset.preset], w = P.watch;
+      Object.assign(w, { alertsPerDay: x.alertsPerDay, watchlistAlerts: x.watchlistAlerts, todayCap: x.todayCap, digestFlags: x.digestFlags, urgent: x.urgent, todoForUrgent: x.todoForUrgent });
+      for (const [k, n] of Object.entries(x.checks)) w.checks[k].n = n;
+      for (const k of Object.keys(w.checks)) w.checks[k].on = !x.off.includes(k);
+      drawSetup(); say(`${pre.textContent} style filled in. Press Save to keep it.`); return;
+    }
+    const dp = e.target.closest("[data-digestpreview]");
+    if (dp) {
+      dp.disabled = true; say("Building the preview…");
+      try {
+        const r = await api("daily-digest", { dry: true });
+        if (r.mode === "dry_run") { say(r.message || "Owner only."); return; }
+        $("toast").hidden = true;
+        if (r.sent === false && !r.subject) { say(r.reason || r.error || "Nothing to send today."); return; }
+        await ask({ title: r.subject, body: String(r.body || "").slice(0, 3000), ok: "Close" });
+      } catch (err) { say(err.message); } finally { dp.disabled = false; }
+      return;
+    }
     const ra = e.target.closest("[data-radd]");
     if (ra) { const t = SETUP.options.rule_types.find((x) => x.key === ra.dataset.radd); P.signalRules.push({ id: `r${Date.now().toString(36)}`, type: t.key, words: [...t.starter], on: true }); drawSetup(); const box2 = $("setupbody").querySelector(`[data-ri="${P.signalRules.length - 1}"] [data-add]`); box2?.focus(); return; }
     const rr = e.target.closest("[data-rrm]");
@@ -1408,7 +1449,7 @@ async function loadSetup() {
       if (bad >= 0) { say("Each buyer type needs a name and at least one job title word."); box.querySelector(`[data-pi="${bad}"]`)?.scrollIntoView({ block: "center" }); return; }
       btn.disabled = true; say("Saving…");
       try {
-        const r = await api("queue", { action: "profile_save", profile: P });
+        const r = await api("queue", { action: "profile_save", profile: P, digest_time_ist: DIGEST_TIME || undefined }); DIGEST_TIME = null;
         if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
         SETUP = { ...r, admin: true }; P = JSON.parse(JSON.stringify(r.profile)); drawSetup(); drawHealth(); say(`Saved. Recalculated ${r.rescored} companies.`); ACC = null;
       } catch (err) { say(err.message); btn.disabled = false; }
