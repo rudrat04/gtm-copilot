@@ -8,6 +8,9 @@ export function googleConfigured(): boolean {
 
 export const ownerEmail = () => (Deno.env.get("GOOGLE_ACCOUNT_EMAIL") ?? "").toLowerCase();
 
+/** Used by the health check: proves the refresh token still works. */
+export const googleToken = () => accessToken();
+
 async function accessToken(): Promise<string> {
   if (cached && cached.exp > Date.now() + 60_000) return cached.token;
   const res = await fetch("https://oauth2.googleapis.com/token", {

@@ -13,6 +13,7 @@ import { tierOf } from "../_shared/score.ts";
 import { clean, loadProfile, REGIONS, saveProfile, STAGES } from "../_shared/profile.ts";
 import { runDiscovery } from "../_shared/discover.ts";
 import { applyDebrief, endsAt, OUTCOME_LABEL, OUTCOMES, type Outcome, verify } from "../_shared/debrief.ts";
+import { checkConnections, healthView } from "../_shared/health.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
 const DAY = 86_400_000;
@@ -338,6 +339,14 @@ serve("queue", async (req) => {
     const rescored = await enrichCompanies(true); // fit and weights changed: recompute every score (no credits)
     await log("info", "profile_saved", { detail: { rescored: rescored.rescored } });
     return json({ mode: "live", ...(await setupView()), rescored: rescored.rescored });
+  }
+  if (body.action === "health") {
+    if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
+    return json({ mode: "live", ...(await healthView()) });
+  }
+  if (body.action === "health_check") {
+    if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
+    return json({ mode: "live", checks: await checkConnections() });
   }
   if (body.action === "run_discovery") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can run discovery." });

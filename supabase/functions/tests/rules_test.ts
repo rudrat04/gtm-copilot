@@ -135,3 +135,37 @@ Deno.test("profile: anything from the page is cleaned before it is saved", () =>
   assertEquals(p.hiringRoles.length, 30);
   assertEquals(clean({ personas: [{ title: "Head of RevOps", match: [] }] }).personas.find((x) => x.title === "Head of RevOps")!.match.length > 0, true); // never an empty keyword list
 });
+
+const { isProblem, jobLevel, creditLevel, spendLevel, problemLevel, worst } = await import("../_shared/health.ts");
+
+Deno.test("health: job rules (paused, never run, failed, late, on schedule)", () => {
+  const now = Date.parse("2026-10-17T12:00:00Z");
+  const ago = (h: number) => new Date(now - h * 3_600_000).toISOString();
+  const job = (o: Record<string, unknown>) => ({ jobname: "x", active: true, last_start: ago(1), last_status: "succeeded", ...o });
+  assertEquals(jobLevel(undefined, 24, now).level, "bad");
+  assertEquals(jobLevel(job({ active: false }), 24, now).level, "warn");
+  assertEquals(jobLevel(job({ last_start: null }), 24, now).level, "warn");
+  assertEquals(jobLevel(job({ last_status: "failed" }), 24, now).level, "bad");
+  assertEquals(jobLevel(job({ last_start: ago(30) }), 24, now).level, "ok");
+  assertEquals(jobLevel(job({ last_start: ago(60) }), 24, now).level, "bad");
+  assertEquals(jobLevel(job({ last_start: ago(0.5) }), 1 / 60, now).level, "bad"); // a every-minute job silent for 30 min
+});
+
+Deno.test("health: credit, spend and problem thresholds, worst of", () => {
+  assertEquals(creditLevel(10, 40), "ok");
+  assertEquals(creditLevel(32, 40), "warn");
+  assertEquals(creditLevel(40, 40), "bad");
+  assertEquals(spendLevel(0.2, 0.25), "warn");
+  assertEquals(problemLevel(0, 0), "ok");
+  assertEquals(problemLevel(1, 0), "warn");
+  assertEquals(problemLevel(5, 0), "bad");
+  assertEquals(worst(["ok", "warn", "ok"]), "warn");
+  assertEquals(worst([]), "ok");
+});
+
+Deno.test("health: rejected callers and bad input are noise, real errors are not", () => {
+  assertFalse(isProblem({ level: "warn", event: "response" }));
+  assertFalse(isProblem({ level: "warn", event: "admin_key_rejected" }));
+  assert(isProblem({ level: "error", event: "response" }));
+  assert(isProblem({ level: "warn", event: "ai_output_truncated" }));
+});

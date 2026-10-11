@@ -948,12 +948,33 @@ function drawSetup() {
       <div id="factsout"></div>
     </article>
 
+    ${own ? `<article class="card" id="healthcard"><p class="label">Health</p><p class="meta" style="margin:0">Loading…</p></article>` : ""}
+
     <details class="how"><summary>How scoring and signals work</summary><div id="icpbody"></div></details>`;
+}
+
+const LV = { ok: ["good", "OK"], warn: ["warn", "Check"], bad: ["bad", "Problem"] };
+const lvDot = (l) => `<span class="badge ${LV[l][0]}">${LV[l][1]}</span>`;
+let HEALTH = null, CHECKS = null;
+function drawHealth() {
+  const el = $("healthcard"); if (!el || !HEALTH) return;
+  const h = HEALTH, when = (t) => (t ? ago(t) : "never");
+  el.innerHTML = `<p class="label">Health ${lvDot(h.overall)}</p>
+    <p class="meta" style="margin:0 0 8px">Hunter: <b>${esc(h.hunter.left)}</b> of ${esc(h.hunter.cap)} credits left this month ${lvDot(h.hunter.level)} · AI today $${esc(h.ai.today_usd.toFixed(3))} of $${esc(h.ai.cap_usd.toFixed(2))} ${lvDot(h.ai.level)} · AI last 30 days $${esc(h.ai.last30_usd.toFixed(2))}</p>
+    <details><summary class="meta">Scheduled jobs</summary>${h.jobs.map((j) => `<p class="meta" style="margin:4px 0">${lvDot(j.level)} ${esc(j.label)} · ${esc(j.note)} · last run ${esc(when(j.last_start))}</p>`).join("")}</details>
+    <details ${h.problems.errors ? "open" : ""}><summary class="meta">Problems in the last 3 days: ${esc(h.problems.errors)} errors, ${esc(h.problems.warns)} warnings ${lvDot(h.problems.level)}</summary>${h.problems.items.length ? h.problems.items.map((p) => `<p class="meta" style="margin:4px 0">${esc(p.fn)} · ${esc(p.event)}${p.n > 1 ? ` (x${esc(p.n)})` : ""} · ${esc(ago(p.last))}${p.message ? ` · ${esc(p.message)}` : ""}${p.run_id ? ` · run ${esc(p.run_id.slice(0, 8))}` : ""}</p>`).join("") : `<p class="meta">Nothing to report.</p>`}</details>
+    <div class="actions" style="margin:10px 0 0"><button class="btn ghost" data-checkconn>Check connections</button><span class="meta">Free. Only reads from HubSpot, Hunter and Google.</span></div>
+    ${CHECKS ? CHECKS.map((c) => `<p class="meta" style="margin:4px 0">${lvDot(c.level)} ${esc(c.name)} · ${esc(c.note)}</p>`).join("") : ""}`;
+}
+async function loadHealth() {
+  if (!SETUP?.admin) return;
+  try { HEALTH = await api("queue", { action: "health" }); drawHealth(); }
+  catch (e) { const el = $("healthcard"); if (el) el.innerHTML = `<p class="label">Health</p><p class="err">${esc(e.message)}</p>`; }
 }
 
 async function loadSetup() {
   $("setupbody").innerHTML = skeleton(5);
-  try { SETUP = await api("queue", { action: "setup" }); P = JSON.parse(JSON.stringify(SETUP.profile)); drawSetup(); }
+  try { SETUP = await api("queue", { action: "setup" }); P = JSON.parse(JSON.stringify(SETUP.profile)); drawSetup(); loadHealth(); }
   catch (e) { $("setupbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 
@@ -984,8 +1005,14 @@ async function loadSetup() {
       try {
         const r = await api("queue", { action: "profile_save", profile: P });
         if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
-        SETUP = { ...r, admin: true }; P = JSON.parse(JSON.stringify(r.profile)); drawSetup(); say(`Saved. Recalculated ${r.rescored} companies.`); ACC = null;
+        SETUP = { ...r, admin: true }; P = JSON.parse(JSON.stringify(r.profile)); drawSetup(); drawHealth(); say(`Saved. Recalculated ${r.rescored} companies.`); ACC = null;
       } catch (err) { say(err.message); btn.disabled = false; }
+    }
+    if (btn.matches("[data-checkconn]")) {
+      btn.disabled = true; say("Checking…");
+      try { const r = await api("queue", { action: "health_check" }); CHECKS = r.checks; drawHealth(); }
+      catch (err) { say(err.message); btn.disabled = false; }
+      return;
     }
     if (btn.matches("[data-run]")) {
       const dry = btn.dataset.run === "preview";
