@@ -9,7 +9,10 @@ Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test");
 const { normalizeDomain } = await import("../_shared/db.ts");
 const { redact } = await import("../_shared/log.ts");
 const { fitBreakdown } = await import("../_shared/firmo.ts");
-const { fitState, heatOf, priorityScore, tierOf } = await import("../_shared/score.ts");
+const { fitState, heatOf, isFundingSignal, priorityScore, tierOf } = await import("../_shared/score.ts");
+const { buildHiring, isListing, rolesFromSnippet } = await import("../_shared/signals.ts");
+const { USEFUL_NEWS } = await import("../_shared/relevance.ts");
+const { dedupeRounds, roundKey } = await import("../_shared/predictleads.ts");
 const { classify, normalizeEvents, plAllowed, toSignal } = await import("../_shared/predictleads.ts");
 const { briefNoteHtml, draftNoteHtml } = await import("../_shared/hsnotes.ts");
 const { isLossReason, LOSS_LABEL, LOSS_REASONS } = await import("../_shared/lossreason.ts");
@@ -429,4 +432,69 @@ Deno.test("predictleads: the monthly allowance is shared out, with a reserve for
   assert(plAllowed("manual", 99, 100));
   assertFalse(plAllowed("manual", 100, 100)); // never past the cap
   assertFalse(plAllowed("auto", 0, 0));
+});
+
+Deno.test("news: directory and data pages are not news; real articles pass", () => {
+  for (const t of [
+    "Attio - 2026 Funding Rounds & List of Investors - Tracxn",
+    "Clay Revenue 2025: $100M ARR, $5B Valuation - GetLatka",
+    "Lemlist Revenue 2026: $53M, $150M Est. Valuation (2025) - GetLatka",
+    "Neon One Revenue 2025: $20M Est. ARR - GetLatka",
+    "Acme Company Profile - Crunchbase",
+    "Top 10 Acme Alternatives & Competitors",
+  ]) assert(isListing(t), t);
+  for (const t of [
+    "Clay Raises $115M to be the AI Growth Engine for Every Company - Business Wire",
+    "AI sales startup Clay raises funding at a $7 billion valuation - WION",
+    "Convex Raises $57 Million Series B, Bringing Total Funding To $110.5 Million - Pulse 2.0",
+    "FusionAuth Establishes UK Team as European Demand for Data Sovereignty Drives 72% Regional Growth",
+  ]) assertFalse(isListing(t), t);
+  for (const k of ["funding", "leadership", "expansion", "product", "customer"]) assert(USEFUL_NEWS.has(k));
+  for (const k of ["opinion", "listing", "partnership", "other"]) assertFalse(USEFUL_NEWS.has(k));
+});
+
+Deno.test("score: a funding label beats the keywords, and unlabelled old items still use them", () => {
+  assert(isFundingSignal({ title: "Anything", detail: { plType: "FUNDING" } }));
+  assertFalse(isFundingSignal({ title: "Acme raises $5M", detail: { plType: "NEW_CRO" } }));
+  assertFalse(isFundingSignal({ title: "Acme funding rounds list", detail: { newsType: "listing" } }));
+  assert(isFundingSignal({ title: "Acme raises $5M", detail: { newsType: "funding" } }));
+  assert(isFundingSignal({ title: "Acme raises $5M Series A", detail: {} })); // stored before labels existed
+  assertFalse(isFundingSignal({ title: "Acme ships a new feature", detail: {} }));
+});
+
+Deno.test("hiring: an unreachable board means unknown, never zero roles", () => {
+  const re = /account executive|sdr/i;
+  const jobs = [{ title: "Account Executive", url: "u1", source: "ashby" }, { title: "Engineer", url: "u2", source: "ashby" }];
+  const ok = buildHiring(jobs, false, true, re);
+  assertEquals(ok.unknown, false);
+  assertEquals(ok.signals.at(-1)!.detail, { totalOpenings: 2, salesOpenings: 1 });
+  const partial = buildHiring(jobs, true, true, re); // another board timed out
+  assertEquals(partial.unknown, true);
+  assertEquals(partial.signals.length, 1); // the role is kept
+  assertFalse(partial.signals.some((x) => x.detail && "salesOpenings" in x.detail)); // the count is not written
+  const none = buildHiring([], true, false, re);
+  assertEquals(none.unknown, true);
+  assertEquals(none.signals, []);
+  assertEquals(buildHiring([], false, false, re).unknown, false); // really no boards: nothing unknown
+});
+
+Deno.test("hiring: roles read from a Hacker News post, never a URL or a city", () => {
+  assertEquals(rolesFromSnippet("Rootly (https://rootly.com/) | design, engineering, GTM, sales | Remote"), "GTM, Sales");
+  assertEquals(rolesFromSnippet("Reactor | https://reactor.inc | San Francisco, CA, USA"), "");
+  assertEquals(rolesFromSnippet("Hiring Account Executives and SDRs, also revops"), "Account Executive, SDR, RevOps");
+  assertEquals(rolesFromSnippet("Backend Engineers, Sr. Software Engineer (Marketing) | REMOTE"), ""); // an engineer on the marketing team is not a sales role
+  assertEquals(rolesFromSnippet("MTS, Applied ML | Remote (India)"), "");
+  assertEquals(rolesFromSnippet("Technical Content & Community Lead | REMOTE (UK)"), "");
+  assertEquals(rolesFromSnippet("Part-time B2B Sales Lead | REMOTE (US)"), "Sales");
+});
+
+Deno.test("predictleads: one funding round counts once", () => {
+  const sig = (title: string, day: string) => ({ kind: "news" as const, title, detail: { plType: "FUNDING", published: `${day}T00:00:00Z` } });
+  assertEquals(roundKey("Wellington invested into Clay $115M in Series D on Aug 31st"), "series d");
+  assertEquals(roundKey("Acme closes Pre-Seed round"), "pre-seed");
+  assertEquals(roundKey("Something happened"), null);
+  const fresh = [sig("Wellington invested into Clay $115M in Series D", "2026-08-31"), sig("Bloomberg Beta invested into Clay $115M in Series D", "2026-09-09"), sig("Clay raises Series E", "2026-10-01")];
+  assertEquals(dedupeRounds(fresh, []).map((s) => s.title), [fresh[0].title, fresh[2].title]); // the second investor is the same round
+  assertEquals(dedupeRounds([fresh[1]], [{ title: fresh[0].title, published: "2026-08-31T00:00:00Z" }]), []); // already stored
+  assertEquals(dedupeRounds([sig("Acme Series B", "2027-06-01")], [{ title: "Acme Series B", published: "2026-01-01T00:00:00Z" }]).length, 1); // far apart: a different event
 });

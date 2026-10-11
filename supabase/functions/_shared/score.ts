@@ -10,6 +10,17 @@ const BASELINE_FIT = 15;
 const DAY = 86_400_000;
 
 
+/**
+ * Is this news item about funding? A label from PredictLeads or from the relevance check wins; only older stored items
+ * with no label fall back on the keywords.
+ */
+export function isFundingSignal(s: { title: string; detail?: Record<string, unknown> | null }): boolean {
+  const d = s.detail ?? {};
+  if (d.plType) return d.plType === "FUNDING";
+  if (d.newsType) return d.newsType === "funding";
+  return FUNDING.test(s.title);
+}
+
 export type Score = {
   score: number;
   parts: { hiring: number; news: number; community: number; fit: number };
@@ -45,7 +56,7 @@ export function priorityScore(signals: Dated[], fit: number = BASELINE_FIT): Sco
 
   const news = signals.filter((s) => s.kind === "news").map((s) => ({
     f: decay(ageDays(s), 30, 60),
-    funding: FUNDING.test(s.title),
+    funding: isFundingSignal(s),
   }));
   const fundedFactor = Math.max(0, ...news.filter((n) => n.funding).map((n) => n.f));
   const funded = fundedFactor > 0;
@@ -105,7 +116,7 @@ export function heatOf(sigs: Sig[], fit: FitState): Heat {
   const sales = Number(sigs.find(isSummary)?.detail?.salesOpenings ?? 0);
   const real = sigs.filter((s) => !isSummary(s) && (s.kind === "news" || s.kind === "hiring"));
   const fresh = real.some((s) => age(s) < 7);
-  const funding = sigs.some((s) => s.kind === "news" && FUNDING.test(s.title) && age(s) < 30);
+  const funding = sigs.some((s) => s.kind === "news" && isFundingSignal(s) && age(s) < 30);
   if (fresh || funding || sales >= 2) return "hot";
   if (sales >= 1 || real.some((s) => age(s) < 60) || sigs.some((s) => s.kind === "hn" && age(s) < 30)) return "warm";
   return "watching";

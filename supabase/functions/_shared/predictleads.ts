@@ -64,6 +64,27 @@ export function classify(e: PlEvent): PlType | null {
   return null;
 }
 
+/** The round a funding headline is about ("series d", "seed"), so several investors in the same round count once. */
+export function roundKey(title: string): string | null {
+  const m = /\b(pre-?seed|seed|series\s+[a-h])\b/i.exec(title);
+  return m ? m[1].toLowerCase().replace(/\s+/g, " ").replace("preseed", "pre-seed") : null;
+}
+
+/** Keeps one signal per funding round (within 45 days of each other), against the batch itself and against what is already stored. */
+export function dedupeRounds(fresh: Signal[], stored: { title: string; published: string | null }[]): Signal[] {
+  const seen: { key: string; at: number }[] = [];
+  for (const s of stored) { const k = roundKey(s.title); const t = Date.parse(s.published ?? ""); if (k && !Number.isNaN(t)) seen.push({ key: k, at: t }); }
+  const out: Signal[] = [];
+  for (const s of fresh) {
+    const k = s.detail?.plType === "FUNDING" ? roundKey(s.title) : null;
+    const t = Date.parse(String(s.detail?.published ?? ""));
+    if (k && !Number.isNaN(t) && seen.some((x) => x.key === k && Math.abs(x.at - t) < 45 * DAY)) continue;
+    if (k && !Number.isNaN(t)) seen.push({ key: k, at: t });
+    out.push(s);
+  }
+  return out;
+}
+
 /** One stored signal per useful event. Its date is when the thing happened if known, else when it was found; old, uncertain or merely planned events are dropped. */
 export function toSignal(e: PlEvent, now = Date.now()): Signal | null {
   const type = classify(e);
@@ -122,9 +143,9 @@ export async function refreshFromPredictLeads(accountId: string, purpose: Purpos
   }
 
   const signals = r.events.map((e) => toSignal(e)).filter((s): s is Signal => !!s);
-  const { data: have } = await sb.from("cp_signals").select("title").eq("account_id", a.id).eq("kind", "news");
+  const { data: have } = await sb.from("cp_signals").select("title,detail").eq("account_id", a.id).eq("kind", "news");
   const known = new Set((have ?? []).map((h) => h.title));
-  const fresh = signals.filter((s) => !known.has(s.title.slice(0, 300)));
+  const fresh = dedupeRounds(signals.filter((s) => !known.has(s.title.slice(0, 300))), (have ?? []).map((h) => ({ title: h.title, published: (h.detail?.published as string | undefined) ?? null })));
   if (fresh.length) {
     await sb.from("cp_signals").upsert(fresh.map((s) => ({ account_id: a.id, kind: s.kind, title: s.title, url: null, detail: s.detail ?? {} })), { onConflict: "account_id,kind,title", ignoreDuplicates: true });
   }

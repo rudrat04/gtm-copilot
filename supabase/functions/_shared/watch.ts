@@ -1,6 +1,6 @@
 import { json, sb } from "./db.ts";
 import { log } from "./log.ts";
-import { collectSignals, type Signal } from "./signals.ts";
+import { collectSignals, type Signal, storedHiringSignals } from "./signals.ts";
 import { priorityScore, tierOf } from "./score.ts";
 import { generateWhy, hash } from "./today.ts";
 import { alertEmail } from "./templates.ts";
@@ -48,7 +48,7 @@ export async function lightCheck(admin: boolean) {
   const one = async (a: Acct) => {
     const { data: existing } = await sb.from("cp_signals").select("kind,title").eq("account_id", a.id);
     const known = new Set((existing ?? []).map((e) => `${e.kind}|${e.title}`));
-    const { signals } = await collectSignals(a.name, a.domain, a.segment ?? "");
+    const { signals, hiringUnknown } = await collectSignals(a.name, a.domain, a.segment ?? "");
     const fresh = signals.filter((s) => !known.has(`${s.kind}|${s.title.slice(0, 300)}`));
 
     if (fresh.length) {
@@ -58,7 +58,7 @@ export async function lightCheck(admin: boolean) {
       );
       newSignals += fresh.length;
     }
-    const score = priorityScore([...signals, ...(await storedPlSignals(a.id))], fitPoints(a)).score; // PredictLeads events stored earlier still count
+    const score = priorityScore([...signals, ...(await storedPlSignals(a.id)), ...(hiringUnknown ? await storedHiringSignals(a.id) : [])], fitPoints(a)).score; // PredictLeads events stored earlier still count
     if (score !== a.priority_score) await sb.from("cp_accounts").update({ priority_score: score }).eq("id", a.id);
 
     // Alert-worthy: new news, or a newly posted individual role. Hacker News alone and role-count changes are not.

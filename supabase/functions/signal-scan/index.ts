@@ -1,5 +1,5 @@
 import { json, sb } from "../_shared/db.ts";
-import { collectSignals } from "../_shared/signals.ts";
+import { collectSignals, storedHiringSignals } from "../_shared/signals.ts";
 import { priorityScore } from "../_shared/score.ts";
 import { queueThreshold } from "../_shared/fitgate.ts";
 import { storedPlSignals } from "../_shared/predictleads.ts";
@@ -18,7 +18,7 @@ const BATCH = 6;
 type Account = { id: string; name: string; domain: string; status: string; segment: string | null; employees: number | null; stage: string | null; country: string | null; firmo_at: string | null };
 
 async function scanOne(a: Account) {
-  const { signals } = await collectSignals(a.name, a.domain, a.segment ?? "");
+  const { signals, hiringUnknown } = await collectSignals(a.name, a.domain, a.segment ?? "");
 
   if (signals.length) {
     await sb.from("cp_signals").upsert(
@@ -33,7 +33,7 @@ async function scanOne(a: Account) {
     );
   }
 
-  const { score } = priorityScore([...signals, ...(await storedPlSignals(a.id))], fitPoints(a)); // PredictLeads events stored earlier still count
+  const { score } = priorityScore([...signals, ...(await storedPlSignals(a.id)), ...(hiringUnknown ? await storedHiringSignals(a.id) : [])], fitPoints(a)); // PredictLeads events stored earlier still count
   const update: Record<string, unknown> = {
     priority_score: score,
     last_scanned_at: new Date().toISOString(),

@@ -19,6 +19,7 @@ import { runDiscovery } from "../_shared/discover.ts";
 import { applyLossReason, isLossReason, verifyLoss } from "../_shared/lossreason.ts";
 import { applyDebrief, endsAt, OUTCOME_LABEL, OUTCOMES, type Outcome, verify } from "../_shared/debrief.ts";
 import { refreshAllFields } from "../_shared/hsfields.ts";
+import { cleanSignals } from "../_shared/cleanup.ts";
 import { plCap, plConfigured, plUsed, refreshFromPredictLeads } from "../_shared/predictleads.ts";
 import { getPropertyOptions } from "../_shared/hubspot.ts";
 import { checkConnections, healthView } from "../_shared/health.ts";
@@ -372,6 +373,13 @@ serve("queue", async (req) => {
   if (body.action === "hubspot_refresh") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
     return json({ mode: "live", ...(await refreshAllFields({ dry: body.dry === true })) });
+  }
+  if (body.action === "clean_signals") {
+    if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
+    const dry = body.dry !== false; // a dry run unless the owner says otherwise
+    const report = await cleanSignals({ dry, ai: body.ai === true });
+    const rescored = dry ? null : (await enrichCompanies(true)).rescored; // scores follow the cleaned signals (no credits)
+    return json({ mode: "live", ...report, rescored });
   }
   if (body.action === "pl_refresh" && typeof body.account_id === "string") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can check an account's news (uses 1 of the monthly PredictLeads calls)." });

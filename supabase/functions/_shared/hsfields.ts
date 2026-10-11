@@ -50,7 +50,8 @@ const ATS_NAME: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lev
 /** PredictLeads already says what an event is. LEADER_HIRE has no matching HubSpot option, so it stays blank. */
 const plTypeOf = (s: { detail: Record<string, unknown> | null }): string | null => {
   const t = s.detail?.plType;
-  return t === "FUNDING" || t === "NEW_CRO" || t === "NEW_VP_SALES" ? t : null;
+  if (t === "FUNDING" || t === "NEW_CRO" || t === "NEW_VP_SALES") return t;
+  return s.detail?.newsType === "funding" ? "FUNDING" : null;
 };
 
 /** Reads a news headline into one of HubSpot's signal types. Words are matched conservatively; anything unclear stays blank. */
