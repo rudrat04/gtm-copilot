@@ -6,3 +6,4 @@ node_modules/
 backups/
 .supabase/
 *.log
+notes/
