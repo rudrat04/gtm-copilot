@@ -52,7 +52,7 @@ export async function applyOutcome(accountId: string, kind: OutcomeKind, opts: {
       Object.assign(update, { outreach_status: "not_now", next_followup_at: null, snoozed_until: null });
       break;
     case "reopen":
-      Object.assign(update, { outreach_status: "open", touches: 0, contacted_at: null, next_followup_at: null, snoozed_until: null });
+      Object.assign(update, { outreach_status: "open", touches: 0, contacted_at: null, next_followup_at: null, snoozed_until: null, not_fit_reason: null, not_fit_at: null });
       logKind = "reopened";
       break;
   }

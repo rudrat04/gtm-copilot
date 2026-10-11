@@ -9,6 +9,6 @@ serve("crm-sync", async (req) => {
   if (!(await jobAllowed(req))) return json({ error: "Not allowed" }, 401);
   const r = await syncFromHubSpot();
   const res = json(r);
-  if (!r.tasks_done && !r.deals_changed && !r.imported && !r.asked) res.headers.set("x-noop", "1"); // quiet runs are not logged
+  if (!r.tasks_done && !r.deals_changed && !r.imported && !r.asked && !r.customers) res.headers.set("x-noop", "1"); // quiet runs are not logged
   return res;
 });

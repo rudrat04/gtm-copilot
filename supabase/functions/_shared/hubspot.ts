@@ -368,6 +368,16 @@ async function applyExtras(kind: "companies" | "contacts", id: string, x: Extras
 export const applyCompanyExtras = (id: string, x: Extras, domain: string) => applyExtras("companies", id, x, domain);
 export const applyContactExtras = (id: string, x: Extras, domain: string) => applyExtras("contacts", id, x, domain);
 
+/** Companies HubSpot marks as customers (lifecycle stage "customer"), so we never treat them as prospects. */
+export async function readCustomerCompanies(limit = 100): Promise<{ id: string; domain: string | null }[]> {
+  const r = await hs("/crm/v3/objects/companies/search", {
+    method: "POST",
+    body: JSON.stringify({ filterGroups: [{ filters: [{ propertyName: "lifecyclestage", operator: "EQ", value: "customer" }] }], properties: ["domain"], limit }),
+  });
+  if (!r.ok) return [];
+  return (r.body.results ?? []).map((c: { id: string; properties?: { domain?: string } }) => ({ id: c.id, domain: c.properties?.domain?.toLowerCase().replace(/^www\./, "") ?? null }));
+}
+
 /** The dropdown options of a HubSpot property, for the Setup page. */
 export async function getPropertyOptions(object: "contacts" | "companies", name: string): Promise<{ value: string; label: string }[]> {
   const r = await hs(`/crm/v3/properties/${object}/${name}`, {}, [404]);

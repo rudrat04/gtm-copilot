@@ -99,7 +99,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
   const cfg = icp.today;
 
   const { data: accts } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,lost_at,lost_reason,priority_score,icp_score,why_now,status,outreach_status,touches,contacted_at,last_touch_at,next_followup_at,snoozed_until,employee_band,employees,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as")
+    .select("id,name,domain,segment,lost_at,lost_reason,priority_score,icp_score,why_now,status,outreach_status,touches,contacted_at,last_touch_at,not_fit_reason,next_followup_at,snoozed_until,employee_band,employees,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as")
     .or("status.in.(queued,pushed),outreach_status.neq.open").limit(300);
   const accounts = accts ?? [];
   const ids = accounts.map((a) => a.id);
@@ -161,7 +161,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     } else if (a.outreach_status === "snoozed" && a.snoozed_until && Date.parse(a.snoozed_until) <= now) {
       it = { ...base, key: `sn-${a.id}`, type: "revive", label: "Snooze ended", urgency: 300 + (a.priority_score ?? 0) / 10,
         headline: "Snooze is over. Decide: reach out or snooze again", due: a.snoozed_until };
-    } else if (a.outreach_status === "not_now" && tier === "tier_1" && !clearMiss && last && newest > Date.parse(last.created_at)) {
+    } else if (a.outreach_status === "not_now" && !a.not_fit_reason && tier === "tier_1" && !clearMiss && last && newest > Date.parse(last.created_at)) {
       it = { ...base, key: `rv-${a.id}`, type: "revive", label: "Worth another look", urgency: 250 + (a.priority_score ?? 0) / 10,
         headline: "Marked not now, but a stronger signal appeared since", due: null };
     } else if (a.lost_at && !clearMiss && ["open", "not_now"].includes(a.outreach_status) && newest > Date.parse(a.lost_at) && now - newest < 30 * DAY) {

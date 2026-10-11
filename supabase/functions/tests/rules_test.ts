@@ -8,6 +8,7 @@ Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test");
 
 const { normalizeDomain } = await import("../_shared/db.ts");
 const { redact } = await import("../_shared/log.ts");
+const { isNotFitReason, notFitLabel, NOT_FIT_REASONS } = await import("../_shared/notfit.ts");
 const { exclusion, extraFacts, fitBreakdown, fitReasons, industryScore, industryWords, motionScore, toolsScore } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, isFundingSignal, priorityScore, tierOf } = await import("../_shared/score.ts");
 const { buildHiring, isListing, rolesFromSnippet } = await import("../_shared/signals.ts");
@@ -570,4 +571,12 @@ Deno.test("fit model: settings from the page are cleaned", () => {
   assertEquals(clean({ fitWeights: { industry: -4 } }).fitWeights.industry, 0);
   assertEquals(clean({ motion: "weird" }).motion, "any");
   assertEquals(clean({ excludeDomains: ["https://www.Rival.com/pricing", ""] }).excludeDomains, ["rival.com"]);
+});
+
+Deno.test("not a fit: a fixed list of reasons, each with a label", () => {
+  assertEquals(NOT_FIT_REASONS.length, 8);
+  for (const [k, l] of NOT_FIT_REASONS) assert(isNotFitReason(k) && notFitLabel(k) === l);
+  assertFalse(isNotFitReason("because"));
+  assertFalse(isNotFitReason(undefined));
+  assertEquals(notFitLabel("mystery"), "mystery");
 });

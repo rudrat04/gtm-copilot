@@ -354,11 +354,11 @@ function actionsHtml({ outreach, hasContacts, hasDraft, primary: custom, compact
     `<button data-act="plnews" title="Uses 1 of the monthly PredictLeads calls">Check company news</button>`,
     parked ? "" : `<hr>${touched ? `<button data-life="reopen">Clear status (reopen)</button>` : ""}<button data-life="replied">They replied</button><button data-life="meeting">Meeting booked</button>
       <button data-life="snooze" data-days="7">Snooze 1 week</button><button data-life="snooze" data-days="14">Snooze 2 weeks</button><button data-life="snooze" data-days="30">Snooze 1 month</button>
-      <hr><button data-life="not_now">Not now</button>`,
+      <hr><button data-life="not_now">Not now</button><button data-act="notfit">Not a fit…</button>`,
   ].join("");
   return `<div class="actions">${primary}${compact ? "" : `<button class="btn ghost" data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>`}
     <div class="menu"><button class="btn ghost" data-tog aria-haspopup="menu">More ▾</button><div class="menu-list" hidden>${menu}</div></div></div>
-    <div class="panel dbox"></div><div class="panel draftbox"></div><div class="panel pbox"></div>`;
+    <div class="panel dbox"></div><div class="panel draftbox"></div><div class="panel pbox"></div><div class="panel nfbox"></div>`;
 }
 
 /* ============ Today: lead with the person ============ */
@@ -458,6 +458,7 @@ function contactLine(a) {
   return `<div class="contact"><b>${esc(c.name)}</b> · ${esc(c.title)} · ${mail}${c.pushed ? ` <span class="ptag">In HubSpot</span>` : ""}${a.contacts.length > 1 ? ` <span class="meta">+${a.contacts.length - 1} more</span>` : ""}</div>`;
 }
 
+const NOT_FIT = { too_big: "Too big", too_small: "Too small", wrong_industry: "Wrong industry", competitor: "Competitor", agency_b2c: "Agency or B2C", wrong_region: "Wrong region", customer: "Already a customer", other: "Other" };
 const MARK = { ok: ["✓", "good"], partly: ["~", "warn"], no: ["✗", "bad"], unknown: ["?", "muted"] };
 /** One line saying why a company fits or not: a mark per criterion. Hover or tap a mark for the detail. */
 function fitWhy(a) {
@@ -476,6 +477,7 @@ function aCard(a) {
       <div class="meta">${esc(a.segment || a.domain)}</div>${fitLine(a.fit, a.firmo)}${fitWhy(a)}
     </div></div>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
+    ${a.not_fit_reason ? `<div class="status-line">Not a fit: ${esc(NOT_FIT[a.not_fit_reason] || a.not_fit_reason)}</div>` : ""}
     ${a.lost_at ? `<div class="status-line">Closed-lost in HubSpot ${esc(ago(a.lost_at))}${a.lost_reason ? `: ${esc(a.lost_reason)}` : ""}</div>` : ""}
     ${reason ? `<div class="why">${reason}</div>` : ""}
     ${sigList(a.signals, 1)}
@@ -521,9 +523,25 @@ function wireCards(root, reload) {
       return;
     }
 
+    const nf = e.target.closest("[data-nfreason]");
+    if (nf) {
+      const card = nf.closest(".card"); nf.disabled = true; say("Saving…");
+      try {
+        const r = await api("queue", { action: "not_fit", account_id: card.dataset.id, reason: nf.dataset.nfreason });
+        if (r.mode === "dry_run") { say(r.message); nf.disabled = false; return; }
+        say(`Marked not a fit: ${r.label}.${r.also ? ` ${r.also}` : ""}${r.crm?.length ? " HubSpot updated." : ""}`); reload();
+      } catch (err) { say(err.message); nf.disabled = false; }
+      return;
+    }
     const btn = e.target.closest("button[data-act]"); if (!btn) return;
     const card = btn.closest(".card"), act = btn.dataset.act;
     if (act === "people") { mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain, true); return; }
+    if (act === "notfit") {
+      const reasons = Object.entries(NOT_FIT);
+      card.querySelector(".nfbox").innerHTML = `<p class="label">Why is ${esc(card.dataset.name)} not a fit?</p><div class="chips" style="margin:0">${reasons.map(([k, l]) => `<button type="button" class="chip" data-nfreason="${esc(k)}">${esc(l)}</button>`).join("")}</div>
+        <p class="meta" style="margin:8px 0 0">It moves to Parked. The reason is saved so the fit settings can be tuned later.</p>`;
+      return;
+    }
     if (act === "plnews") {
       btn.disabled = true; say("Checking company news…");
       try {

@@ -1,6 +1,6 @@
 import { normalizeDomain, sb } from "./db.ts";
 import { log } from "./log.ts";
-import { readDeals, readTaskStatuses, searchLostDeals } from "./hubspot.ts";
+import { readCustomerCompanies, readDeals, readTaskStatuses, searchLostDeals } from "./hubspot.ts";
 import { applyOutcome } from "./lifecycle.ts";
 import { askLossReasons } from "./lossreason.ts";
 
@@ -10,7 +10,7 @@ import { askLossReasons } from "./lossreason.ts";
 const DAY = 86_400_000;
 const OPEN_STAGES = new Set(["appointmentscheduled", "qualifiedtobuy", "presentationscheduled", "decisionmakerboughtin", "contractsent"]);
 
-export type BackSummary = { tasks_done: number; marked_contacted: number; deals_changed: number; lost_found: number; imported: number; asked?: number; skipped?: string };
+export type BackSummary = { tasks_done: number; marked_contacted: number; deals_changed: number; lost_found: number; imported: number; customers?: number; asked?: number; skipped?: string };
 
 export async function syncFromHubSpot(): Promise<BackSummary> {
   const out: BackSummary = { tasks_done: 0, marked_contacted: 0, deals_changed: 0, lost_found: 0, imported: 0 };
@@ -60,7 +60,7 @@ export async function syncFromHubSpot(): Promise<BackSummary> {
         Object.assign(upd, { outreach_status: "not_now", next_followup_at: null, lost_at: d.closedAt ?? new Date().toISOString(), lost_reason: d.lostReason });
         note = `Deal closed lost in HubSpot${d.lostReason ? `: ${d.lostReason}` : ""}`;
       } else if (d.stage === "closedwon") {
-        Object.assign(upd, { won_at: d.closedAt ?? new Date().toISOString(), next_followup_at: null });
+        Object.assign(upd, { won_at: d.closedAt ?? new Date().toISOString(), next_followup_at: null, known_as: "customer" });
         note = "Deal won in HubSpot";
       } else if (OPEN_STAGES.has(d.stage)) {
         Object.assign(upd, { lost_at: null, lost_reason: null });
@@ -95,9 +95,23 @@ export async function syncFromHubSpot(): Promise<BackSummary> {
       await sb.from("cp_accounts").update({ lost_at: when, lost_reason: l.reason, hubspot_company_id: l.companyId }).eq("id", a.id);
     }
   }
+  // 3b) Companies HubSpot already knows as customers are not prospects. Once a day, and only for accounts we already track.
+  const { data: cs } = await sb.from("cp_state").select("value").eq("key", "customers_synced").maybeSingle();
+  if (!cs?.value || Date.now() - Date.parse(cs.value) > 20 * 3_600_000) {
+    await sb.from("cp_state").upsert({ key: "customers_synced", value: new Date().toISOString(), updated_at: new Date().toISOString() });
+    const customers = await readCustomerCompanies(100);
+    const ids = new Set(customers.map((c) => c.id)), domains = new Set(customers.map((c) => c.domain).filter(Boolean));
+    const { data: tracked } = await sb.from("cp_accounts").select("id,domain,hubspot_company_id,known_as,won_at");
+    for (const a of tracked ?? []) {
+      const isCustomer = (a.hubspot_company_id && ids.has(a.hubspot_company_id)) || domains.has(a.domain);
+      if (isCustomer && a.known_as !== "customer") { await sb.from("cp_accounts").update({ known_as: "customer" }).eq("id", a.id); out.customers = (out.customers ?? 0) + 1; }
+      else if (!isCustomer && a.known_as === "customer" && !a.won_at && customers.length < 100) await sb.from("cp_accounts").update({ known_as: null }).eq("id", a.id); // no longer a customer there
+    }
+  }
+
   // 4) Lost deals of ours with no reason: one email with five one-tap choices (once per deal).
   out.asked = await askLossReasons().catch(() => 0);
 
-  if (out.tasks_done || out.deals_changed || out.imported || out.asked) await log("info", "crm_read_back", { detail: out });
+  if (out.tasks_done || out.deals_changed || out.imported || out.asked || out.customers) await log("info", "crm_read_back", { detail: out });
   return out;
 }
