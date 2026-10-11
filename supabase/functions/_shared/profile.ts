@@ -1,13 +1,14 @@
 import { sb } from "./db.ts";
 import icp from "./icp.json" with { type: "json" };
 import { MIN_FITS, type MinFit } from "./fitgate.ts";
+import { INDUSTRIES, REGIONS, STAGES } from "./lists.ts";
+
+export { INDUSTRIES, REGIONS, STAGES };
 
 // The editable part of the ICP. Defaults come from icp.json; the owner's saved changes live in cp_state
 // ("profile") and are laid over the defaults at the start of every request, so every module keeps reading
 // `icp.*` as before. Nothing here is secret.
 
-export const STAGES = ["Pre-Seed", "Seed", "Series A", "Series B", "Series C"];
-export const REGIONS = ["US", "UK", "EU", "Canada", "Australia / NZ", "India"];
 
 // The watch checks and the range each number may take (days, hours or minutes; see flags.ts).
 export const WATCH_LIMITS: Record<string, [number, number]> = {
@@ -17,11 +18,20 @@ export const WATCH_LIMITS: Record<string, [number, number]> = {
 export type WatchCheck = { on: boolean; n: number };
 export type Watch = { urgent: boolean; todoForUrgent: boolean; checks: Record<string, WatchCheck> };
 
-/** One kind of buyer. `weight` is how good a contact this is (100 = the person we most want). `onlyBelow` limits it to small companies. */
-export type Persona = { title: string; match: string[]; weight: number; hubspot: string | null; onlyBelow: number | null };
+/**
+ * One kind of buyer. The list order is the priority (first = the person we most want), which sets `weight` (100 down to 60).
+ * `department` and `seniority` narrow who matches; `hubspot` is the "Scored persona" value, found or created automatically on save.
+ * `onlyBelow` is kept for old saved profiles and is always null now.
+ */
+export type Persona = { title: string; match: string[]; weight: number; hubspot: string | null; onlyBelow: number | null; department: string; seniority: string[] };
+export const DEPARTMENTS = ["Executive", "Sales", "Marketing", "Revenue operations", "Operations", "Finance", "Engineering", "Product", "Customer success", "People / HR", "IT"];
+export const SENIORITIES = [["founder_c", "Founder / C-level"], ["vp", "VP"], ["head_director", "Head / Director"], ["manager", "Manager"], ["ic", "Individual contributor"]] as const;
+export const PRODUCT_MAX = 1500;
 export const MAX_PERSONAS = 8;
 
 export type Profile = {
+  product: { description: string; website: string }; // what the owner sells: the suggestion for everything else is made from this
+  competitors: string[];                    // competitor names or domains, for the "uses a competitor" signal and the never-show list
   industries: string[];
   employeesMin: number;
   employeesMax: number;
@@ -47,6 +57,8 @@ export type Profile = {
 // Snapshot of the defaults, taken before anything is applied.
 const BASE_WEIGHTS = { ...icp.signals.weights };
 const DEFAULT: Profile = {
+  product: { description: "", website: "" },
+  competitors: [],
   industries: [...icp.company.industries],
   employeesMin: icp.company.employeesMin,
   employeesMax: icp.company.employeesMax,
@@ -54,7 +66,7 @@ const DEFAULT: Profile = {
   regions: [...icp.company.regions],
   hiringRoles: [...icp.signals.hiringRoles],
   signals: { hiring: true, news: true, community: true },
-  personas: icp.personas.map((p) => ({ title: p.title, match: [...p.match], weight: p.weight, hubspot: p.hubspot, onlyBelow: p.onlyBelow })),
+  personas: icp.personas.map((p, i) => ({ title: p.title, match: [...p.match], weight: Math.max(60, 100 - 5 * i), hubspot: p.hubspot, onlyBelow: null, department: "", seniority: [] })),
   discovery: true,
   minFit: icp.fit.minFit as MinFit,
   minScore: icp.fit.minScore,
@@ -74,17 +86,19 @@ const list = (v: unknown, fallback: string[], max = 25, allowEmpty = false): str
   const out = [...new Set(v.map((x) => String(x).trim().replace(/\s+/g, " ").slice(0, 40)).filter(Boolean))].slice(0, max);
   return out.length || allowEmpty ? out : fallback;
 };
+/** A website address as typed, reduced to a host name; anything that is not a public host is dropped. */
+function cleanSite(v: unknown): string {
+  const h = String(v ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#].*$/, "");
+  return /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/.test(h) && h.length <= 80 ? h : "";
+}
 const num = (v: unknown, fallback: number, lo: number, hi: number) => {
   const n = Math.round(Number(v));
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
 };
 
-/**
- * The owner's own list of buyer types. A saved list from before personas were editable (title and words only) keeps its
- * original weights, HubSpot values and size limit by matching on the title. Personas with no words are dropped.
- */
-function cleanPersonas(raw: unknown, legacyFounderBelow: number): Persona[] {
-  if (!Array.isArray(raw)) return DEFAULT.personas.map((p) => ({ ...p, match: [...p.match] }));
+/** The owner's own list of buyer types, in priority order. Types with no job-title words are dropped. */
+function cleanPersonas(raw: unknown): Persona[] {
+  if (!Array.isArray(raw)) return DEFAULT.personas.map((p) => ({ ...p, match: [...p.match], seniority: [] }));
   const out: Persona[] = [];
   const seen = new Set<string>();
   for (const g of raw.slice(0, MAX_PERSONAS * 2) as Record<string, unknown>[]) {
@@ -93,14 +107,13 @@ function cleanPersonas(raw: unknown, legacyFounderBelow: number): Persona[] {
     const match = list(g?.match, base?.match ?? [], 20, true);
     if (!title || !match.length || seen.has(title.toLowerCase())) continue;
     seen.add(title.toLowerCase());
-    let below = 0; // 0 = any company size
-    if (g && "onlyBelow" in g) below = num(g.onlyBelow, 0, 0, 100000);
-    else if (base?.onlyBelow) below = legacyFounderBelow || base.onlyBelow; // a profile saved before personas were editable
     const hubspot = g && "hubspot" in g ? (typeof g.hubspot === "string" && g.hubspot.trim() ? g.hubspot.trim().slice(0, 60) : null) : (base?.hubspot ?? null);
-    out.push({ title, match, weight: g && "weight" in g ? num(g.weight, 70, 10, 100) : (base?.weight ?? 70), hubspot, onlyBelow: below >= 2 ? below : null });
+    const department = DEPARTMENTS.find((d) => d === g?.department) ?? "";
+    const seniority = (Array.isArray(g?.seniority) ? g.seniority : []).map(String).filter((x) => SENIORITIES.some(([k]) => k === x));
+    out.push({ title, match, weight: Math.max(60, 100 - 5 * out.length), hubspot, onlyBelow: null, department, seniority });
     if (out.length >= MAX_PERSONAS) break;
   }
-  return out.length ? out : DEFAULT.personas.map((p) => ({ ...p, match: [...p.match] }));
+  return out.length ? out : DEFAULT.personas.map((p) => ({ ...p, match: [...p.match], seniority: [] }));
 }
 
 function cleanWindow(raw: unknown): [number, number] {
@@ -109,12 +122,10 @@ function cleanWindow(raw: unknown): [number, number] {
   return [lo, Math.max(lo + 1, num(r[1], DEFAULT.roundWindow[1], 1, 1080))];
 }
 
-function cleanWeights(raw: unknown): Profile["fitWeights"] {
-  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const out = {} as Profile["fitWeights"];
-  for (const k of Object.keys(DEFAULT.fitWeights) as (keyof Profile["fitWeights"])[]) out[k] = r[k] === undefined ? DEFAULT.fitWeights[k] : num(r[k], DEFAULT.fitWeights[k], 0, 10);
-  if (!Object.values(out).some((v) => v > 0)) return { ...DEFAULT.fitWeights }; // at least one criterion has to count
-  return out;
+/** How much each fit criterion counts is automatic: size, stage and region always, the rest only when the owner gave something to compare with. */
+export function autoWeights(p: Pick<Profile, "industries" | "toolsGood" | "toolsAvoid" | "motion">): Profile["fitWeights"] {
+  const ownIndustries = p.industries.join() !== DEFAULT.industries.join(); // counts only once the owner has chosen their own
+  return { size: 10, stage: 10, region: 5, industry: ownIndustries ? 4 : 0, tools: p.toolsGood.length + p.toolsAvoid.length ? 5 : 0, motion: p.motion !== "any" ? 4 : 0 };
 }
 
 function cleanWatch(raw: unknown): Watch {
@@ -138,9 +149,16 @@ export function clean(input: unknown): Profile {
   const hiring = sig.hiring !== false || (!news && !community); // at least one signal has to count
   const stages = (Array.isArray(i.stages) ? i.stages : []).map(String).filter((s) => STAGES.includes(s));
   const regions = (Array.isArray(i.regions) ? i.regions : []).map(String).filter((s) => REGIONS.includes(s));
-  const personas = cleanPersonas(i.personas, num(i.founderBelow, 0, 0, 1000));
+  const personas = cleanPersonas(i.personas);
+  const industries = (Array.isArray(i.industries) ? i.industries : []).map(String).filter((s) => INDUSTRIES.includes(s)).slice(0, 25);
+  const pr = (i.product && typeof i.product === "object" ? i.product : {}) as Record<string, unknown>;
+  const toolsGood = list(i.toolsGood, [], 20, true), toolsAvoid = list(i.toolsAvoid, [], 20, true);
+  const motion = (["any", "sales_led", "self_serve"] as const).find((m) => m === i.motion) ?? "any";
+  const industriesOut = industries.length ? industries : DEFAULT.industries;
   return {
-    industries: list(i.industries, DEFAULT.industries, 12),
+    product: { description: String(pr.description ?? "").trim().slice(0, PRODUCT_MAX), website: cleanSite(pr.website) },
+    competitors: list(i.competitors, [], 15, true),
+    industries: industriesOut,
     employeesMin: min,
     employeesMax: max,
     stages: stages.length ? stages : DEFAULT.stages,
@@ -152,10 +170,10 @@ export function clean(input: unknown): Profile {
     minFit: MIN_FITS.find((m) => m === i.minFit) ?? DEFAULT.minFit,
     minScore: num(i.minScore, DEFAULT.minScore, 0, 90),
     watch: cleanWatch(i.watch),
-    fitWeights: cleanWeights(i.fitWeights),
-    toolsGood: list(i.toolsGood, [], 20, true),
-    toolsAvoid: list(i.toolsAvoid, [], 20, true),
-    motion: (["any", "sales_led", "self_serve"] as const).find((m) => m === i.motion) ?? "any",
+    fitWeights: autoWeights({ industries: industriesOut, toolsGood, toolsAvoid, motion }),
+    toolsGood,
+    toolsAvoid,
+    motion,
     excludeWords: list(i.excludeWords, [], 20, true),
     excludeDomains: list(i.excludeDomains, [], 30, true).map((d) => d.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")).filter(Boolean),
     roundWindow: cleanWindow(i.roundWindow),
@@ -183,7 +201,9 @@ export function apply(p: Profile) {
   Object.assign(icp.fitWeights, p.fitWeights);
   icp.timing.roundWindowDays = [p.roundWindow[0], p.roundWindow[1]];
   const c = icp.company as { toolsGood: string[]; toolsAvoid: string[]; motion: string; excludeWords: string[]; excludeDomains: string[] };
-  c.toolsGood = p.toolsGood; c.toolsAvoid = p.toolsAvoid; c.motion = p.motion; c.excludeWords = p.excludeWords; c.excludeDomains = p.excludeDomains;
+  c.toolsGood = p.toolsGood; c.toolsAvoid = p.toolsAvoid; c.motion = p.motion; c.excludeWords = p.excludeWords;
+  // competitors written as domains are never shown either
+  c.excludeDomains = [...new Set([...p.excludeDomains, ...p.competitors.map((x) => x.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")).filter((x) => /\.[a-z]{2,}$/.test(x))])];
 }
 
 export async function loadProfile(): Promise<Profile> {

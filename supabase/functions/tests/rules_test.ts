@@ -363,12 +363,12 @@ Deno.test("personas: fully editable, validated, and used by the ranking", () => 
   // The defaults survive an empty or old-format profile, including weights, HubSpot values and the founder size limit.
   const d = clean({}).personas;
   assertEquals(d.map((p) => p.title), ["Head of Sales / VP Sales", "Head of RevOps", "Founder / CEO"]);
-  assertEquals(d[2].onlyBelow, 30);
-  const old = clean({ personas: [{ title: "Founder / CEO", match: ["founder"] }], founderBelow: 45 }).personas;
+  assertEquals(d.map((p) => p.weight), [100, 95, 90]); // the list order is the priority
+  const old = clean({ personas: [{ title: "Founder / CEO", match: ["founder"] }] }).personas;
   assertEquals(old.length, 1);
-  assertEquals(old[0].weight, 70);
-  assertEquals(old[0].hubspot, "Founder");
-  assertEquals(old[0].onlyBelow, 45);
+  assertEquals(old[0].weight, 100); // first in the list
+  assertEquals(old[0].hubspot, "Founder"); // a type with the old default name keeps its HubSpot value
+  assertEquals(old[0].onlyBelow, null);
   // Validation: no words or no name means the type is dropped; duplicates and extras are trimmed; bad numbers are clamped.
   const p = clean({ personas: [
     { title: "  Marketing   lead ", match: ["CMO", "head of marketing"], weight: 500, hubspot: "  ", onlyBelow: 1 },
@@ -377,17 +377,16 @@ Deno.test("personas: fully editable, validated, and used by the ranking", () => 
     { title: "", match: ["y"] },
   ] }).personas;
   assertEquals(p.length, 1);
-  assertEquals(p[0], { title: "Marketing lead", match: ["CMO", "head of marketing"], weight: 100, hubspot: null, onlyBelow: null });
+  assertEquals(p[0], { title: "Marketing lead", match: ["CMO", "head of marketing"], weight: 100, hubspot: null, onlyBelow: null, department: "", seniority: [] });
   assertEquals(clean({ personas: Array.from({ length: 20 }, (_, i) => ({ title: `T${i}`, match: ["w"] })) }).personas.length, 8);
   assertEquals(clean({ personas: [{ title: "Nothing", match: [] }] }).personas.length, 3); // nothing valid: back to the defaults
   // Ranking follows the owner's list: the best-weighted match wins, and the sales fallbacks switch off with the sales personas.
-  apply(clean({ personas: [{ title: "Marketing lead", match: ["head of marketing", "cmo"], weight: 90, hubspot: null, onlyBelow: null }, { title: "Founder", match: ["founder"], weight: 70, hubspot: "Founder", onlyBelow: 20 }] }));
+  apply(clean({ personas: [{ title: "Marketing lead", match: ["head of marketing", "cmo"] }, { title: "Founder", match: ["founder"], hubspot: "Founder" }] }));
   try {
     assertEquals(rank("CMO", 80).persona, "Marketing lead");
-    assertEquals(rank("Head of Marketing", 80).relevance, 93);
+    assertEquals(rank("Head of Marketing", 80).relevance, 103); // weight 100 plus the seniority bonus
     assertEquals(rank("VP Sales", 80).relevance, 0);
-    assertEquals(rank("Founder", 10).relevance, 74);
-    assertEquals(rank("Founder", 50).relevance, 54); // capped at 50, plus the seniority bonus
+    assertEquals(rank("Founder", 10).relevance, 99); // second in the list: 95, plus the seniority bonus
   } finally {
     apply(clean({}));
   }
@@ -535,8 +534,8 @@ Deno.test("fit model: the default weights give exactly the old size + stage + re
 });
 
 Deno.test("fit model: industry, tools and sales style score 0 to 1 and the weights decide", () => {
-  const profile = clean({ fitWeights: { size: 10, stage: 10, region: 5, industry: 5, tools: 5, motion: 5 }, toolsGood: ["HubSpot"], toolsAvoid: ["Clay"], motion: "sales_led", industries: ["B2B SaaS"], excludeWords: ["agency"], excludeDomains: ["rival.com"] });
-  assertEquals(profile.fitWeights.industry, 5);
+  const profile = clean({ toolsGood: ["HubSpot"], toolsAvoid: ["Clay"], motion: "sales_led", industries: ["B2B SaaS"], excludeWords: ["agency"], excludeDomains: ["rival.com"] });
+  assertEquals(profile.fitWeights, { size: 10, stage: 10, region: 5, industry: 4, tools: 5, motion: 4 }); // automatic: each extra criterion counts once there is something to compare with
   assertEquals(profile.excludeDomains, ["rival.com"]);
   apply(profile);
   try {
@@ -554,7 +553,7 @@ Deno.test("fit model: industry, tools and sales style score 0 to 1 and the weigh
     const base = { employees: 100, stage: "Series A", country: "US", firmo_at: "2026-01-01" };
     const good = fitBreakdown({ ...base, industry: "Software", tech: ["hubspot"], sales_motion: "sales_led" }).points;
     const bad = fitBreakdown({ ...base, industry: "Retail", tech: ["clay"], sales_motion: "self_serve" }).points;
-    assert(good > 24.9 && bad < 16 && good - bad > 9); // right on every criterion vs wrong on the three new ones (25 x 25/40 = 15.6)
+    assert(good > 24.9 && bad < 17 && good - bad > 8); // right on every criterion vs wrong on the three new ones (25 x 25/38 = 16.4)
     // Exclusions: a word, a domain and a customer are never prospects, and fitState says so.
     assertEquals(exclusion({ blurb: "A digital marketing agency", name: "Pixel" }), 'Matches "agency"');
     assertEquals(exclusion({ domain: "RIVAL.com" }), "On your never-show list");
@@ -572,9 +571,12 @@ Deno.test("fit model: industry, tools and sales style score 0 to 1 and the weigh
 
 Deno.test("fit model: settings from the page are cleaned", () => {
   assertEquals(industryWords("B2B SaaS").includes("software"), true);
-  assertEquals(clean({ fitWeights: { size: 0, stage: 0, region: 0, industry: 0, tools: 0, motion: 0 } }).fitWeights.size, 10); // at least one criterion has to count
-  assertEquals(clean({ fitWeights: { size: 99, industry: -4 } }).fitWeights.size, 10);
-  assertEquals(clean({ fitWeights: { industry: -4 } }).fitWeights.industry, 0);
+  assertEquals(clean({}).fitWeights, { size: 10, stage: 10, region: 5, industry: 0, tools: 0, motion: 0 }); // nothing chosen: size, stage and region only
+  assertEquals(clean({ fitWeights: { size: 0 } }).fitWeights.size, 10); // weights are no longer settable
+  assertEquals(clean({ industries: ["Fintech", "Not a real industry"] }).industries, ["Fintech"]);
+  assertEquals(clean({ stages: ["Series E or later", "Nope"], regions: ["Germany", "Nordics", "Mars"] }).regions, ["Germany", "Nordics"]);
+  assertEquals(clean({ product: { description: "x".repeat(2000), website: "https://www.Example.com/about?x=1" } }).product, { description: "x".repeat(1500), website: "example.com" });
+  assertEquals(clean({ product: { website: "not a site" } }).product.website, "");
   assertEquals(clean({ motion: "weird" }).motion, "any");
   assertEquals(clean({ excludeDomains: ["https://www.Rival.com/pricing", ""] }).excludeDomains, ["rival.com"]);
 });
@@ -674,4 +676,26 @@ Deno.test("bulk find: hot first, then warm, by score; watching is never searched
   assertEquals(pickTop(rows, 2).map((x) => x.name), ["d", "b"]);
   assertEquals(pickTop(Array.from({ length: 20 }, (_, i) => r(`x${i}`, "hot", i)), 99).length, 8); // never more than the cap
   assertEquals(pickTop([r("z", "watching", 99)], 5), []);
+});
+
+Deno.test("buyer types: department and seniority narrow who matches", () => {
+  apply(clean({ personas: [{ title: "Sales leader", match: ["head of sales", "vp sales"], seniority: ["vp", "head_director"] }, { title: "Ops", match: ["operations"], department: "Revenue operations" }] }));
+  try {
+    assertEquals(rank("VP Sales", 80).persona, "Sales leader");
+    assertEquals(rank("Head of Sales", 80).persona, "Sales leader");
+    assertEquals(rank("Sales Manager", 80).persona, null); // not a chosen seniority and no matching words
+    assertEquals(rank("Director of Operations", 80, "operations").persona, "Ops");
+    assertEquals(rank("Director of Operations", 80, "engineering").persona, null); // wrong department
+    assertEquals(rank("Director of Operations", 80, null).persona, "Ops"); // an unknown department never rules someone out
+  } finally {
+    apply(clean({}));
+  }
+});
+
+Deno.test("location choices: groups and single countries both resolve to country codes", async () => {
+  const { codesFor, REGIONS } = await import("../_shared/lists.ts");
+  assertEquals(codesFor("Germany"), ["DE"]);
+  assertEquals(codesFor("DACH (Germany, Austria, Switzerland)"), ["DE", "AT", "CH"]);
+  assertEquals(codesFor("Mars"), []);
+  assertEquals(new Set(REGIONS).size, REGIONS.length);
 });

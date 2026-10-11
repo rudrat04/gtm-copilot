@@ -1,12 +1,11 @@
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import icp from "./icp.json" with { type: "json" };
+import { codesFor, STAGE_OPTIONS } from "./lists.ts";
 
 // Company facts from Hunter's Company Enrichment (about 0.2 credit per company). Saved once, refreshed rarely.
 
-const EU = new Set(["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "NO", "CH"]);
-const REGION_COUNTRIES: Record<string, string[]> = { US: ["US"], UK: ["GB"], EU: [...EU], Canada: ["CA"], "Australia / NZ": ["AU", "NZ"], India: ["IN"] };
-const inRegions = (cc: string) => icp.company.regions.some((r) => REGION_COUNTRIES[r]?.includes(cc));
+const inRegions = (cc: string) => icp.company.regions.some((r) => codesFor(r).includes(cc));
 const CREDIT_PER_COMPANY = 0.2;
 
 export type Firmo = {
@@ -107,11 +106,8 @@ export type FitRow = {
 /** The columns to select wherever fit is computed, so a new criterion takes effect everywhere. */
 export const FIT_COLS = "employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date";
 
-/** Is this funding stage one of the stages we target? "Seed" also covers pre-seed and angel rounds. */
-const stageWanted = (s: string) => icp.company.stages.some((w) => {
-  const k = w.toLowerCase();
-  return k === "seed" ? /pre-?seed|angel|seed/.test(s) : k === "pre-seed" ? /pre-?seed|angel/.test(s) : s.includes(k);
-});
+/** Is this funding stage one of the stages we target? Each stage the owner picked has its own pattern (see lists.ts). */
+const stageWanted = (s: string) => icp.company.stages.some((w) => (STAGE_OPTIONS.find((o) => o.name === w)?.re ?? new RegExp(w.toLowerCase().replace(/[^a-z0-9 ]/g, ""))).test(s));
 
 // Words a Hunter category or tag may use for the industries you list in Setup.
 const SYNONYMS: Record<string, string[]> = {

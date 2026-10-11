@@ -13,7 +13,9 @@ import { BudgetError } from "../_shared/claude.ts";
 import { tierOf } from "../_shared/score.ts";
 import { activeFlags, flagAction } from "../_shared/flags.ts";
 import { meetsFit, queueThreshold, worthShowing } from "../_shared/fitgate.ts";
-import { clean, loadProfile, REGIONS, saveProfile, STAGES } from "../_shared/profile.ts";
+import { clean, DEPARTMENTS, INDUSTRIES, loadProfile, REGIONS, saveProfile, SENIORITIES, STAGES } from "../_shared/profile.ts";
+import { REGION_GROUPS } from "../_shared/lists.ts";
+import { suggestProfile } from "../_shared/suggest.ts";
 import { rerankPeople } from "../_shared/people.ts";
 import { runDiscovery } from "../_shared/discover.ts";
 import { applyLossReason, isLossReason, verifyLoss } from "../_shared/lossreason.ts";
@@ -24,7 +26,7 @@ import { planBulkFind, runBulkFind } from "../_shared/bulkfind.ts";
 import { guardPeople } from "../_shared/guard.ts";
 import { cleanSignals } from "../_shared/cleanup.ts";
 import { plCap, plConfigured, plUsed, refreshFromPredictLeads } from "../_shared/predictleads.ts";
-import { getPropertyOptions } from "../_shared/hubspot.ts";
+import { ensurePersonaOption } from "../_shared/hubspot.ts";
 import { checkConnections, healthView } from "../_shared/health.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
@@ -222,7 +224,7 @@ async function meetingsView(admin: boolean) {
 }
 
 /** Everything the Setup tab needs: the editable profile, discovery status and a few counts. */
-async function setupView(admin = false) {
+async function setupView() {
   const [profile, { data: disc }, { count: unknown }, { data: ai }, { data: fitRows }] = await Promise.all([
     loadProfile(),
     sb.from("cp_discovered").select("status,found_at").order("found_at", { ascending: false }).limit(60),
@@ -235,7 +237,7 @@ async function setupView(admin = false) {
   const month = Date.now() - 30 * DAY;
   return {
     profile,
-    options: { stages: STAGES, regions: REGIONS, not_fit_reasons: NOT_FIT_REASONS, hubspot_personas: await hubspotPersonaOptions(admin) },
+    options: { stages: STAGES, regions: REGIONS, region_groups: Object.keys(REGION_GROUPS).length, industries: INDUSTRIES, departments: DEPARTMENTS, seniorities: SENIORITIES, not_fit_reasons: NOT_FIT_REASONS },
     discovery: {
       schedule: "Mondays at 10:30 IST, an hour before the signal scan",
       last: disc?.[0]?.found_at ?? null,
@@ -246,13 +248,6 @@ async function setupView(admin = false) {
     predictleads: { configured: plConfigured(), used: plConfigured() ? await plUsed() : 0, cap: plCap() },
     ai: { today_usd: Number(ai?.usd ?? 0), cap_usd: icp.ai.dailyBudgetUsd },
   };
-}
-
-/** The values HubSpot accepts for "Scored persona", so each buyer type can be matched to one. The portal is only asked for the owner. */
-async function hubspotPersonaOptions(admin: boolean): Promise<{ value: string; label: string }[]> {
-  const fallback = [{ value: "sales_leader", label: "Sales leader" }, { value: "revops", label: "Revenue operations" }, { value: "Founder", label: "Founder" }];
-  if (!admin || !Deno.env.get("HUBSPOT_TOKEN")) return fallback;
-  try { const o = await getPropertyOptions("contacts", "gtm_persona"); return o.length ? o : fallback; } catch { return fallback; }
 }
 
 /** The ICP playbook for the sales team, straight from the live config plus a few counts. */
@@ -403,14 +398,32 @@ serve("queue", async (req) => {
     const r = await applyLossReason(body.account_id, body.reason);
     return "error" in r ? json({ error: r.error }, 404) : json({ mode: "live", ...r });
   }
-  if (body.action === "setup") return json({ ...(await setupView(admin)), admin });
+  if (body.action === "setup") return json({ ...(await setupView()), admin });
   if (body.action === "profile_save") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to save changes." });
-    await saveProfile(clean(body.profile));
+    const next = clean(body.profile);
+    // Each buyer type needs a "Scored persona" value in HubSpot: reuse a matching one, or add it there. Never blocks the save.
+    if (Deno.env.get("HUBSPOT_TOKEN")) {
+      for (const p of next.personas) p.hubspot = await ensurePersonaOption(p.title, p.hubspot).catch(() => p.hubspot);
+    }
+    await saveProfile(next);
     const rescored = await enrichCompanies(true); // fit and weights changed: recompute every score (no credits)
     await rerankPeople(); // the buyer types may have changed: re-rank the people we already have (no credits)
     await log("info", "profile_saved", { detail: { rescored: rescored.rescored } });
-    return json({ mode: "live", ...(await setupView(true)), rescored: rescored.rescored });
+    return json({ mode: "live", ...(await setupView()), rescored: rescored.rescored });
+  }
+  if (body.action === "profile_suggest") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to get suggestions." });
+    const description = String(body.description ?? "").trim();
+    if (description.length < 20) return json({ error: "Describe what you sell in a sentence or two first." }, 400);
+    try {
+      const r = await suggestProfile(await loadProfile(), description, clean({ product: { website: body.website } }).product.website);
+      return json({ mode: "live", ...r });
+    } catch (e) {
+      if (e instanceof BudgetError) return json({ error: "Today's AI limit is reached. Try again tomorrow." }, 429);
+      await log("error", "profile_suggest_failed", { message: (e as Error).message });
+      return json({ error: "Could not make a suggestion. Try again." }, 502);
+    }
   }
   if (body.action === "hubspot_refresh") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);

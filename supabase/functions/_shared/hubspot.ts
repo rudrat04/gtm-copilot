@@ -410,6 +410,27 @@ export async function getPropertyOptions(object: "contacts" | "companies", name:
   return (r.ok ? r.body.options ?? [] : []).filter((o: { hidden?: boolean }) => !o.hidden).map((o: { value: string; label: string }) => ({ value: o.value, label: o.label }));
 }
 
+/**
+ * The "Scored persona" value for a buyer type. An option that already matches (same value or label, or the keyword families
+ * sales, revenue operations and founder) is reused; otherwise a new option is added to the HubSpot property. Null when HubSpot cannot be reached.
+ */
+export async function ensurePersonaOption(title: string, current: string | null): Promise<string | null> {
+  const r = await hs("/crm/v3/properties/contacts/gtm_persona", {}, [404]);
+  if (!r.ok) return current;
+  // deno-lint-ignore no-explicit-any -- JSON from HubSpot
+  const options: any[] = r.body.options ?? [];
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40) || "persona";
+  const t = title.toLowerCase();
+  if (current && options.some((o) => o.value === current)) return current;
+  const exact = options.find((o) => o.value === slug || String(o.label).toLowerCase() === t);
+  if (exact) return exact.value;
+  const family = /revops|revenue operations|sales operations/.test(t) ? "revops" : /founder|ceo|co-founder/.test(t) ? "Founder" : /sales|revenue|cro/.test(t) ? "sales_leader" : null;
+  if (family && options.some((o) => o.value === family)) return family;
+  const next = [...options.map((o, i) => ({ label: o.label, value: o.value, displayOrder: i, hidden: !!o.hidden })), { label: title.slice(0, 60), value: slug, displayOrder: options.length, hidden: false }];
+  const u = await hs("/crm/v3/properties/contacts/gtm_persona", { method: "PATCH", body: JSON.stringify({ options: next }) }, [400, 403]);
+  return u.ok ? slug : current;
+}
+
 /** Records why a deal we opened was lost. Only ever called for deals we created. */
 export async function setDealLostReason(dealId: string, reason: string): Promise<boolean> {
   const r = await hs(`/crm/v3/objects/deals/${dealId}`, { method: "PATCH", body: JSON.stringify({ properties: { closed_lost_reason: reason.slice(0, 200) } }) }, [400]);

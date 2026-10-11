@@ -54,11 +54,24 @@ export const norm = (s: string) => {
 /** The loose "other senior sales titles" fallbacks only make sense while one of the owner's personas is a sales or revenue buyer. */
 const salesBuyer = () => icp.personas.some((p) => p.match.some((m) => /sales|revenue|revops|cro/i.test(m)));
 
-export function rank(title: string, employees?: number | null): { persona: string | null; relevance: number; seniority: string } {
+type PersonaRule = { title: string; match: string[]; weight: number; onlyBelow?: number | null; department?: string; seniority?: string[] };
+const SENIORITY_GROUP: Record<string, string> = { c_suite: "founder_c", vp: "vp", head: "head_director", director: "head_director", manager: "manager", ic: "ic" };
+
+/** Does this buyer type's department and seniority choice (if any) allow this person? An unknown department never rules someone out. */
+function allowed(p: PersonaRule, seniority: string, department?: string | null): boolean {
+  if (p.seniority?.length && !p.seniority.includes(SENIORITY_GROUP[seniority] ?? "ic")) return false;
+  if (p.department && department) {
+    const want = p.department.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2), have = department.toLowerCase();
+    if (!want.some((w) => have.includes(w.slice(0, 5)))) return false;
+  }
+  return true;
+}
+
+export function rank(title: string, employees?: number | null, department?: string | null): { persona: string | null; relevance: number; seniority: string } {
   const t = norm(title);
   const seniority = seniorityOf(title);
-  // The best-weighted persona whose words appear in the title wins.
-  const matched = icp.personas.filter((p) => p.match.some((m) => t.includes(norm(m)))).sort((a, b) => b.weight - a.weight)[0];
+  // The best-weighted persona whose words appear in the title (and whose department and seniority fit) wins.
+  const matched = (icp.personas as PersonaRule[]).filter((p) => p.match.some((m) => t.includes(norm(m))) && allowed(p, seniority, department)).sort((a, b) => b.weight - a.weight)[0];
   let relevance = 0;
   if (matched) {
     relevance = matched.weight;
@@ -76,11 +89,11 @@ export function rank(title: string, employees?: number | null): { persona: strin
 
 /** Recomputes persona and relevance for every stored person after the persona list changes. No credits. */
 export async function rerankPeople(): Promise<number> {
-  const { data } = await sb.from("cp_people").select("id,title,account_id");
+  const { data } = await sb.from("cp_people").select("id,title,account_id,department");
   const { data: accts } = await sb.from("cp_accounts").select("id,employees");
   const size = new Map((accts ?? []).map((a) => [a.id, a.employees as number | null]));
   for (const p of data ?? []) {
-    const r = rank(p.title ?? "", size.get(p.account_id));
+    const r = rank(p.title ?? "", size.get(p.account_id), p.department);
     await sb.from("cp_people").update({ persona: r.persona, relevance: r.relevance, seniority: r.seniority }).eq("id", p.id);
   }
   return data?.length ?? 0;
@@ -219,7 +232,7 @@ export async function searchAndStore(account: { id: string; domain: string }): P
   const found = await provider().search(account.domain);
   const { data: acc } = await sb.from("cp_accounts").select("employees").eq("id", account.id).maybeSingle();
   const rows = found.people.map((p) => {
-    const r = rank(p.title, acc?.employees);
+    const r = rank(p.title, acc?.employees, p.department);
     return {
       account_id: account.id,
       provider: provider().name,
