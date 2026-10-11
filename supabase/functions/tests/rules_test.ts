@@ -217,7 +217,7 @@ Deno.test("HubSpot notes: escaped, labelled, and a draft says it was not sent", 
   assert(d.includes("Hi {{first_name}},<br>Hello"));
 });
 
-const { countryName, hsSource, hsStatus, newsType, signalFacts } = await import("../_shared/hsfields.ts");
+const { countryName, emailStatusOption, hsSource, hsStatus, newsType, signalFacts } = await import("../_shared/hsfields.ts");
 
 Deno.test("hubspot columns: status and source mapping, country names", () => {
   const a = (o: Record<string, unknown>) => ({ outreach_status: "open", lost_at: null, won_at: null, ...o });
@@ -260,4 +260,11 @@ Deno.test("hubspot columns: news headlines map to signal types, ATS comes from t
   const row = (kind: string, title: string, detail: Record<string, unknown>) => ({ kind, title, url: null, detail, detected_at: "2026-10-09T00:00:00Z" });
   assertEquals(signalFacts([row("hiring", "Hiring: Account Executive", { source: "lever" })]).ats, "Lever");
   assertEquals(signalFacts([row("hiring", "Hiring: AE (Hacker News Who is hiring)", { source: "hn_hiring" })]).ats, null);
+});
+
+Deno.test("hubspot columns: email status options", () => {
+  assertEquals(emailStatusOption("valid"), "valid");
+  assertEquals(emailStatusOption("accept_all"), "accept_all");
+  assertEquals(emailStatusOption("webmail"), "unknown");
+  assertEquals(emailStatusOption(null), "unknown");
 });

@@ -177,7 +177,6 @@ export async function processLead(l: LeadInput): Promise<{ id: string; label: La
     }
     if (accountId) {
       await sb.from("cp_people").upsert({ account_id: accountId, provider: "inbound", first_name: l.name.split(" ")[0], last_name: l.name.split(" ").slice(1).join(" "), title: l.role ?? "Inbound lead", persona: null, relevance: 90, email: l.email, email_status: "unknown", email_revealed: true, hubspot_contact_id: contactId }, { onConflict: "account_id,email" });
-      await refreshAccountFields(accountId); // fills the extra HubSpot columns and the owner on the company and the new contact
     }
   }
   if (label === "not_fit") mark("Routed", "Marked as not a fit, so nobody is interrupted");
@@ -196,6 +195,7 @@ export async function processLead(l: LeadInput): Promise<{ id: string; label: La
     account_id: accountId, company: companyName || null, label, fit, heat, why: why || null, facts: facts || null, top_signals: signalLines, hubspot_contact_id: contactId, hubspot_task_id: taskId,
     alerted_at: alerted ? new Date().toISOString() : null, timeline,
   }).eq("id", id);
+  if (accountId && contactId) await refreshAccountFields(accountId); // extra HubSpot columns and owner, once the lead row is complete (label, intent, source)
   await log("info", "inbound_processed", { account: domain, detail: { label, fit, heat, ms: Date.now() - t0, hubspot: !!taskId, alerted } });
   return { id, label, timeline };
 }
