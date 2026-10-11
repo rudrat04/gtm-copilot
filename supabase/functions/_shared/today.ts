@@ -75,6 +75,21 @@ export async function generateWhy(it: { name: string; tier: string; type: string
   }
 }
 
+/**
+ * "Gone quiet": contacted, never replied, the follow-up sequence is used up, and something new has happened
+ * since the last touch (and not longer ago than 30 days). Pure, so it can be tested.
+ */
+export function goneDark(
+  a: { outreach_status: string; touches: number | null; next_followup_at: string | null; last_touch_at: string | null },
+  newestSignalMs: number,
+  now: number,
+  sequenceLength: number,
+): boolean {
+  if (a.outreach_status !== "contacted" || a.next_followup_at || (a.touches ?? 0) < sequenceLength) return false;
+  if (!a.last_touch_at || !newestSignalMs) return false;
+  return newestSignalMs > Date.parse(a.last_touch_at) && now - newestSignalMs < 30 * DAY;
+}
+
 /** Companies the rep cannot act on yet: a good signal but no named person to contact. */
 export type NeedsContact = { id: string; name: string; tier: string; priority: number | null; reason: string };
 
@@ -152,6 +167,9 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     } else if (a.lost_at && !clearMiss && ["open", "not_now"].includes(a.outreach_status) && newest > Date.parse(a.lost_at) && now - newest < 30 * DAY) {
       it = { ...base, key: `lost-${a.id}`, type: "revive", label: "Closed-lost, new signal", urgency: 280 + (a.priority_score ?? 0) / 10,
         headline: `Lost ${ageLabel(a.lost_at)}${a.lost_reason ? ` (${a.lost_reason})` : ""}, but something new happened`, due: null };
+    } else if (!clearMiss && goneDark(a, newest, now, icp.followUp.days.length)) {
+      it = { ...base, key: `dark-${a.id}`, type: "revive", label: "Gone quiet, new signal", urgency: 270 + (a.priority_score ?? 0) / 10,
+        headline: `No reply after ${a.touches} touches (first contact ${ageLabel(a.contacted_at)}), but something new happened`, due: null };
     } else if (a.outreach_status === "open" && a.status === "queued" && tier !== "tier_3" && !clearMiss && newest && now - newest < cfg.newDays * DAY) {
       const hot = now - newest < cfg.hotHours * HOUR;
       it = { ...base, key: `hot-${a.id}`, type: hot ? "hot" : "new", label: hot ? "Hot now" : "New this week",

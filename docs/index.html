@@ -371,7 +371,8 @@ function tCard(i) {
   const sub = c ? `${esc(c.title)} at <b>${esc(a.name)}</b>` : esc(a.name);
   const mail = c?.email ? (c.email.includes("***") ? `<span>${esc(c.email)}</span>` : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : "";
   const facts = fitLine(a.fit_state, a.firmo);
-  const note = fu ? `<div class="status-line due">${esc(i.headline)}</div>` : `<div class="why"><b>Why today.</b> ${esc(i.why || i.reason)}</div>`;
+  const why = `<div class="why"><b>Why today.</b> ${esc(i.why || i.reason)}</div>`;
+  const note = fu ? `<div class="status-line due">${esc(i.headline)}</div>` : i.type === "revive" ? `<div class="status-line">${esc(i.headline)}</div>${why}` : why;
   return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
     <div class="card-head"><div>
       <div class="eyebrow"><span class="badge ${TODAY_BADGE[i.type] || ""}">${esc(i.label)}</span></div>

@@ -136,6 +136,7 @@ Deno.test("profile: anything from the page is cleaned before it is saved", () =>
   assertEquals(clean({ personas: [{ title: "Head of RevOps", match: [] }] }).personas.find((x) => x.title === "Head of RevOps")!.match.length > 0, true); // never an empty keyword list
 });
 
+const { goneDark } = await import("../_shared/today.ts");
 const { isProblem, jobLevel, creditLevel, spendLevel, problemLevel, worst } = await import("../_shared/health.ts");
 
 Deno.test("health: job rules (paused, never run, failed, late, on schedule)", () => {
@@ -168,4 +169,17 @@ Deno.test("health: rejected callers and bad input are noise, real errors are not
   assertFalse(isProblem({ level: "warn", event: "admin_key_rejected" }));
   assert(isProblem({ level: "error", event: "response" }));
   assert(isProblem({ level: "warn", event: "ai_output_truncated" }));
+});
+
+Deno.test("goneDark: only after the sequence, with a newer signal that is under 30 days old", () => {
+  const now = Date.parse("2026-10-20T00:00:00Z");
+  const base = { outreach_status: "contacted", touches: 3, next_followup_at: null, last_touch_at: "2026-10-01T00:00:00Z" };
+  const sig = (d: string) => Date.parse(d);
+  assert(goneDark(base, sig("2026-10-10T00:00:00Z"), now, 3));
+  assertFalse(goneDark({ ...base, touches: 2 }, sig("2026-10-10T00:00:00Z"), now, 3)); // still in the sequence
+  assertFalse(goneDark({ ...base, next_followup_at: "2026-10-22T00:00:00Z" }, sig("2026-10-10T00:00:00Z"), now, 3));
+  assertFalse(goneDark({ ...base, outreach_status: "replied" }, sig("2026-10-10T00:00:00Z"), now, 3));
+  assertFalse(goneDark(base, sig("2026-09-25T00:00:00Z"), now, 3)); // older than the last touch
+  assertFalse(goneDark(base, sig("2026-09-10T00:00:00Z"), now, 3)); // stale
+  assertFalse(goneDark(base, 0, now, 3)); // no signal at all
 });
