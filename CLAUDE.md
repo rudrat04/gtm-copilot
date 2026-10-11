@@ -1,4 +1,4 @@
-# Account Copilot: project notes for Claude
+# F1rstword (formerly Account Copilot): project notes for Claude
 
 A portfolio project that starts conversations with B2B SaaS clients (freelance work and job hunting). One demo-able system: finds companies, watches buying signals, finds and enriches the right people, briefs the rep before meetings, handles the debrief and inbound leads, and keeps HubSpot in step. Outreach is always manual. It is a portfolio piece, not a company product, so keep additions purposeful.
 

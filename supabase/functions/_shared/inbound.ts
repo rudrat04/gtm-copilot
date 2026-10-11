@@ -214,7 +214,7 @@ async function alertOwner(l: LeadInput, c: { label: Label; why: string; companyN
     c.signalLines.length ? c.signalLines.map((s) => `  - ${s}`).join("\n") : "",
     `\nAnswer within ${icp.inbound.slaMinutes} minutes: mailto:${l.email}`,
     `Open Inbound: ${PAGE}`,
-    `\n— Account Copilot · nothing is sent to ${l.name}`,
+    `\n— F1rstword · nothing is sent to ${l.name}`,
   ].filter((x) => x !== "").join("\n");
   const html = layout(
     `<div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#dc2626">${esc(LABEL_TEXT[c.label])}</div>
@@ -226,7 +226,7 @@ async function alertOwner(l: LeadInput, c: { label: Label; why: string; companyN
      ${h2("The company")}${muted(esc([fitText, c.facts].filter(Boolean).join(" · ") || "Nothing known yet"), 14)}
      ${c.signalLines.length ? `<ul style="margin:6px 0;padding-left:20px">${c.signalLines.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}
      ${button(`mailto:${l.email}`, `Reply to ${l.name.split(" ")[0]}`)} ${muted(`Target: within ${icp.inbound.slaMinutes} minutes.`)}`,
-    `Account Copilot · ${link(PAGE, "Open the Inbound tab")} · nothing is sent to ${esc(l.name)}`,
+    `F1rstword · ${link(PAGE, "Open the Inbound tab")} · nothing is sent to ${esc(l.name)}`,
   );
   await sendMail(ownerEmail(), subject, text, html);
 }
@@ -243,7 +243,7 @@ export async function nudgeOverdueLeads(): Promise<number> {
       const mins = Math.round((Date.now() - Date.parse(l.alerted_at!)) / 60_000);
       await sendMail(ownerEmail(), `Still waiting: ${shortName(l.name)}${l.company ? ` at ${l.company}` : ""} (${mins} min)`,
         `${l.name} ${INTENT_TEXT[l.intent as Intent]} ${mins} minutes ago and has not had an answer.\nReply: mailto:${l.email}\nOpen Inbound: ${PAGE}`,
-        layout(`<div style="font-size:18px;font-weight:700">${esc(l.name)} has been waiting ${mins} minutes</div>${muted(esc(`${INTENT_TEXT[l.intent as Intent]}${l.company ? ` · ${l.company}` : ""}`), 14)}${button(`mailto:${l.email}`, `Reply to ${l.name.split(" ")[0]}`)}`, `Account Copilot · ${link(PAGE, "Open the Inbound tab")}`));
+        layout(`<div style="font-size:18px;font-weight:700">${esc(l.name)} has been waiting ${mins} minutes</div>${muted(esc(`${INTENT_TEXT[l.intent as Intent]}${l.company ? ` · ${l.company}` : ""}`), 14)}${button(`mailto:${l.email}`, `Reply to ${l.name.split(" ")[0]}`)}`, `F1rstword · ${link(PAGE, "Open the Inbound tab")}`));
       await sb.from("cp_leads").update({ sla_nudged_at: new Date().toISOString() }).eq("id", l.id);
       n++;
     } catch (e) {

@@ -4,7 +4,7 @@ import { sb } from "./db.ts";
 // The logo is a small image stored as a data URL, so the page needs no file hosting.
 
 export type Brand = { name: string; tagline: string; logo: string };
-export const DEFAULT_BRAND: Brand = { name: "Account Copilot", tagline: "Who to contact today, and why", logo: "" };
+export const DEFAULT_BRAND: Brand = { name: "F1rstword", tagline: "Know who to talk to, and when.", logo: "" };
 export const LOGO_MAX = 300_000;
 
 const LOGO_RE = /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;

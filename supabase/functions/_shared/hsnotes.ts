@@ -9,11 +9,11 @@ const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "
 const lines = (t: string) => esc(t).replace(/\n/g, "<br>");
 
 export function briefNoteHtml(meetingTitle: string, when: string, briefText: string): string {
-  return `<p><b>Account Copilot: meeting brief</b> · ${esc(meetingTitle)} · ${esc(when)}</p><p><i>Internal. Not shared with the guest.</i></p><p>${lines(briefText)}</p>`;
+  return `<p><b>F1rstword: meeting brief</b> · ${esc(meetingTitle)} · ${esc(when)}</p><p><i>Internal. Not shared with the guest.</i></p><p>${lines(briefText)}</p>`;
 }
 
 export function draftNoteHtml(d: { persona?: string | null; subject: string; body: string }): string {
-  return `<p><b>Account Copilot: draft first-touch email</b> (a suggestion, <u>not sent</u>)${d.persona ? ` · for ${esc(d.persona)}` : ""}</p><p><b>Subject:</b> ${esc(d.subject)}</p><p>${lines(d.body)}</p>`;
+  return `<p><b>F1rstword: draft first-touch email</b> (a suggestion, <u>not sent</u>)${d.persona ? ` · for ${esc(d.persona)}` : ""}</p><p><b>Subject:</b> ${esc(d.subject)}</p><p>${lines(d.body)}</p>`;
 }
 
 /** Adds the note to the account's HubSpot company, if it has one. Returns whether a note was written. */

@@ -1,4 +1,4 @@
-# Demo: Account Copilot in 2 minutes
+# Demo: F1rstword in 2 minutes
 
 The story: **"A rep shouldn't research and hunt for leads. The system finds them, qualifies them and hands over a ready pipeline. The rep just talks to people."**
 

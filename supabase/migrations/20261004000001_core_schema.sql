@@ -1,4 +1,4 @@
--- Account Copilot core schema. All access goes through Edge Functions using the service role,
+-- F1rstword core schema. All access goes through Edge Functions using the service role,
 -- so RLS is enabled with no client policies.
 
 create extension if not exists pgcrypto;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Account Copilot smoke test. Run: bash scripts/smoke.sh
+# F1rstword smoke test. Run: bash scripts/smoke.sh
 # Checks security, the public and owner paths, and the scheduled jobs. Never prints keys. Costs no credits.
 cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a

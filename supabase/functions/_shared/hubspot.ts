@@ -47,7 +47,7 @@ export function dossierNoteHtml(d: Dossier | null, signals: SignalRow[], whyNow:
     return `<p><b>Why now:</b> ${esc(whyNow)}</p><h4>Signals</h4>${ul(signals.map((s) => `${s.kind}: ${s.title}`))}`;
   }
   return [
-    `<h3>Account Copilot dossier</h3>`,
+    `<h3>F1rstword dossier</h3>`,
     `<p>${esc(d.summary)}</p>`,
     `<p><b>ICP fit:</b> ${esc(d.icp_fit?.score ?? "n/a")} / 100</p>${ul(d.icp_fit?.reasons)}`,
     `<p><b>Why now:</b> ${esc(d.why_now ?? whyNow)}</p>`,
@@ -301,7 +301,7 @@ export async function createTask(t: TaskInput): Promise<string> {
   return r.body.id;
 }
 
-// ---- Status sync: lead status, notes, deals (only ever on records Account Copilot created) ----
+// ---- Status sync: lead status, notes, deals (only ever on records F1rstword created) ----
 
 export type LeadStatus = "NEW" | "OPEN" | "IN_PROGRESS" | "OPEN_DEAL" | "UNQUALIFIED" | "ATTEMPTED_TO_CONTACT" | "CONNECTED" | "BAD_TIMING";
 export type DealStage = "appointmentscheduled" | "qualifiedtobuy" | "closedlost";

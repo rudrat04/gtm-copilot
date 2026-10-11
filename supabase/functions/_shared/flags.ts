@@ -218,7 +218,7 @@ export async function runWatch(mode: "daily" | "urgent", opts: { dry?: boolean }
       const { data: a } = await sb.from("cp_accounts").select("hubspot_company_id").eq("id", f.accountId!).maybeSingle();
       if (!a?.hubspot_company_id) continue;
       try {
-        const id = await createTask({ subject: `Needs attention: ${f.title}`.slice(0, 240), html: `<p>${f.title}</p><p>${f.detail}</p><p><i>Account Copilot pipeline watch. Nothing was sent to anyone.</i></p>`, dueIso: nowIso, priority: "HIGH", ownerId: icp.owner.hubspotOwnerId, companyId: a.hubspot_company_id });
+        const id = await createTask({ subject: `Needs attention: ${f.title}`.slice(0, 240), html: `<p>${f.title}</p><p>${f.detail}</p><p><i>F1rstword pipeline watch. Nothing was sent to anyone.</i></p>`, dueIso: nowIso, priority: "HIGH", ownerId: icp.owner.hubspotOwnerId, companyId: a.hubspot_company_id });
         await sb.from("cp_flags").update({ hubspot_task_id: id }).eq("key", f.key);
         await sb.from("cp_tasks").insert({ key: `flag:${f.key}:${nowIso.slice(0, 10)}`, account_id: f.accountId, hubspot_task_id: id });
         summary.todos++;

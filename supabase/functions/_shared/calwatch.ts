@@ -15,8 +15,8 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "s
 type Meeting = { id: string; calendar_event_id: string; title: string | null; starts_at: string; ends_at: string | null; attendee_name: string | null; attendee_email: string | null; attendee_domain: string | null; account_id: string | null; status: string; outcome: string | null; reschedule_count: number | null };
 
 async function notify(subject: string, headline: string, detail: string) {
-  const text = `${headline}\n\n${detail}\n\nOpen the Meetings tab: ${PAGE}\n\n— Account Copilot`;
-  const html = layout(`<div style="font-size:18px;font-weight:700">${esc(headline)}</div>${muted(esc(detail), 14)}${button(PAGE, "Open Meetings")}`, "Account Copilot · only you get this email");
+  const text = `${headline}\n\n${detail}\n\nOpen the Meetings tab: ${PAGE}\n\n— F1rstword`;
+  const html = layout(`<div style="font-size:18px;font-weight:700">${esc(headline)}</div>${muted(esc(detail), 14)}${button(PAGE, "Open Meetings")}`, "F1rstword · only you get this email");
   await sendMail(ownerEmail(), subject, text, html);
 }
 

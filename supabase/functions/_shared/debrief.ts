@@ -127,12 +127,12 @@ export async function sendDueDebriefs(): Promise<number> {
     const who = m.attendee_name ?? m.attendee_email ?? "your meeting";
     const company = m.attendee_domain ?? "";
     const links = await Promise.all(OUTCOMES.map(async (o) => [o, await linkFor(m.id, o)] as const));
-    const text = `How did "${m.title ?? "your meeting"}" with ${who}${company ? ` (${company})` : ""} go?\n\nOne tap records it, updates HubSpot and sets the next step:\n${links.map(([o, u]) => `  ${OUTCOME_LABEL[o]}: ${u}`).join("\n")}\n\nAfter tapping you can add two lines of notes and get a recap plus a follow-up email draft.\n\n— Account Copilot · nothing is sent to ${who}`;
+    const text = `How did "${m.title ?? "your meeting"}" with ${who}${company ? ` (${company})` : ""} go?\n\nOne tap records it, updates HubSpot and sets the next step:\n${links.map(([o, u]) => `  ${OUTCOME_LABEL[o]}: ${u}`).join("\n")}\n\nAfter tapping you can add two lines of notes and get a recap plus a follow-up email draft.\n\n— F1rstword · nothing is sent to ${who}`;
     const html = layout(
       `<div style="font-size:19px;font-weight:700">How did it go with ${esc(who)}?</div>${muted(`${esc(m.title ?? "Meeting")}${company ? ` · ${esc(company)}` : ""}`)}
        ${h2("One tap")}<div>${links.map(([o, u]) => `<div style="margin:6px 0">${button(u, OUTCOME_LABEL[o])}</div>`).join("")}</div>
        ${muted("It updates HubSpot (lead status, deal stage, a to-do) and then lets you add two lines of notes for a recap and a follow-up draft.")}`,
-      `Account Copilot · nothing is sent to ${esc(who)} · ${link(PAGE, "Open the Meetings tab")}`,
+      `F1rstword · nothing is sent to ${esc(who)} · ${link(PAGE, "Open the Meetings tab")}`,
     );
     try {
       await sendMail(ownerEmail(), `How did it go? ${company || who} · ${who}`, text, html);

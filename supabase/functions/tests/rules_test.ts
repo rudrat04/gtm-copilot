@@ -1,4 +1,4 @@
-// Unit tests for the rule-based parts of Account Copilot: scoring, fit, labels, parsing, validation, redaction.
+// Unit tests for the rule-based parts of F1rstword: scoring, fit, labels, parsing, validation, redaction.
 // No network and no database are used. Run: deno test --allow-env --allow-read tests/
 import { assert, assertEquals, assertFalse } from "jsr:@std/assert@1";
 

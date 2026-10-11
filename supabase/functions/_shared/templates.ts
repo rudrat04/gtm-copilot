@@ -86,7 +86,7 @@ export function digestEmail(items: TodayItem[], hidden: number, links: Links, at
     section("MEETINGS", mt),
     section("WORTH ANOTHER LOOK", rv),
     `Open the full list: ${page}`,
-    `\n— Account Copilot${hidden ? ` · ${hidden} lower-priority accounts not shown` : ""} · outreach stays manual, nothing is sent for you`,
+    `\n— F1rstword${hidden ? ` · ${hidden} lower-priority accounts not shown` : ""} · outreach stays manual, nothing is sent for you`,
   ].filter(Boolean).join("\n");
   const subject = items.length
     ? `Today: ${items.length} prospect${items.length === 1 ? "" : "s"} to focus on (${parts})${attention.total ? ` · ${attention.total} need attention` : ""}`
@@ -115,7 +115,7 @@ export function alertEmail(
       a.firmo ? `Company: ${a.firmo}` : "",
       `Why today: ${why}`,
       `Open: ${hubspotId ? hubspotCompanyUrl(hubspotId) : page}`,
-      `\n— Account Copilot · you get at most ${icp.alerts.maxPerDay} of these a day`,
+      `\n— F1rstword · you get at most ${icp.alerts.maxPerDay} of these a day`,
     ].filter(Boolean).join("\n"),
   };
 }
@@ -146,7 +146,7 @@ function itemHtml(it: TodayItem, links: Links): string {
     it.last_action ? muted(`Last action: ${h(it.last_action)}`) : "",
     c2 ? `<div style="margin-top:6px">Also consider: <b>${h(c2.name)}</b>, ${h(c2.title)}${c2.email ? ` (${mailto(c2.email)})` : ""}</div>` : "",
     !c ? muted(`Next: open the page and use <b>Find relevant people</b>`) : "",
-    `<div style="margin-top:6px">${link(open, links.get(a!.id) ? "Open in HubSpot" : "Open in Account Copilot")}</div>`,
+    `<div style="margin-top:6px">${link(open, links.get(a!.id) ? "Open in HubSpot" : "Open in F1rstword")}</div>`,
   ].join(""));
 }
 
@@ -163,9 +163,9 @@ function digestHtml(items: TodayItem[], hidden: number, links: Links, attention:
     section("Follow-ups due", group(["follow_up"])),
     section("Meetings", group(["meeting"])),
     section("Worth another look", group(["revive"])),
-    `<div style="margin-top:18px">${button(page, "Open Account Copilot")}</div>`,
+    `<div style="margin-top:18px">${button(page, "Open F1rstword")}</div>`,
   ].join("");
-  return layout(inner, `Account Copilot${hidden ? ` · ${hidden} lower-priority accounts not shown` : ""} · outreach stays manual, nothing is sent for you`);
+  return layout(inner, `F1rstword${hidden ? ` · ${hidden} lower-priority accounts not shown` : ""} · outreach stays manual, nothing is sent for you`);
 }
 
 function alertHtml(
@@ -186,9 +186,9 @@ function alertHtml(
     quote("Why today:", why),
     list([`${h(top.title.slice(0, 140))} <span style="color:#78716c">(${top.published ? `published ${h(age(top.published))}` : "found today"})</span>`]),
     c2 ? `<div>Also consider: <b>${h(c2.name)}</b>, ${h(c2.title)}${c2.email ? ` (${mailto(c2.email)})` : ""}</div>` : "",
-    `<div>${button(open, hubspotId ? "Open in HubSpot" : "Open in Account Copilot")}</div>`,
+    `<div>${button(open, hubspotId ? "Open in HubSpot" : "Open in F1rstword")}</div>`,
   ].join("");
-  return layout(inner, `Account Copilot · you get at most ${icp.alerts.maxPerDay} of these a day · outreach stays manual`);
+  return layout(inner, `F1rstword · you get at most ${icp.alerts.maxPerDay} of these a day · outreach stays manual`);
 }
 
 /** HubSpot task title and body (HTML) for one prospect. */
@@ -207,7 +207,7 @@ export function taskFor(it: TodayItem, contactName?: string | null) {
     `<p><b>Why today:</b> ${esc(it.why || it.reason)}</p>`,
     it.signals.length ? `<p><b>Signals (${it.signals.length}, newest first):</b></p>${li(it.signals.map(sigText))}` : "",
     it.last_action ? `<p><b>Last action:</b> ${esc(it.last_action)}</p>` : "",
-    `<p>Marking it contacted in Account Copilot schedules the next follow-up: <a href="${esc(page)}">${esc(page)}</a></p>`,
+    `<p>Marking it contacted in F1rstword schedules the next follow-up: <a href="${esc(page)}">${esc(page)}</a></p>`,
   ].join("");
   return { subject, html };
 }
@@ -220,7 +220,7 @@ export function summaryTask(items: TodayItem[], hidden: number) {
     return `${c ? `${c.name} (${c.title}) at ` : ""}${i.account!.name} · ${TIER[i.account!.tier]}: ${i.label.toLowerCase()}, ${(i.why || i.reason).slice(0, 100)}`;
   });
   return {
-    subject: `Account Copilot: today's focus (${items.length})`,
-    html: `<p>${esc(longDate())}</p><ol>${rows.map((r) => `<li>${esc(r)}</li>`).join("")}</ol>${hidden ? `<p>${hidden} lower-priority accounts not shown.</p>` : ""}<p><a href="${esc(page)}">Open Account Copilot</a></p>`,
+    subject: `F1rstword: today's focus (${items.length})`,
+    html: `<p>${esc(longDate())}</p><ol>${rows.map((r) => `<li>${esc(r)}</li>`).join("")}</ol>${hidden ? `<p>${hidden} lower-priority accounts not shown.</p>` : ""}<p><a href="${esc(page)}">Open F1rstword</a></p>`,
   };
 }

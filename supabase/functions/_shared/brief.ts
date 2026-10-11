@@ -63,7 +63,7 @@ export function buildBrief(i: BriefInput): string {
   if (d?.risks?.length) lines.push(`\nWATCH OUT FOR\n${bullets(d.risks, 2)}`);
 
   lines.push(`\nFull dossier and people: ${i.pageUrl}`);
-  lines.push(`Account Copilot · public sources only · kept private, not added to the calendar invite`);
+  lines.push(`F1rstword · public sources only · kept private, not added to the calendar invite`);
   return lines.join("\n");
 }
 
@@ -91,7 +91,7 @@ export function buildBriefHtml(i: BriefInput): string {
     questions.length ? h2("Questions to ask") + `<ol style="margin:6px 0;padding-left:20px">${questions.map((q) => `<li style="margin:4px 0">${esc(q)}</li>`).join("")}</ol>` : "",
     d?.pains?.length ? h2("Likely pains") + list(d.pains.slice(0, 3).map(esc)) : "",
     d?.risks?.length ? h2("Watch out for") + list(d.risks.slice(0, 2).map(esc)) : "",
-    `<div style="margin-top:18px">${link(i.pageUrl, "Full dossier and people in Account Copilot")}</div>`,
+    `<div style="margin-top:18px">${link(i.pageUrl, "Full dossier and people in F1rstword")}</div>`,
   ].join("");
-  return layout(inner, "Account Copilot · public sources only · kept private, not added to the calendar invite");
+  return layout(inner, "F1rstword · public sources only · kept private, not added to the calendar invite");
 }

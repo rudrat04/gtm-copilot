@@ -6,7 +6,7 @@ import { esc } from "./emailhtml.ts";
 import icp from "./icp.json" with { type: "json" };
 
 // Keeps HubSpot in step with what the rep does here. Only for accounts we already pushed to HubSpot, only on
-// records Account Copilot created (the company, its contacts and the one deal we open). Best effort: a HubSpot
+// records F1rstword created (the company, its contacts and the one deal we open). Best effort: a HubSpot
 // problem is logged and reported, but never blocks the action in the app.
 
 export type SyncKind = "contacted" | "replied" | "meeting" | "snooze" | "not_now" | "went_well" | "follow_up" | "no_show" | "not_fit" | "cancelled";
@@ -71,7 +71,7 @@ export async function syncOutcome(accountId: string, kind: SyncKind, ctx: { note
     }
   }
 
-  const body = `<p><b>Account Copilot:</b> ${esc(LABEL[kind])}${ctx.note ? ` · ${esc(ctx.note)}` : ""}</p>${ctx.recapHtml ?? ""}`;
+  const body = `<p><b>F1rstword:</b> ${esc(LABEL[kind])}${ctx.note ? ` · ${esc(ctx.note)}` : ""}</p>${ctx.recapHtml ?? ""}`;
   await step("Note added", async () => { if (!(await logNote(body, { companyId: a.hubspot_company_id, contactId }))) throw new Error("note"); });
 
   const t = TASK[kind];

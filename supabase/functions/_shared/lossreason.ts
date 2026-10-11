@@ -26,11 +26,11 @@ export async function askLossReasons(): Promise<number> {
   let sent = 0;
   for (const a of rows ?? []) {
     const links = await Promise.all(LOSS_REASONS.map(async (r) => [r, `${PAGE}#loss=${a.id}&r=${r}&s=${await sign(a.id, r, NS)}`] as const));
-    const text = `The deal with ${a.name} is closed lost. Why? One tap records it and writes it to the deal in HubSpot:\n${links.map(([r, u]) => `  ${LOSS_LABEL[r]}: ${u}`).join("\n")}\n\n— Account Copilot · nothing is sent to ${a.name}`;
+    const text = `The deal with ${a.name} is closed lost. Why? One tap records it and writes it to the deal in HubSpot:\n${links.map(([r, u]) => `  ${LOSS_LABEL[r]}: ${u}`).join("\n")}\n\n— F1rstword · nothing is sent to ${a.name}`;
     const html = layout(
       `<div style="font-size:19px;font-weight:700">Why was ${esc(a.name)} lost?</div>${muted("One tap records it on the account and on the deal in HubSpot.")}
        ${h2("Pick one")}<div>${links.map(([r, u]) => `<div style="margin:6px 0">${button(u, LOSS_LABEL[r])}</div>`).join("")}</div>`,
-      `Account Copilot · nothing is sent to ${esc(a.name)} · ${link(PAGE, "Open the app")}`,
+      `F1rstword · nothing is sent to ${esc(a.name)} · ${link(PAGE, "Open the app")}`,
     );
     try {
       await sendMail(ownerEmail(), `Why was it lost? ${a.name}`, text, html);

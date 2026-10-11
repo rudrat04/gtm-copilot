@@ -1,4 +1,4 @@
-# Case study: Account Copilot
+# Case study: F1rstword
 
 *A GTM system that finds, qualifies and briefs, so reps spend their time on people.*
 

@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tecgblsoylrshcqneevf.supabase.co; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
-<title>Account Copilot</title>
+<title>F1rstword</title>
 <style>
   :root {
     color-scheme: light;
@@ -273,7 +273,7 @@
 <body>
 <main>
   <header class="top">
-    <div class="brand"><h1>Account Copilot</h1><p>Who to contact today, and why</p></div>
+    <div class="brand"><h1>F1rstword</h1><p>Know who to talk to, and when.</p></div>
     <div class="mode" id="mode"></div>
   </header>
 
@@ -1216,7 +1216,7 @@ function tagField(path, label, help) {
 }
 const chipField = (key, label, options, help) => `<div class="field"><span class="lbl">${esc(label)}</span><div class="chips" style="margin:0">${options.map((o) => `<button type="button" class="chip${P[key].includes(o) ? " sel" : ""}" data-toggle="${key}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div>${help ? `<p class="help">${esc(help)}</p>` : ""}</div>`;
 
-let SUGGEST_NOTE = "", MS_OPEN = null, DIGEST_TIME = null, BRAND_DRAFT = { name: "Account Copilot", tagline: "Who to contact today, and why", logo: "" };
+let SUGGEST_NOTE = "", MS_OPEN = null, DIGEST_TIME = null, BRAND_DRAFT = { name: "F1rstword", tagline: "Know who to talk to, and when.", logo: "" };
 const PRESETS = {
   quiet: { alertsPerDay: 1, watchlistAlerts: true, todayCap: 5, digestFlags: true, urgent: true, todoForUrgent: false, checks: { hotUntouched: 96, followupOverdue: 4, leadPastTarget: 60, meetingNoDebrief: 4, repliedNoNext: 10, dealStuck: 30, thinPipeline: 1, drift: 14 }, off: ["thinPipeline", "drift"] },
   normal: { alertsPerDay: 3, watchlistAlerts: true, todayCap: 8, digestFlags: true, urgent: true, todoForUrgent: true, checks: { hotUntouched: 48, followupOverdue: 2, leadPastTarget: 30, meetingNoDebrief: 2, repliedNoNext: 5, dealStuck: 14, thinPipeline: 3, drift: 7 }, off: [] },
