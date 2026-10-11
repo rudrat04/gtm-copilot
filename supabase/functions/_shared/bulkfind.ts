@@ -22,7 +22,7 @@ export function pickTop<T extends { heat: string; priority: number | null }>(row
 
 export async function planBulkFind(limit: number): Promise<{ plan: Planned[]; waiting: number; credits_min: number; credits_max: number; balance: { remaining: number; available: number } | null }> {
   const { data: accts } = await sb.from("cp_accounts").select(`id,name,priority_score,status,outreach_status,${FIT_COLS}`)
-    .in("status", ["queued", "pushed"]).eq("outreach_status", "open").order("priority_score", { ascending: false, nullsFirst: false }).limit(200);
+    .is("removed_at", null).in("status", ["queued", "pushed"]).eq("outreach_status", "open").order("priority_score", { ascending: false, nullsFirst: false }).limit(200);
   const { data: have } = await sb.from("cp_people").select("account_id");
   const withPeople = new Set((have ?? []).map((p) => p.account_id));
   const todo = (accts ?? []).filter((a) => !withPeople.has(a.id) && worthShowing(a));

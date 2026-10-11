@@ -65,7 +65,7 @@ export async function collect(mode: "daily" | "urgent"): Promise<Candidate[]> {
   const out: Candidate[] = [];
   const add = (c: Omit<Candidate, "key"> & { extra?: string }) => out.push({ ...c, key: `${c.kind}:${c.accountId ?? "-"}${c.extra ? `:${c.extra}` : ""}` });
 
-  const { data: all } = await sb.from("cp_accounts").select(ACCT).or("status.in.(queued,pushed),outreach_status.neq.open").limit(500);
+  const { data: all } = await sb.from("cp_accounts").select(ACCT).is("removed_at", null).or("status.in.(queued,pushed),outreach_status.neq.open").limit(500);
   const accounts = all ?? [];
   const byId = new Map(accounts.map((a) => [a.id, a]));
   // Companies below the owner's fit bar are never flagged, unless the owner is already working them.

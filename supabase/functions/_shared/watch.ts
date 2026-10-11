@@ -37,7 +37,7 @@ export async function lightCheck(admin: boolean) {
 
   const { data } = await sb.from("cp_accounts")
     .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date")
-    .in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted", "snoozed"])
+    .is("removed_at", null).in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted", "snoozed"])
     .order("priority_score", { ascending: false }).limit(MAX_ACCOUNTS);
   const accounts = (data ?? []) as Acct[];
   const pl = await autoRefreshPredictLeads(2).catch(() => ({ checked: 0, added: 0 })); // a couple of the best accounts a day, within the monthly allowance

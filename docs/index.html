@@ -217,6 +217,13 @@
   @keyframes sh { to { background-position: -200% 0; } }
   @media (prefers-reduced-motion: reduce) { .skel i { animation: none; } }
 
+  .modal-bg { position: fixed; inset: 0; z-index: 80; background: rgba(40, 35, 27, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal { background: var(--surface); border: 1px solid var(--line, #e3dcc8); border-radius: 14px; box-shadow: var(--shadow); max-width: 440px; width: 100%; padding: 20px 22px; }
+  .modal h3 { margin: 0 0 8px; font-size: 17px; }
+  .modal p { margin: 0 0 16px; white-space: pre-line; color: var(--muted, #6d6552); font-size: 14px; line-height: 1.5; }
+  .modal .row { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn.danger { background: #a3261c; border-color: #a3261c; color: #fff; }
+  .toast button { margin-left: 12px; background: none; border: 0; color: inherit; text-decoration: underline; font: inherit; cursor: pointer; }
   .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 60; max-width: min(92vw, 520px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; box-shadow: var(--shadow); }
   .err { color: var(--bad); }
 
@@ -291,7 +298,22 @@ async function api(fn, body) {
 }
 
 let toastTimer;
-function say(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 4200); }
+function say(msg, action) {
+  const t = $("toast"); t.textContent = msg;
+  if (action) { const b = document.createElement("button"); b.type = "button"; b.textContent = action.label; b.onclick = () => { t.hidden = true; action.run(); }; t.append(b); }
+  t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), action ? 9000 : 4200);
+}
+/** Our own confirm box (the browser one looks out of place). Resolves true or false. */
+function ask({ title, body, ok = "Continue", danger = false }) {
+  return new Promise((resolve) => {
+    const bg = document.createElement("div"); bg.className = "modal-bg";
+    bg.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><h3>${esc(title)}</h3><p>${esc(body || "")}</p><div class="row"><button type="button" class="btn ghost" data-no>Cancel</button><button type="button" class="btn ${danger ? "danger" : "primary"}" data-yes>${esc(ok)}</button></div></div>`;
+    const done = (v) => { bg.remove(); document.removeEventListener("keydown", key); resolve(v); };
+    const key = (e) => { if (e.key === "Escape") done(false); };
+    bg.addEventListener("click", (e) => { if (e.target === bg || e.target.closest("[data-no]")) done(false); else if (e.target.closest("[data-yes]")) done(true); });
+    document.addEventListener("keydown", key); document.body.append(bg); bg.querySelector("[data-yes]").focus();
+  });
+}
 
 const days = (iso) => { const t = Date.parse(iso); return Number.isNaN(t) ? null : Math.floor((Date.now() - t) / 864e5); };
 function ago(iso) {
@@ -375,7 +397,7 @@ function lifeLine(a) {
  *  - contact known: Mark contacted (or Contacted again)
  * Everything else lives in the More menu.
  */
-function actionsHtml({ outreach, hasContacts, hasDraft, primary: custom, compact }) {
+function actionsHtml({ outreach, hasContacts, hasDraft, primary: custom, compact, extra = "", removable = false }) {
   const parked = outreach === "snoozed" || outreach === "not_now";
   const primary = custom ?? (parked ? `<button class="btn primary" data-life="reopen">Reopen</button>`
     : !hasContacts ? `<button class="btn primary" data-act="people">Find relevant people</button>`
@@ -383,7 +405,8 @@ function actionsHtml({ outreach, hasContacts, hasDraft, primary: custom, compact
   const touched = outreach === "contacted" || outreach === "replied" || outreach === "meeting";
   const markInMenu = !parked && (custom != null || !hasContacts);
   const menu = [
-    hasContacts ? `<button data-act="people">See all contacts</button>` : "",
+    hasContacts ? `<button data-act="people">See all people</button>` : "",
+    extra,
     markInMenu ? `<button data-life="contacted">${outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>` : "",
     compact ? `<button data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>` : "",
     `<button data-act="dossier">View dossier</button>`,
@@ -391,8 +414,9 @@ function actionsHtml({ outreach, hasContacts, hasDraft, primary: custom, compact
     parked ? "" : `<hr>${touched ? `<button data-life="reopen">Clear status (reopen)</button>` : ""}<button data-life="replied">They replied</button><button data-life="meeting">Meeting booked</button>
       <button data-life="snooze" data-days="7">Snooze 1 week</button><button data-life="snooze" data-days="14">Snooze 2 weeks</button><button data-life="snooze" data-days="30">Snooze 1 month</button>
       <hr><button data-life="not_now">Not now</button><button data-act="notfit">Not a fit…</button>`,
+    removable ? `<button data-act="remove">Remove this company…</button>` : "",
   ].join("");
-  return `<div class="actions">${primary}${compact ? "" : `<button class="btn ghost" data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>`}
+  return `<div class="actions">${primary}${compact && hasContacts && removable ? `<button class="btn ghost sm" data-act="morepeople" title="Searches again for more people. Uses 1 to 2 search credits">Find more people</button>` : ""}${compact ? "" : `<button class="btn ghost" data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>`}
     <div class="menu"><button class="btn ghost" data-tog aria-haspopup="menu">More ▾</button><div class="menu-list" hidden>${menu}</div></div></div>
     <div class="panel dbox"></div><div class="panel draftbox"></div><div class="panel pbox"></div><div class="panel nfbox"></div>`;
 }
@@ -464,11 +488,12 @@ async function loadToday() {
 const parkedS = (a) => a.outreach_status === "snoozed" || a.outreach_status === "not_now";
 const progressS = (a) => ["contacted", "replied", "meeting"].includes(a.outreach_status);
 const VIEWS = [
-  ["open", "Prospects", "Companies worth working that you have not contacted yet", (a) => !a.low && a.outreach_status === "open"],
-  ["progress", "In progress", "Contacted, replied or meeting booked", progressS],
-  ["parked", "Parked", "Snoozed, not now, or closed-lost", parkedS],
+  ["open", "Prospects", "Companies worth working that you have not contacted yet", (a) => !a.removed && !a.low && a.outreach_status === "open"],
+  ["progress", "In progress", "Contacted, replied or meeting booked", (a) => !a.removed && progressS(a)],
+  ["parked", "Parked", "Snoozed, not now, or closed-lost", (a) => !a.removed && parkedS(a)],
   ["low", "Low fit", "Hidden by default: outside your fit bar or too low a score", (a) => a.low],
-  ["all", "All", "Every company", () => true],
+  ["all", "All", "Every company except removed ones", (a) => !a.removed],
+  ["removed", "Removed", "Hidden and blocked. Restore any of them here", (a) => a.removed],
 ];
 const SELECTS = [
   ["heat", "Heat", [["", "Any"], ["hot", "Hot"], ["warm", "Warm"], ["watching", "Watching"]], (a, v) => a.heat === v],
@@ -507,6 +532,7 @@ function stageText(a) {
 /** The one next step for this company, from what we already know about it. */
 function nextStep(a) {
   const s = a.outreach_status, c = a.contacts[0];
+  if (a.removed) return `<button class="btn primary sm" data-act="restore">Restore</button>`;
   if (parkedS(a)) return `<button class="btn primary sm" data-life="reopen">Reopen</button>`;
   if (s === "meeting") return "";
   if (s === "replied") return `<button class="btn primary sm" data-life="meeting">Meeting booked</button>`;
@@ -546,7 +572,7 @@ function aFacts(a) {
     ${fact("Size", f.size && esc(f.size), none)}
     ${fact("Stage", stage, none)}
     ${fact("Location", f.location && esc(f.location), none)}
-    ${fact("Founded", f.founded && esc(f.founded), none)}
+    ${f.founded ? fact("Founded", esc(f.founded), none) : ""}
     ${fact("Industry", f.industry && esc(f.industry), "Unknown")}
     ${fact("Tools they use", tools, "Unknown")}
     ${fact("Sales style", motion && esc(motion), "Unknown")}
@@ -572,7 +598,7 @@ function aCard(a) {
     ${reason ? `<section class="blk"><p class="label">Why now</p><div class="why">${reason}</div></section>` : ""}
     <section class="blk"><p class="label">Signals</p>${sigList(a.signals, 2) || `<p class="meta" style="margin:0"><span class="unk">No signals yet</span></p>`}</section>
     <section class="blk"><p class="label">Best contact</p>${contact || `<div class="contact meta"><span class="unk">No contact yet</span></div>`}</section>
-    ${actionsHtml({ outreach: a.outreach_status, hasContacts: a.contacts.length > 0, hasDraft: false, primary: nextStep(a), compact: true })}</article>`;
+    ${a.removed ? `<div class="actions">${nextStep(a)}</div>` : actionsHtml({ outreach: a.outreach_status, hasContacts: a.contacts.length > 0, hasDraft: false, primary: nextStep(a), compact: true, removable: !progressS(a), extra: !a.firmo_known && a.contacts.length ? `<button data-act="firmo" title="Uses 0.2 search credit">Check size and stage</button>` : "" })}</article>`;
 }
 
 function drawAccounts() {
@@ -594,7 +620,7 @@ function drawAccounts() {
         <div class="fgrid">${SELECTS.map(sel).join("")}${sel(["sort", "Sort by", SORTS.map(([k, l]) => [k, l])])}</div></details>
       <input id="asearch" class="fsearch" type="search" placeholder="Search by name, website or what they do" aria-label="Search companies" value="${esc(AF.q)}">
       <div class="fbar"><span>Showing <b>${list.length}</b> of ${base.length} in ${esc(view[1])}</span>
-        <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
+        <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin && AF.view === "low" && list.length ? `<button class="btn ghost sm" data-bulkremove title="Removes low-fit companies nobody has touched">Remove all low fit</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
     </div>`;
   $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${filtersOn() ? "No companies match these filters." : AF.view === "open" ? "Nothing to work right now." : "No companies in this view."}${filtersOn() ? `<br><button class="btn link" data-clear>Clear filters</button>` : ""}</div>`;
   const s = $("asearch"); if (AF.q && document.activeElement?.id === "asearch") { s.focus(); s.setSelectionRange(AF.q.length, AF.q.length); }
@@ -608,6 +634,19 @@ async function loadAccounts(quiet) {
 $("ahead").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-view]"); if (b) { AF.view = b.dataset.view; saveAF(); drawAccounts(); return; }
   if (e.target.closest("[data-clear]")) { AF = { ...AF_DEFAULT, view: AF.view }; saveAF(); drawAccounts(); return; }
+  const br = e.target.closest("[data-bulkremove]");
+  if (br) {
+    br.disabled = true;
+    try {
+      const p = await api("queue", { action: "remove_low", dry: true });
+      if (p.mode === "dry_run") { say(p.message); return; }
+      if (!p.count) { say("Nothing to remove: every low-fit company here already has activity."); return; }
+      if (!(await ask({ title: `Remove ${p.count} low-fit compan${p.count === 1 ? "y" : "ies"}?`, body: `${p.names.join("\n")}${p.count > p.names.length ? `\n…and ${p.count - p.names.length} more` : ""}\n\nOnly companies you have not touched, that are not in HubSpot and have no people. They can be restored from the Removed view.`, ok: "Remove", danger: true }))) return;
+      const r = await api("queue", { action: "remove_low", dry: false });
+      say(`Removed ${r.removed}.`); ACC = null; loadAccounts(true);
+    } catch (err) { say(err.message); } finally { br.disabled = false; }
+    return;
+  }
   const bf = e.target.closest("[data-bulkfind]"); if (!bf) return;
   bf.disabled = true; say("Checking who to search…");
   try {
@@ -615,7 +654,7 @@ $("ahead").addEventListener("click", async (e) => {
     if (p.mode === "dry_run") { say(p.message); return; }
     if (!p.plan.length) { say(`No hot or warm company without people${p.waiting ? "" : " that passes your fit bar"}.`); return; }
     const bal = p.balance ? ` You have ${p.balance.remaining} of ${p.balance.available} credits left this month.` : "";
-    if (!confirm(`Search for people at ${p.plan.length} compan${p.plan.length > 1 ? "ies" : "y"}?\n\n${p.plan.map((x) => `${x.name} (${x.heat})`).join("\n")}\n\nCost: ${p.credits_min} to ${p.credits_max} search credits (1 each, a second only if the first finds fewer than 3 people).${bal}`)) return;
+    if (!(await ask({ title: `Search for people at ${p.plan.length} compan${p.plan.length > 1 ? "ies" : "y"}?`, body: `${p.plan.map((x) => `${x.name} (${x.heat})`).join("\n")}\n\nCost: ${p.credits_min} to ${p.credits_max} search credits (1 each, a second only if the first finds fewer than 3 people).${bal}`, ok: "Search" }))) return;
     say("Searching…");
     const r = await api("queue", { action: "find_people_bulk", limit: 5, dry: false });
     const found = r.done.reduce((a, d) => a + d.stored, 0);
@@ -657,6 +696,22 @@ function wireCards(root, reload) {
     const btn = e.target.closest("button[data-act]"); if (!btn) return;
     const card = btn.closest(".card"), act = btn.dataset.act;
     if (act === "people") { mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain, true); return; }
+    if (act === "morepeople") {
+      if (!(await ask({ title: `Search again for people at ${card.dataset.name}?`, body: "Looks for more relevant people. Uses 1 to 2 search credits. People you already have are kept.", ok: "Search" }))) return;
+      mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain, true, true); return;
+    }
+    if (act === "remove" || act === "restore") {
+      const id = card.dataset.id, name = card.dataset.name;
+      if (act === "remove" && !(await ask({ title: `Remove ${name}?`, body: "It disappears from every list and is never found or imported again. Nothing is changed in HubSpot. You can bring it back from the Removed view.", ok: "Remove", danger: true }))) return;
+      btn.disabled = true;
+      try {
+        const r = await api("queue", { action: act === "remove" ? "remove_account" : "restore_account", account_id: id });
+        if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
+        say(act === "remove" ? `${name} removed.` : `${name} restored.`, act === "remove" ? { label: "Undo", run: async () => { await api("queue", { action: "restore_account", account_id: id }); say(`${name} restored.`); reload(); } } : undefined);
+        reload();
+      } catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
     if (act === "notfit") {
       const reasons = Object.entries(NOT_FIT);
       card.querySelector(".nfbox").innerHTML = `<p class="label">Why is ${esc(card.dataset.name)} not a fit?</p><div class="chips" style="margin:0">${reasons.map(([k, l]) => `<button type="button" class="chip" data-nfreason="${esc(k)}">${esc(l)}</button>`).join("")}</div>
@@ -758,7 +813,7 @@ function strip(c) {
   return `<div class="strip">${cell(c.fit, "ICP fit", "From the dossier. Blank until the company is researched")}${cell(c.priority, "Priority", "Total of all signals")}${cell(c.signal, "Signals", "Hiring, news, community")}${cell(c.intent, "Intent", "Hiring and funding only")}${cell(c.tier_label, "Tier", "Becomes the ICP tier in HubSpot")}</div>`;
 }
 
-function mountPeople(box, accountName, domain, autoload) {
+function mountPeople(box, accountName, domain, autoload, refresh = false) {
   let accountId = null, people = [], msg = "", company = null, dirty = true;
 
   const row = (p) => {
@@ -790,9 +845,9 @@ function mountPeople(box, accountName, domain, autoload) {
   const find = async () => {
     box.innerHTML = `<p class="label">Relevant people</p><div class="skel"><i></i><i></i></div>`;
     try {
-      const d = await api("people", { action: "find", domain });
+      const d = await api("people", { action: "find", domain, refresh });
       accountId = d.account_id; people = d.people; company = d.company;
-      msg = d.locked ? d.message : people.length ? (d.cached ? "" : `Found with ${d.credits_spent ?? 1} search credit${d.credits_spent === 2 ? "s" : ""}.`) : "No matching people found for this company.";
+      msg = d.locked ? d.message : people.length ? (d.cached ? "" : refresh ? `Searched again with ${d.credits_spent ?? 1} search credit${d.credits_spent === 1 ? "" : "s"}.` : `Found with ${d.credits_spent ?? 1} search credit${d.credits_spent === 2 ? "s" : ""}.`) : "No matching people found for this company.";
       draw();
     } catch (err) { msg = err.message; draw(); }
   };
@@ -1264,7 +1319,7 @@ async function loadSetup() {
         const d = await api("queue", { action: "hubspot_refresh", dry: true });
         if (d.mode === "dry_run") { say(d.message); btn.disabled = false; return; }
         if (!d.companies) { $("hsout").innerHTML = `<p class="meta">No companies in HubSpot yet.</p>`; btn.disabled = false; return; }
-        if (!confirm(`Update ${d.companies} companies and ${d.contacts} contacts in HubSpot? Blank fields only; nothing is deleted.`)) { btn.disabled = false; return; }
+        if (!(await ask({ title: "Update HubSpot?", body: `${d.companies} companies and ${d.contacts} contacts. Blank fields only; nothing is deleted.`, ok: "Update" }))) { btn.disabled = false; return; }
         $("hsout").innerHTML = `<p class="meta">Updating…</p>`;
         const r = await api("queue", { action: "hubspot_refresh" });
         $("hsout").innerHTML = `<p class="meta">Updated ${esc(r.companies)} companies and ${esc(r.contacts)} contacts.</p>`;
@@ -1280,7 +1335,7 @@ async function loadSetup() {
     }
     if (btn.matches("[data-run]")) {
       const dry = btn.dataset.run === "preview";
-      if (!dry && !confirm("Run discovery now? About 1 cent of AI and up to 0.8 search credit.")) return;
+      if (!dry && !(await ask({ title: "Run discovery now?", body: "About 1 cent of AI and up to 0.8 search credit.", ok: "Run" }))) return;
       btn.disabled = true; $("runout").innerHTML = `<p class="meta">${dry ? "Checking sources…" : "Running. This takes about a minute."}</p>`;
       try {
         const r = await api("queue", { action: "run_discovery", dry });
@@ -1292,7 +1347,7 @@ async function loadSetup() {
       btn.disabled = false;
     }
     if (btn.matches("[data-facts]")) {
-      if (!confirm("Look up size and stage for the companies that have none? 0.2 search credit each.")) return;
+      if (!(await ask({ title: "Look up size and stage?", body: "For the companies that have none. 0.2 search credit each.", ok: "Look up" }))) return;
       btn.disabled = true; $("factsout").innerHTML = `<p class="meta">Looking up…</p>`;
       try {
         const r = await api("queue", { action: "enrich_companies" });

@@ -65,7 +65,7 @@ async function scanInfo() {
 async function list(view = "todo", admin = false) {
   const { data: accounts } = await sb.from("cp_accounts")
     .select("id,name,domain,segment,source,created_at,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date")
-    .in("status", ["queued", "pushed"])
+    .is("removed_at", null).in("status", ["queued", "pushed"])
     .in("outreach_status", VIEWS[view] ?? VIEWS.todo)
     .order("priority_score", { ascending: false })
     .limit(30);
@@ -138,7 +138,7 @@ function accountFacts(a: { firmo_at: string | null; employees: number | null; em
  */
 async function accountsView(admin: boolean) {
   const { data: all } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,founded_year,linkedin_handle,last_round_date")
+    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,founded_year,linkedin_handle,removed_at")
     .order("priority_score", { ascending: false, nullsFirst: false }).limit(400);
   const rows = (all ?? []).map((a) => {
     const f = fitBreakdown(a);
@@ -146,9 +146,9 @@ async function accountsView(admin: boolean) {
     const deliberate = a.source === "research" || a.source === "discovered" || a.source === "hubspot" || !!a.lost_at; // someone chose or the system found it
     const low = !deliberate && !worthShowing(a) && a.outreach_status === "open";
     const isNew = a.source === "discovered" && a.outreach_status === "open" && Date.now() - Date.parse(a.created_at) < 14 * DAY;
-    return { a, low: low || (a.source === "discovered" && !meetsFit(fitState(a)) && a.outreach_status === "open"), outside, isNew }; // found by the system and below the fit bar: hidden too
+    return { a, removed: !!a.removed_at, low: !a.removed_at && (low || (a.source === "discovered" && !meetsFit(fitState(a)) && a.outreach_status === "open")), outside, isNew }; // found by the system and below the fit bar: hidden too
   });
-  const shown = rows.filter((r) => !r.low).map((r) => r.a.id);
+  const shown = rows.filter((r) => !r.low && !r.removed).map((r) => r.a.id);
   const ids = shown.length ? shown : ["00000000-0000-0000-0000-000000000000"];
   const [contactMap, { data: signals }, { data: ppl }, { data: disc }] = await Promise.all([
     contactsFor(ids, admin),
@@ -166,19 +166,19 @@ async function accountsView(admin: boolean) {
     discovery: { added_30d: (disc ?? []).filter((d) => Date.parse(d.found_at) > Date.now() - 30 * DAY).length, last: disc?.[0]?.found_at ?? null },
     scan: await scanInfo(),
     good_tools: (icp.company.toolsGood as string[]).map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, "")),
-    accounts: rows.map(({ a, low, outside, isNew }) => {
+    accounts: rows.map(({ a, low, removed, outside, isNew }) => {
       const mine = (sigsBy.get(a.id) ?? []).filter((s, i, arr) => !isSummary(s) || arr.findIndex(isSummary) === i);
       return {
         id: a.id, name: a.name, domain: a.domain, segment: a.segment, source: a.source, created_at: a.created_at,
         tier: tierOf(a.priority_score), priority: a.priority_score, icp_score: a.icp_score, why_now: a.why_now,
         facts: accountFacts(a), firmo: firmoLine(a), outside_icp: outside, fit: fitState(a), fit_reasons: fitReasons(a), excluded: fitBreakdown(a).excluded,
         heat: heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)),
-        firmo_known: !!a.firmo_at, low, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
+        firmo_known: !!a.firmo_at, low, removed, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
         lost_at: a.lost_at, lost_reason: a.lost_reason, not_fit_reason: a.not_fit_reason,
         last_scanned_at: a.last_scanned_at, found_reason: why.get(a.domain) ?? null,
         searched: searched.has(a.id), contacts: contactMap.get(a.id) ?? [],
-        signals: low ? [] : mine.slice(0, 3).map((s) => ({
+        signals: low || removed ? [] : mine.slice(0, 3).map((s) => ({
           kind: s.kind, title: s.title, url: s.url, first_seen: s.detected_at,
           published: (s.detail as { published?: string } | null)?.published ?? null,
           is_new: Date.now() - new Date(s.detected_at).getTime() < 7 * DAY,
@@ -421,6 +421,27 @@ serve("queue", async (req) => {
     if (!isNotFitReason(body.reason)) return json({ error: "Unknown reason" }, 400);
     const r = await markNotFit(body.account_id, body.reason);
     return "error" in r ? json({ error: r.error }, 404) : json({ mode: "live", ...r });
+  }
+  if (body.action === "remove_account" || body.action === "restore_account") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed. Unlock to remove or restore companies." });
+    if (typeof body.account_id !== "string") return json({ error: "account_id required" }, 400);
+    const { data: a } = await sb.from("cp_accounts").select("id,domain,outreach_status").eq("id", body.account_id).maybeSingle();
+    if (!a) return json({ error: "Account not found" }, 404);
+    const restoring = body.action === "restore_account";
+    if (!restoring && ["contacted", "replied", "meeting"].includes(a.outreach_status)) return json({ error: "You have already been in touch with this company. Use Not now or Not a fit instead." }, 400);
+    await sb.from("cp_accounts").update({ removed_at: restoring ? null : new Date().toISOString() }).eq("id", a.id);
+    await log("info", restoring ? "account_restored" : "account_removed", { account: a.domain });
+    return json({ mode: "live", ok: true });
+  }
+  if (body.action === "remove_low") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed. Unlock to remove companies." });
+    // Only companies nobody has touched: below the bar, still open, not in HubSpot, no people stored.
+    const v = await accountsView(true);
+    const ids = v.accounts.filter((a) => a.low && !a.removed && a.outreach_status === "open" && !a.hubspot && !a.contacts.length && !a.lost_at).map((a) => a.id);
+    if (body.dry !== false) return json({ mode: "plan", count: ids.length, names: v.accounts.filter((a) => ids.includes(a.id)).slice(0, 8).map((a) => a.name) });
+    if (ids.length) await sb.from("cp_accounts").update({ removed_at: new Date().toISOString() }).in("id", ids);
+    await log("info", "accounts_removed_bulk", { detail: { count: ids.length } });
+    return json({ mode: "live", removed: ids.length });
   }
   if (body.action === "clean_signals") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);

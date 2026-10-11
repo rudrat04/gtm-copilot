@@ -65,6 +65,7 @@ serve("signal-scan", async (req) => {
   const cutoff = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
   const { data: stale, error } = await sb.from("cp_accounts")
     .select("id,name,domain,status,segment,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date")
+    .is("removed_at", null)
     .or(`last_scanned_at.is.null,last_scanned_at.lt.${cutoff}`)
     .order("last_scanned_at", { ascending: true, nullsFirst: true })
     .limit(BATCH);
