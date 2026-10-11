@@ -219,5 +219,8 @@
         "n": 0
       }
     }
+  },
+  "predictleads": {
+    "auto": true
   }
 }

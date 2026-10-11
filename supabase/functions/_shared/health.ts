@@ -1,5 +1,6 @@
 import { sb } from "./db.ts";
 import { googleConfigured, googleToken } from "./google.ts";
+import { plCap, plConfigured, plUsed } from "./predictleads.ts";
 import icp from "./icp.json" with { type: "json" };
 
 export type Level = "ok" | "warn" | "bad";
@@ -83,14 +84,18 @@ export async function healthView() {
     else grouped.set(k, { fn: r.fn, event: r.event, level: r.level, n: 1, last: r.created_at, message: r.message, run_id: r.run_id });
   }
 
+  const plOn = plConfigured();
+  const plCalls = plOn ? await plUsed() : 0;
+  const plLevel = plOn ? creditLevel(plCalls, plCap()) : "ok" as Level;
   const hunterLevel = creditLevel(used, hunterCap);
   const aiLevel = spendLevel(aiToday, icp.ai.dailyBudgetUsd);
   const probLevel = problemLevel(errors, warns);
-  const overall = worst([hunterLevel, aiLevel, probLevel, ...jobs.map((j) => j.level)]);
+  const overall = worst([hunterLevel, plLevel, aiLevel, probLevel, ...jobs.map((j) => j.level)]);
 
   return {
     overall,
     hunter: { used: Math.round(used * 10) / 10, cap: hunterCap, left: Math.max(0, Math.round((hunterCap - used) * 10) / 10), level: hunterLevel },
+    predictleads: { configured: plOn, used: plCalls, cap: plCap(), level: plLevel },
     ai: { today_usd: aiToday, cap_usd: icp.ai.dailyBudgetUsd, last30_usd: Math.round(ai30 * 1000) / 1000, level: aiLevel },
     jobs,
     problems: { errors, warns, level: probLevel, items: [...grouped.values()].slice(0, 8) },

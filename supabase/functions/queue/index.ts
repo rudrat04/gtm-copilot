@@ -19,6 +19,7 @@ import { runDiscovery } from "../_shared/discover.ts";
 import { applyLossReason, isLossReason, verifyLoss } from "../_shared/lossreason.ts";
 import { applyDebrief, endsAt, OUTCOME_LABEL, OUTCOMES, type Outcome, verify } from "../_shared/debrief.ts";
 import { refreshAllFields } from "../_shared/hsfields.ts";
+import { plCap, plConfigured, plUsed, refreshFromPredictLeads } from "../_shared/predictleads.ts";
 import { getPropertyOptions } from "../_shared/hubspot.ts";
 import { checkConnections, healthView } from "../_shared/health.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
@@ -212,6 +213,7 @@ async function setupView(admin = false) {
     },
     unknown_fit: unknown ?? 0,
     fit_counts: fitCounts,
+    predictleads: { configured: plConfigured(), used: plConfigured() ? await plUsed() : 0, cap: plCap() },
     ai: { today_usd: Number(ai?.usd ?? 0), cap_usd: icp.ai.dailyBudgetUsd },
   };
 }
@@ -370,6 +372,10 @@ serve("queue", async (req) => {
   if (body.action === "hubspot_refresh") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
     return json({ mode: "live", ...(await refreshAllFields({ dry: body.dry === true })) });
+  }
+  if (body.action === "pl_refresh" && typeof body.account_id === "string") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can check an account's news (uses 1 of the monthly PredictLeads calls)." });
+    return json({ mode: "live", ...(await refreshFromPredictLeads(body.account_id, "manual")) });
   }
   if (body.action === "health") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);

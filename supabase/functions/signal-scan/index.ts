@@ -2,6 +2,7 @@ import { json, sb } from "../_shared/db.ts";
 import { collectSignals } from "../_shared/signals.ts";
 import { priorityScore } from "../_shared/score.ts";
 import { queueThreshold } from "../_shared/fitgate.ts";
+import { storedPlSignals } from "../_shared/predictleads.ts";
 import { reasonLine } from "../_shared/today.ts";
 import { fitPoints } from "../_shared/firmo.ts";
 import { log, serve } from "../_shared/log.ts";
@@ -32,7 +33,7 @@ async function scanOne(a: Account) {
     );
   }
 
-  const { score } = priorityScore(signals, fitPoints(a));
+  const { score } = priorityScore([...signals, ...(await storedPlSignals(a.id))], fitPoints(a)); // PredictLeads events stored earlier still count
   const update: Record<string, unknown> = {
     priority_score: score,
     last_scanned_at: new Date().toISOString(),

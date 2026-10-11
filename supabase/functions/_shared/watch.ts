@@ -7,6 +7,7 @@ import { alertEmail } from "./templates.ts";
 import { googleConfigured, ownerEmail, sendMail } from "./google.ts";
 import { firmoLine, fitPoints } from "./firmo.ts";
 import { autoFindContacts, contactsFor } from "./contacts.ts";
+import { autoRefreshPredictLeads, storedPlSignals } from "./predictleads.ts";
 import icp from "./icp.json" with { type: "json" };
 
 const BATCH = 5;
@@ -39,6 +40,7 @@ export async function lightCheck(admin: boolean) {
     .in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted", "snoozed"])
     .order("priority_score", { ascending: false }).limit(MAX_ACCOUNTS);
   const accounts = (data ?? []) as Acct[];
+  const pl = await autoRefreshPredictLeads(2).catch(() => ({ checked: 0, added: 0 })); // a couple of the best accounts a day, within the monthly allowance
 
   const candidates: { a: Acct; top: Signal; score: number; hash: string; fresh: number }[] = [];
   let newSignals = 0, failed = 0;
@@ -56,7 +58,7 @@ export async function lightCheck(admin: boolean) {
       );
       newSignals += fresh.length;
     }
-    const score = priorityScore(signals, fitPoints(a)).score;
+    const score = priorityScore([...signals, ...(await storedPlSignals(a.id))], fitPoints(a)).score; // PredictLeads events stored earlier still count
     if (score !== a.priority_score) await sb.from("cp_accounts").update({ priority_score: score }).eq("id", a.id);
 
     // Alert-worthy: new news, or a newly posted individual role. Hacker News alone and role-count changes are not.
@@ -111,6 +113,6 @@ export async function lightCheck(admin: boolean) {
     }
   }
 
-  await log("info", "watch_done", { detail: { accounts: accounts.length, new_signals: newSignals, candidates: candidates.length, alerted, failed } });
-  return json({ accounts: accounts.length, new_signals: newSignals, alert_candidates: candidates.length, alerted, failed });
+  await log("info", "watch_done", { detail: { accounts: accounts.length, new_signals: newSignals, candidates: candidates.length, alerted, failed, predictleads: pl } });
+  return json({ accounts: accounts.length, new_signals: newSignals, alert_candidates: candidates.length, alerted, failed, predictleads: pl });
 }

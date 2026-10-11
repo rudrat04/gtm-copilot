@@ -47,6 +47,12 @@ export const countryName = (code: string | null): string | null => {
 
 const ATS_NAME: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby" };
 
+/** PredictLeads already says what an event is. LEADER_HIRE has no matching HubSpot option, so it stays blank. */
+const plTypeOf = (s: { detail: Record<string, unknown> | null }): string | null => {
+  const t = s.detail?.plType;
+  return t === "FUNDING" || t === "NEW_CRO" || t === "NEW_VP_SALES" ? t : null;
+};
+
 /** Reads a news headline into one of HubSpot's signal types. Words are matched conservatively; anything unclear stays blank. */
 export function newsType(title: string): string | null {
   if (/\b(chief revenue officer|cro)\b/i.test(title) && /\b(hires?|hired|appoints?|names?|named|joins?|new)\b/i.test(title)) return "NEW_CRO";
@@ -67,7 +73,7 @@ export function signalFacts(rows: SigRow[]) {
   return {
     latest,
     latestAt: latest ? new Date(when(latest)).toISOString() : null,
-    latestType: latest ? (latest.kind === "hiring" ? "SALES_HIRING" : newsType(latest.title)) : null,
+    latestType: latest ? (latest.kind === "hiring" ? "SALES_HIRING" : plTypeOf(latest) ?? newsType(latest.title)) : null,
     ats: ats ? ATS_NAME[String(ats.detail?.source)] : null,
     openRoles: summary && typeof summary.detail?.salesOpenings === "number" ? summary.detail.salesOpenings as number : null,
     news,

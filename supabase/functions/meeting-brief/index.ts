@@ -7,6 +7,7 @@ import { lookupForBrief, tierLabel } from "../_shared/hubspot.ts";
 import { buildBrief, buildBriefHtml } from "../_shared/brief.ts";
 import { tierOf } from "../_shared/score.ts";
 import { briefNoteHtml, noteToHubSpot } from "../_shared/hsnotes.ts";
+import { refreshFromPredictLeads } from "../_shared/predictleads.ts";
 import { sendDueDebriefs } from "../_shared/debrief.ts";
 import { nudgeOverdueLeads } from "../_shared/inbound.ts";
 
@@ -125,6 +126,7 @@ async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry" | "
     title = person?.title ?? null;
   }
   const account = researched?.account;
+  if (accountId) await refreshFromPredictLeads(accountId, "brief", { maxAgeDays: 7 }).catch(() => null); // fresh company news for the brief, at most once a week per account
   const tz = ev.start?.timeZone ?? "UTC";
   const when = new Date(startIso).toLocaleString("en-GB", {
     weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: tz,

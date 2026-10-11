@@ -1,0 +1,95 @@
+{
+ "_note": "Synthetic data in the shape of a real PredictLeads news_events response (verified on 11 Oct 2026). No real company or person data.",
+ "data": [
+  {
+   "id": "00000000-0000-0000-0000-000000000000",
+   "type": "news_event",
+   "attributes": {
+    "category": "hires",
+    "headline": "Example Co hired a person in January 2026",
+    "summary": "Example Co hired a person in January 2026",
+    "found_at": "2026-09-30T12:23:18Z",
+    "effective_date": null,
+    "first_seen_at": "2026-10-03T06:31:09Z",
+    "confidence": 0.6,
+    "planning": false,
+    "job_title": null,
+    "contact": null,
+    "financing_type": null,
+    "amount": null
+   }
+  },
+  {
+   "id": "00000000-0000-0000-0000-000000000001",
+   "type": "news_event",
+   "attributes": {
+    "category": "integrates_with",
+    "headline": "Tool A integrated with Example Co on Sep 21st '26",
+    "summary": "Tool A integrated with Example Co on Sep 21st '26",
+    "found_at": "2026-09-30T12:23:18Z",
+    "effective_date": null,
+    "first_seen_at": "2026-10-03T06:31:09Z",
+    "confidence": 0.6,
+    "planning": false,
+    "job_title": null,
+    "contact": null,
+    "financing_type": null,
+    "amount": null
+   }
+  },
+  {
+   "id": "00000000-0000-0000-0000-000000000002",
+   "type": "news_event",
+   "attributes": {
+    "category": "identified_as_competitor_of",
+    "headline": "Example Co identified as competitor of Rival Inc.",
+    "summary": "Example Co identified as competitor of Rival Inc.",
+    "found_at": "2026-09-30T12:23:18Z",
+    "effective_date": null,
+    "first_seen_at": "2026-10-03T06:31:09Z",
+    "confidence": 0.6,
+    "planning": false,
+    "job_title": null,
+    "contact": null,
+    "financing_type": null,
+    "amount": null
+   }
+  },
+  {
+   "id": "00000000-0000-0000-0000-000000000003",
+   "type": "news_event",
+   "attributes": {
+    "category": "integrates_with",
+    "headline": "Tool B integrated with Example Co on Jun 21st '26",
+    "summary": "Tool B integrated with Example Co on Jun 21st '26",
+    "found_at": "2026-09-30T12:23:18Z",
+    "effective_date": null,
+    "first_seen_at": "2026-10-03T06:31:09Z",
+    "confidence": 0.6,
+    "planning": false,
+    "job_title": null,
+    "contact": null,
+    "financing_type": null,
+    "amount": null
+   }
+  },
+  {
+   "id": "00000000-0000-0000-0000-000000000004",
+   "type": "news_event",
+   "attributes": {
+    "category": "integrates_with",
+    "headline": "Example Co integrates with Tool C",
+    "summary": "Example Co integrates with Tool C",
+    "found_at": "2026-09-30T12:23:18Z",
+    "effective_date": null,
+    "first_seen_at": "2026-10-03T06:31:09Z",
+    "confidence": 0.6,
+    "planning": false,
+    "job_title": null,
+    "contact": null,
+    "financing_type": null,
+    "amount": null
+   }
+  }
+ ]
+}

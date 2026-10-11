@@ -349,6 +349,7 @@ function actionsHtml({ outreach, hasContacts, hasDraft, primary: custom, compact
     markInMenu ? `<button data-life="contacted">${outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>` : "",
     compact ? `<button data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>` : "",
     `<button data-act="dossier">View dossier</button>`,
+    `<button data-act="plnews" title="Uses 1 of the monthly PredictLeads calls">Check company news</button>`,
     parked ? "" : `<hr>${touched ? `<button data-life="reopen">Clear status (reopen)</button>` : ""}<button data-life="replied">They replied</button><button data-life="meeting">Meeting booked</button>
       <button data-life="snooze" data-days="7">Snooze 1 week</button><button data-life="snooze" data-days="14">Snooze 2 weeks</button><button data-life="snooze" data-days="30">Snooze 1 month</button>
       <hr><button data-life="not_now">Not now</button>`,
@@ -513,6 +514,16 @@ function wireCards(root, reload) {
     const btn = e.target.closest("button[data-act]"); if (!btn) return;
     const card = btn.closest(".card"), act = btn.dataset.act;
     if (act === "people") { mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain, true); return; }
+    if (act === "plnews") {
+      btn.disabled = true; say("Checking company news…");
+      try {
+        const r = await api("queue", { action: "pl_refresh", account_id: card.dataset.id });
+        if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
+        say(r.skipped ? `Not checked: ${r.skipped}.` : r.error ? r.error : `${r.added ? `${r.added} new signal${r.added > 1 ? "s" : ""}` : "Nothing new"} (${r.events} events read). ${r.used} of ${r.cap} monthly calls used.`);
+        if (!r.skipped && !r.error) reload(); else btn.disabled = false;
+      } catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
     if (act === "firmo") {
       btn.disabled = true;
       try {
@@ -1007,6 +1018,8 @@ function drawSetup() {
     <article class="card"><p class="label">Credits and costs</p>
       <div class="tiles" style="margin:0 0 10px"><div class="tile"><b>${esc(d.ai.today_usd.toFixed(2))}</b><span>AI spend today (limit $${esc(d.ai.cap_usd.toFixed(2))})</span></div>
         <div class="tile"><b>${esc(d.unknown_fit)}</b><span>companies with size and stage not checked</span></div></div>
+      ${d.predictleads.configured ? `<p class="meta" style="margin:0 0 10px"><b>PredictLeads:</b> ${esc(d.predictleads.used)} of ${esc(d.predictleads.cap)} monthly calls used.</p>
+      <label class="toggle" style="margin:0 0 12px"><input type="checkbox" data-chk="plAuto" ${P.plAuto ? "checked" : ""}><span>Let the daily watch check news for the best accounts<small>At most 2 calls a day, only for accounts that pass your fit bar and have not been checked for 2 weeks. It stops at 60% of the allowance, so the rest stays for meeting briefs and your own checks.</small></span></label>` : ""}
       ${d.unknown_fit ? `<div class="actions" style="margin:0"><button class="btn ghost" data-facts>Check size and stage for ${esc(d.unknown_fit)} companies</button><span class="meta">0.2 search credit each</span></div>` : `<p class="meta" style="margin:0">All companies have their size and stage.</p>`}
       <div id="factsout"></div>
     </article>
@@ -1027,7 +1040,7 @@ function drawHealth() {
   const el = $("healthcard"); if (!el || !HEALTH) return;
   const h = HEALTH, when = (t) => (t ? ago(t) : "never");
   el.innerHTML = `<p class="label">Health ${lvDot(h.overall)}</p>
-    <p class="meta" style="margin:0 0 8px">Hunter: <b>${esc(h.hunter.left)}</b> of ${esc(h.hunter.cap)} credits left this month ${lvDot(h.hunter.level)} · AI today $${esc(h.ai.today_usd.toFixed(3))} of $${esc(h.ai.cap_usd.toFixed(2))} ${lvDot(h.ai.level)} · AI last 30 days $${esc(h.ai.last30_usd.toFixed(2))}</p>
+    <p class="meta" style="margin:0 0 8px">Hunter: <b>${esc(h.hunter.left)}</b> of ${esc(h.hunter.cap)} credits left this month ${lvDot(h.hunter.level)} · PredictLeads ${esc(h.predictleads.used)} of ${esc(h.predictleads.cap)} calls ${lvDot(h.predictleads.level)} · AI today $${esc(h.ai.today_usd.toFixed(3))} of $${esc(h.ai.cap_usd.toFixed(2))} ${lvDot(h.ai.level)} · AI last 30 days $${esc(h.ai.last30_usd.toFixed(2))}</p>
     <details><summary class="meta">Scheduled jobs</summary>${h.jobs.map((j) => `<p class="meta" style="margin:4px 0">${lvDot(j.level)} ${esc(j.label)} · ${esc(j.note)} · last run ${esc(when(j.last_start))}</p>`).join("")}</details>
     <details ${h.problems.errors ? "open" : ""}><summary class="meta">Problems in the last 3 days: ${esc(h.problems.errors)} errors, ${esc(h.problems.warns)} warnings ${lvDot(h.problems.level)}</summary>${h.problems.items.length ? h.problems.items.map((p) => `<p class="meta" style="margin:4px 0">${esc(p.fn)} · ${esc(p.event)}${p.n > 1 ? ` (x${esc(p.n)})` : ""} · ${esc(ago(p.last))}${p.message ? ` · ${esc(p.message)}` : ""}${p.run_id ? ` · run ${esc(p.run_id.slice(0, 8))}` : ""}</p>`).join("") : `<p class="meta">Nothing to report.</p>`}</details>
     <div class="actions" style="margin:10px 0 0"><button class="btn ghost" data-checkconn>Check connections</button><span class="meta">Free. Only reads from HubSpot, Hunter and Google.</span></div>

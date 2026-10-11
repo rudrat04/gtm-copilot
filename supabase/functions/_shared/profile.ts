@@ -34,6 +34,7 @@ export type Profile = {
   minFit: MinFit;                           // the fit bar: companies below it are hidden everywhere
   minScore: number;                         // the score needed to count as ready
   watch: Watch;                             // pipeline watch: which checks run and their limits
+  plAuto: boolean;                          // let the daily watch spend a few PredictLeads calls on the best accounts
 };
 
 // Snapshot of the defaults, taken before anything is applied.
@@ -51,6 +52,7 @@ const DEFAULT: Profile = {
   minFit: icp.fit.minFit as MinFit,
   minScore: icp.fit.minScore,
   watch: JSON.parse(JSON.stringify(icp.watch)),
+  plAuto: icp.predictleads.auto !== false,
 };
 
 const list = (v: unknown, fallback: string[], max = 25, allowEmpty = false): string[] => {
@@ -122,6 +124,7 @@ export function clean(input: unknown): Profile {
     minFit: MIN_FITS.find((m) => m === i.minFit) ?? DEFAULT.minFit,
     minScore: num(i.minScore, DEFAULT.minScore, 0, 90),
     watch: cleanWatch(i.watch),
+    plAuto: i.plAuto !== false,
   };
 }
 
@@ -141,6 +144,7 @@ export function apply(p: Profile) {
   icp.fit.minFit = p.minFit;
   icp.fit.minScore = p.minScore;
   Object.assign(icp.watch, JSON.parse(JSON.stringify(p.watch)));
+  icp.predictleads.auto = p.plAuto;
 }
 
 export async function loadProfile(): Promise<Profile> {

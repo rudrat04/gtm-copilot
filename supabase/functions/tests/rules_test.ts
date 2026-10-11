@@ -10,6 +10,7 @@ const { normalizeDomain } = await import("../_shared/db.ts");
 const { redact } = await import("../_shared/log.ts");
 const { fitBreakdown } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, priorityScore, tierOf } = await import("../_shared/score.ts");
+const { classify, normalizeEvents, plAllowed, toSignal } = await import("../_shared/predictleads.ts");
 const { briefNoteHtml, draftNoteHtml } = await import("../_shared/hsnotes.ts");
 const { isLossReason, LOSS_LABEL, LOSS_REASONS } = await import("../_shared/lossreason.ts");
 const { cleanContext, contextLine, labelFor, validate } = await import("../_shared/inbound.ts");
@@ -381,4 +382,51 @@ Deno.test("personas: fully editable, validated, and used by the ranking", () => 
     apply(clean({}));
   }
   assertEquals(rank("VP of Sales", 80).persona, "Head of Sales / VP Sales"); // the defaults are back
+});
+
+// Synthetic data in the exact shape of a real PredictLeads news_events response (no real company or person data is stored in the repo).
+const plReal = JSON.parse(await Deno.readTextFile(new URL("./fixtures_predictleads.json", import.meta.url)));
+
+Deno.test("predictleads: a response in the real shape is read and the noise categories are ignored", () => {
+  const events = normalizeEvents(plReal);
+  assertEquals(events.length, 5);
+  assertEquals(events.map((e) => e.category), ["hires", "integrates_with", "identified_as_competitor_of", "integrates_with", "integrates_with"]);
+  const now = Date.parse("2026-10-11T00:00:00Z");
+  // None of these five is a buying signal: a hire with no role named, three integrations and a competitor mention.
+  assertEquals(events.map((e) => toSignal(e, now)), [null, null, null, null, null]);
+  assertEquals(normalizeEvents({}), []);
+  assertEquals(normalizeEvents({ data: [{ type: "company", id: "x" }] }), []);
+});
+
+Deno.test("predictleads: funding and executive hires become signals, with the right type and date", () => {
+  const ev = (o: Record<string, unknown>) => ({ id: "1", category: "", headline: "H", summary: "", found_at: "2026-10-01T00:00:00Z", effective_date: null, confidence: 0.8, planning: false, job_title: null, contact: null, financing_type: null, amount: null, ...o });
+  const now = Date.parse("2026-10-11T00:00:00Z");
+  assertEquals(classify(ev({ category: "receives_financing" })), "FUNDING");
+  assertEquals(classify(ev({ category: "invests_into" })), "FUNDING"); // the category PredictLeads really uses for a funding round
+  assertEquals(classify(ev({ category: "other", financing_type: "series_b" })), "FUNDING");
+  assertEquals(classify(ev({ category: "hires", job_title: "Chief Revenue Officer" })), "NEW_CRO");
+  assertEquals(classify(ev({ category: "hires", headline: "Acme hired Jo as VP of Sales" })), "NEW_VP_SALES");
+  assertEquals(classify(ev({ category: "hires", job_title: "Head of Marketing" })), "LEADER_HIRE");
+  assertEquals(classify(ev({ category: "hires", job_title: "Software Engineer" })), null);
+  assertEquals(classify(ev({ category: "integrates_with" })), null);
+  const s = toSignal(ev({ category: "receives_financing", headline: "Acme raises $20M Series B", effective_date: "2026-10-05", amount: 20000000 }), now)!;
+  assertEquals(s.kind, "news");
+  assertEquals(s.title, "Acme raises $20M Series B");
+  assertEquals(s.detail?.plType, "FUNDING");
+  assertEquals(s.detail?.source, "predictleads");
+  assertEquals(String(s.detail?.published).slice(0, 10), "2026-10-05"); // the date it happened, not the date it was found
+  assertEquals(toSignal(ev({ category: "receives_financing", confidence: 0.3 }), now), null); // too uncertain
+  assertEquals(toSignal(ev({ category: "receives_financing", planning: true }), now), null); // only planned
+  assertEquals(toSignal(ev({ category: "receives_financing", effective_date: "2025-01-01" }), now), null); // too old
+  assertEquals(toSignal(ev({ category: "receives_financing", headline: "" }), now), null);
+});
+
+Deno.test("predictleads: the monthly allowance is shared out, with a reserve for the owner", () => {
+  assert(plAllowed("auto", 59, 100));
+  assertFalse(plAllowed("auto", 60, 100)); // background use stops at 60%
+  assert(plAllowed("brief", 89, 100));
+  assertFalse(plAllowed("brief", 90, 100)); // meeting briefs stop at 90%
+  assert(plAllowed("manual", 99, 100));
+  assertFalse(plAllowed("manual", 100, 100)); // never past the cap
+  assertFalse(plAllowed("auto", 0, 0));
 });
