@@ -40,6 +40,7 @@ export type Profile = {
   motion: "any" | "sales_led" | "self_serve";
   excludeWords: string[];                   // never show a company whose industry, tags, description or name has one of these
   excludeDomains: string[];                 // never show these companies (competitors, partners)
+  roundWindow: [number, number];            // days after a funding round when a company is best timed
   plAuto: boolean;                          // let the daily watch spend a few PredictLeads calls on the best accounts
 };
 
@@ -64,6 +65,7 @@ const DEFAULT: Profile = {
   motion: icp.company.motion as Profile["motion"],
   excludeWords: [...(icp.company.excludeWords as string[])],
   excludeDomains: [...(icp.company.excludeDomains as string[])],
+  roundWindow: [icp.timing.roundWindowDays[0], icp.timing.roundWindowDays[1]],
   plAuto: icp.predictleads.auto !== false,
 };
 
@@ -99,6 +101,12 @@ function cleanPersonas(raw: unknown, legacyFounderBelow: number): Persona[] {
     if (out.length >= MAX_PERSONAS) break;
   }
   return out.length ? out : DEFAULT.personas.map((p) => ({ ...p, match: [...p.match] }));
+}
+
+function cleanWindow(raw: unknown): [number, number] {
+  const r = Array.isArray(raw) ? raw : [];
+  const lo = num(r[0], DEFAULT.roundWindow[0], 0, 720);
+  return [lo, Math.max(lo + 1, num(r[1], DEFAULT.roundWindow[1], 1, 1080))];
 }
 
 function cleanWeights(raw: unknown): Profile["fitWeights"] {
@@ -150,6 +158,7 @@ export function clean(input: unknown): Profile {
     motion: (["any", "sales_led", "self_serve"] as const).find((m) => m === i.motion) ?? "any",
     excludeWords: list(i.excludeWords, [], 20, true),
     excludeDomains: list(i.excludeDomains, [], 30, true).map((d) => d.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")).filter(Boolean),
+    roundWindow: cleanWindow(i.roundWindow),
     plAuto: i.plAuto !== false,
   };
 }
@@ -172,6 +181,7 @@ export function apply(p: Profile) {
   Object.assign(icp.watch, JSON.parse(JSON.stringify(p.watch)));
   icp.predictleads.auto = p.plAuto;
   Object.assign(icp.fitWeights, p.fitWeights);
+  icp.timing.roundWindowDays = [p.roundWindow[0], p.roundWindow[1]];
   const c = icp.company as { toolsGood: string[]; toolsAvoid: string[]; motion: string; excludeWords: string[]; excludeDomains: string[] };
   c.toolsGood = p.toolsGood; c.toolsAvoid = p.toolsAvoid; c.motion = p.motion; c.excludeWords = p.excludeWords; c.excludeDomains = p.excludeDomains;
 }

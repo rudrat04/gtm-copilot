@@ -235,5 +235,11 @@
     "industry": 0,
     "tools": 0,
     "motion": 0
+  },
+  "timing": {
+    "roundWindowDays": [
+      90,
+      270
+    ]
   }
 }

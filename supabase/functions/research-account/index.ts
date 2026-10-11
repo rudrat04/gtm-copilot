@@ -1,10 +1,10 @@
 import { json, normalizeDomain, sb } from "../_shared/db.ts";
 import { askClaude, BudgetError, parseJson } from "../_shared/claude.ts";
 import { collectSignals, type SiteInfo } from "../_shared/signals.ts";
-import { priorityScore } from "../_shared/score.ts";
+import { scoreAccount } from "../_shared/score.ts";
 import { log, serve } from "../_shared/log.ts";
 import { callerId, isAdmin, rateOk } from "../_shared/auth.ts";
-import { fetchFirmo, firmoLine, fitPoints, saveFirmo } from "../_shared/firmo.ts";
+import { fetchFirmo, firmoLine, saveFirmo } from "../_shared/firmo.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
 const CACHE_HOURS = 24;
@@ -137,7 +137,7 @@ serve("research-account", async (req) => {
   await sb.from("cp_accounts").update({
     icp_score: Math.round(Number(dossier.icp_fit?.score ?? 0)) || null,
     why_now: dossier.why_now ?? null,
-    priority_score: priorityScore(signals, fitPoints(account)).score,
+    priority_score: scoreAccount(signals, account).score,
     last_scanned_at: new Date().toISOString(),
   }).eq("id", account.id);
 

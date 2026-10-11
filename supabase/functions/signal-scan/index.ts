@@ -1,10 +1,9 @@
 import { json, sb } from "../_shared/db.ts";
-import { collectSignals, storedHiringSignals } from "../_shared/signals.ts";
-import { priorityScore } from "../_shared/score.ts";
+import { collectSignals, saveSiteFacts, storedHiringSignals } from "../_shared/signals.ts";
+import { scoreAccount } from "../_shared/score.ts";
 import { queueThreshold } from "../_shared/fitgate.ts";
 import { storedPlSignals } from "../_shared/predictleads.ts";
 import { reasonLine } from "../_shared/today.ts";
-import { fitPoints } from "../_shared/firmo.ts";
 import { log, serve } from "../_shared/log.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 import { isAdmin, jobAllowed } from "../_shared/auth.ts";
@@ -18,7 +17,8 @@ const BATCH = 6;
 type Account = { id: string; name: string; domain: string; status: string; segment: string | null; employees: number | null; stage: string | null; country: string | null; firmo_at: string | null };
 
 async function scanOne(a: Account) {
-  const { signals, hiringUnknown } = await collectSignals(a.name, a.domain, a.segment ?? "");
+  const { signals, hiringUnknown, motion, jobTools } = await collectSignals(a.name, a.domain, a.segment ?? "");
+  await saveSiteFacts(a.id, { motion, jobTools }); // sales style and tools seen on the site and in job posts
 
   if (signals.length) {
     await sb.from("cp_signals").upsert(
@@ -33,7 +33,7 @@ async function scanOne(a: Account) {
     );
   }
 
-  const { score } = priorityScore([...signals, ...(await storedPlSignals(a.id)), ...(hiringUnknown ? await storedHiringSignals(a.id) : [])], fitPoints(a)); // PredictLeads events stored earlier still count
+  const { score } = scoreAccount([...signals, ...(await storedPlSignals(a.id)), ...(hiringUnknown ? await storedHiringSignals(a.id) : [])], a); // PredictLeads events stored earlier still count
   const update: Record<string, unknown> = {
     priority_score: score,
     last_scanned_at: new Date().toISOString(),
@@ -64,7 +64,7 @@ serve("signal-scan", async (req) => {
 
   const cutoff = new Date(Date.now() - STALE_HOURS * 3600_000).toISOString();
   const { data: stale, error } = await sb.from("cp_accounts")
-    .select("id,name,domain,status,segment,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as")
+    .select("id,name,domain,status,segment,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date")
     .or(`last_scanned_at.is.null,last_scanned_at.lt.${cutoff}`)
     .order("last_scanned_at", { ascending: true, nullsFirst: true })
     .limit(BATCH);

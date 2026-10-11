@@ -102,10 +102,10 @@ export async function saveFirmo(accountId: string, f: Firmo) {
 export type FitRow = {
   employees?: number | null; stage?: string | null; country?: string | null; firmo_at?: string | null;
   tech?: string[] | null; industry?: string | null; tags?: string[] | null; blurb?: string | null; sales_motion?: string | null;
-  domain?: string | null; name?: string | null; known_as?: string | null;
+  domain?: string | null; name?: string | null; known_as?: string | null; last_round_date?: string | null;
 };
 /** The columns to select wherever fit is computed, so a new criterion takes effect everywhere. */
-export const FIT_COLS = "employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,domain,name,known_as";
+export const FIT_COLS = "employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date";
 
 /** Is this funding stage one of the stages we target? "Seed" also covers pre-seed and angel rounds. */
 const stageWanted = (s: string) => icp.company.stages.some((w) => {

@@ -45,14 +45,35 @@ function decay(days: number | null, full: number, half: number): number {
 }
 
 /** Deterministic priority score. No AI involved, so ranking is cheap and explainable. */
-export function priorityScore(signals: Dated[], fit: number = BASELINE_FIT): Score {
+/**
+ * How well-timed the last funding round is: the best window is a few months after it (hiring ramps up), a fresh round counts
+ * a little less, an old one fades. 0 when the date is unknown. The window comes from the owner's profile.
+ */
+export function roundTiming(lastRoundDate: string | null | undefined, now = Date.now()): number {
+  const t = Date.parse(lastRoundDate ?? "");
+  if (Number.isNaN(t)) return 0;
+  const days = (now - t) / DAY;
+  const [lo, hi] = icp.timing.roundWindowDays;
+  if (days < 0) return 0;
+  if (days < lo) return 0.6;
+  if (days <= hi) return 1;
+  return days <= hi * 1.5 ? 0.4 : 0;
+}
+
+/** The one place a company's priority score is worked out: its signals, how well it fits, and how well timed its funding is. */
+export function scoreAccount(signals: Dated[], a: FitRow & { last_round_date?: string | null }): Score {
+  return priorityScore(signals, fitBreakdown(a).points, roundTiming(a.last_round_date));
+}
+
+export function priorityScore(signals: Dated[], fit: number = BASELINE_FIT, timing = 0): Score {
   const w = icp.signals.weights;
 
   const summary = signals.find((s) => s.kind === "hiring" && s.detail && "salesOpenings" in s.detail);
   const salesOpenings = Number(summary?.detail?.salesOpenings ?? 0);
   const revops = signals.some((s) => s.kind === "hiring" && REVOPS.test(s.title));
   const posted = signals.some((s) => s.kind === "hiring" && s.detail?.source === "hn_hiring"); // a recent public sales-role post
-  const hiring = Math.min(w.hiring, Math.max(salesOpenings * 12 + (revops ? 10 : 0), posted ? 12 : 0));
+  const d = (summary?.detail ?? {}) as { leader?: boolean; founding?: boolean };
+  const hiring = Math.min(w.hiring, Math.max(salesOpenings * 12 + (revops ? 10 : 0) + (salesOpenings > 0 ? (d.leader ? 8 : 0) + (d.founding ? 6 : 0) : 0), posted ? 12 : 0));
 
   const news = signals.filter((s) => s.kind === "news").map((s) => ({
     f: decay(ageDays(s), 30, 60),
@@ -62,7 +83,7 @@ export function priorityScore(signals: Dated[], fit: number = BASELINE_FIT): Sco
   const funded = fundedFactor > 0;
   const newsPts = funded
     ? w.news * fundedFactor
-    : Math.min(w.news * 0.4, news.reduce((a, n) => a + n.f, 0) * 5);
+    : Math.min(w.news * 0.4, news.reduce((a, n) => a + n.f, 0) * 5 + w.news * 0.3 * timing); // no funding news, but a round in the sweet spot still counts a little
 
   const hn = signals.filter((s) => s.kind === "hn").reduce((a, s) => a + decay(ageDays(s), 30, 90), 0);
   const community = Math.min(w.tech, hn * 4);

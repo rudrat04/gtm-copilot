@@ -79,7 +79,7 @@ export async function fetchSite(domain: string): Promise<SiteInfo | null> {
 }
 
 // Public job-board APIs: Greenhouse, Lever, Ashby. No keys needed.
-type Job = { title: string; url: string; source: string };
+type Job = { title: string; url: string; source: string; desc?: string };
 
 async function jobsFor(slug: string): Promise<{ jobs: Job[]; errored: boolean }> {
   const [gh, lv, ab] = await Promise.all([
@@ -97,12 +97,12 @@ async function jobsFor(slug: string): Promise<{ jobs: Job[]; errored: boolean }>
     }
     if (lv.res) {
       for (const j of (await lv.res.json()) ?? []) {
-        jobs.push({ title: j.text, url: j.hostedUrl, source: "lever" });
+        jobs.push({ title: j.text, url: j.hostedUrl, source: "lever", desc: String(j.descriptionPlain ?? "").slice(0, 4000) });
       }
     }
     if (ab.res) {
       for (const j of (await ab.res.json()).jobs ?? []) {
-        jobs.push({ title: j.title, url: j.jobUrl, source: "ashby" });
+        jobs.push({ title: j.title, url: j.jobUrl, source: "ashby", desc: String(j.descriptionPlain ?? "").slice(0, 4000) });
       }
     }
   } catch (e) {
@@ -134,8 +134,61 @@ async function discoverSlugs(domain: string, homeHtml: string): Promise<string[]
   return [...found];
 }
 
+// ---- What the sales job posts say about the company ----
+
+// Tool names. Ones that are also everyday words (close, outreach, segment, dynamics) only count in a specific form.
+const TOOLS: [string, RegExp][] = [
+  ["salesforce", /\bsalesforce\b/i], ["hubspot", /\bhubspot\b/i], ["outreach", /\boutreach\.io\b|\boutreach (platform|sequences)\b/i], ["salesloft", /\bsalesloft\b/i],
+  ["gong", /\bgong\b/i], ["apollo", /\bapollo\.io\b|\bapollo (platform|crm)\b/i], ["zoominfo", /\bzoominfo\b/i], ["clay", /\bclay\.com\b|\bclay (workflows?|tables?)\b/i],
+  ["pipedrive", /\bpipedrive\b/i], ["attio", /\battio\b/i], ["clari", /\bclari\b/i], ["groove", /\bgroove\.co\b|\bgroove (crm|platform)\b/i],
+  ["sales navigator", /\bsales navigator\b/i], ["6sense", /\b6sense\b/i], ["close", /\bclose\.com\b|\bclose crm\b/i], ["dynamics", /\bmicrosoft dynamics\b|\bdynamics 365\b/i],
+  ["zoho", /\bzoho\b/i], ["intercom", /\bintercom\b/i], ["segment", /\bsegment\.(com|io)\b|\btwilio segment\b/i], ["marketo", /\bmarketo\b/i], ["pardot", /\bpardot\b/i], ["netsuite", /\bnetsuite\b/i],
+];
+const PAINS = ["forecasting", "pipeline", "crm", "revops", "sales process", "attribution", "data quality", "outbound", "playbook", "enablement", "territory"];
+const hasWord = (text: string, w: string) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text);
+
+export type JobInsights = { leader: boolean; founding: boolean; tools: string[]; pains: string[] };
+
+/** Reads the sales and revenue roles for seniority, "founding" roles, and the tools and problems the posts mention. Pure. */
+export function jobInsights(matched: Job[]): JobInsights {
+  const leader = matched.some((j) => /\b(head of|vp|vice president|chief|director)\b/i.test(j.title));
+  const founding = matched.some((j) => /\b(founding|first|1st)\b/i.test(j.title) || /\bfirst (sales|sdr|ae|account executive|revenue)\b|\bbuild (out )?(our|the) (sales|revenue) (team|function|motion)|\bfounding (ae|sdr|sales)/i.test(j.desc ?? ""));
+  const text = matched.map((j) => `${j.title} ${j.desc ?? ""}`).join(" \n ");
+  return { leader, founding, tools: TOOLS.filter(([, re]) => re.test(text)).map(([name]) => name).slice(0, 8), pains: PAINS.filter((p) => hasWord(text, p)).slice(0, 6) };
+}
+
+// ---- Sales-led or self-serve, from the company's own homepage ----
+
+const SALES_CTA = /\b((book|request|schedule|get)( a| your)?( live| personal| free)? demo|talk to (our )?sales|contact (our )?sales|speak (to|with) (our )?sales)\b/i;
+const SELF_CTA = /\b((start|try)( it| for)? free|get started (for )?free|sign up (for )?free|free trial|create (a |your )?free account|start (building|now) (for )?free|no credit card)\b/i;
+
+/** Which way the homepage invites you in: a demo or sales call, a free start, or both. Null when it says neither. */
+export function salesMotion(html: string): "sales_led" | "self_serve" | "both" | null {
+  const text = htmlToText(html).slice(0, 60_000);
+  const sales = SALES_CTA.test(text), self = SELF_CTA.test(text);
+  return sales && self ? "both" : sales ? "sales_led" : self ? "self_serve" : null;
+}
+
 /** `unknown` means a job board could not be reached, so the open-role COUNT cannot be trusted this time and is not written. */
 export type Hiring = { signals: Signal[]; verified: boolean; sample: string[]; unknown: boolean };
+
+/** Stores the sales style seen on the homepage and the tools named in job posts (added to what Hunter told us). */
+export async function saveSiteFacts(accountId: string, f: { motion: string | null; jobTools: string[] }) {
+  const upd: Record<string, unknown> = {};
+  if (f.motion) upd.sales_motion = f.motion;
+  if (f.jobTools.length) {
+    const { data } = await sb.from("cp_accounts").select("tech").eq("id", accountId).maybeSingle();
+    const merged = [...new Set([...(data?.tech ?? []), ...f.jobTools.map((t) => t.toLowerCase())])].slice(0, 80);
+    if (merged.length !== (data?.tech ?? []).length) upd.tech = merged;
+  }
+  if (Object.keys(upd).length) await sb.from("cp_accounts").update(upd).eq("id", accountId);
+}
+
+/** Tools named in the sales job posts, from the stored summary, so the Tools fit criterion has data without a paid lookup. */
+export function toolsFromHiring(signals: Signal[]): string[] {
+  const t = signals.find((s) => s.kind === "hiring" && s.detail && "salesOpenings" in s.detail)?.detail?.tools;
+  return Array.isArray(t) ? t.map(String) : [];
+}
 
 /** Pure: turns the jobs we read into signals. If any board errored, the individual roles are kept but the count is left out. */
 export function buildHiring(all: Job[], errored: boolean, discovered: boolean, re: RegExp): Hiring {
@@ -145,7 +198,7 @@ export function buildHiring(all: Job[], errored: boolean, discovered: boolean, r
   const sales = matched.filter((j) => !seen.has(j.title) && seen.add(j.title)).slice(0, 8);
   const out: Signal[] = sales.map((j) => ({ kind: "hiring", title: `Hiring: ${j.title}`, url: j.url, detail: { source: j.source } }));
   if (!errored) {
-    out.push({ kind: "hiring", title: `${all.length} open roles, ${matched.length} in sales/RevOps`, detail: { totalOpenings: all.length, salesOpenings: matched.length } });
+    out.push({ kind: "hiring", title: `${all.length} open roles, ${matched.length} in sales/RevOps`, detail: { totalOpenings: all.length, salesOpenings: matched.length, ...jobInsights(matched) } });
   }
   const sample = [...new Set(all.map((j) => j.title))].slice(0, 10);
   return { signals: out, verified: discovered, sample, unknown: errored };
@@ -291,5 +344,5 @@ export async function collectSignals(name: string, domain: string, segment = "")
     },
   });
   if (!site) await log("warn", "site_unreachable", { account: domain });
-  return { site, signals, hiringUnknown };
+  return { site, signals, hiringUnknown, motion: site?.html ? salesMotion(site.html) : null, jobTools: rel.jobsOk ? toolsFromHiring(hiring.signals) : [] };
 }

@@ -1,11 +1,11 @@
 import { json, sb } from "./db.ts";
 import { log } from "./log.ts";
-import { collectSignals, type Signal, storedHiringSignals } from "./signals.ts";
-import { priorityScore, tierOf } from "./score.ts";
+import { collectSignals, saveSiteFacts, type Signal, storedHiringSignals } from "./signals.ts";
+import { scoreAccount, tierOf } from "./score.ts";
 import { generateWhy, hash } from "./today.ts";
 import { alertEmail } from "./templates.ts";
 import { googleConfigured, ownerEmail, sendMail } from "./google.ts";
-import { firmoLine, fitPoints } from "./firmo.ts";
+import { firmoLine } from "./firmo.ts";
 import { autoFindContacts, contactsFor } from "./contacts.ts";
 import { autoRefreshPredictLeads, storedPlSignals } from "./predictleads.ts";
 import icp from "./icp.json" with { type: "json" };
@@ -36,7 +36,7 @@ export async function lightCheck(admin: boolean) {
   await setState("watch_last", new Date().toISOString());
 
   const { data } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as")
+    .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date")
     .in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted", "snoozed"])
     .order("priority_score", { ascending: false }).limit(MAX_ACCOUNTS);
   const accounts = (data ?? []) as Acct[];
@@ -48,7 +48,8 @@ export async function lightCheck(admin: boolean) {
   const one = async (a: Acct) => {
     const { data: existing } = await sb.from("cp_signals").select("kind,title").eq("account_id", a.id);
     const known = new Set((existing ?? []).map((e) => `${e.kind}|${e.title}`));
-    const { signals, hiringUnknown } = await collectSignals(a.name, a.domain, a.segment ?? "");
+    const { signals, hiringUnknown, motion, jobTools } = await collectSignals(a.name, a.domain, a.segment ?? "");
+    await saveSiteFacts(a.id, { motion, jobTools });
     const fresh = signals.filter((s) => !known.has(`${s.kind}|${s.title.slice(0, 300)}`));
 
     if (fresh.length) {
@@ -58,7 +59,7 @@ export async function lightCheck(admin: boolean) {
       );
       newSignals += fresh.length;
     }
-    const score = priorityScore([...signals, ...(await storedPlSignals(a.id)), ...(hiringUnknown ? await storedHiringSignals(a.id) : [])], fitPoints(a)).score; // PredictLeads events stored earlier still count
+    const score = scoreAccount([...signals, ...(await storedPlSignals(a.id)), ...(hiringUnknown ? await storedHiringSignals(a.id) : [])], a).score; // PredictLeads events stored earlier still count
     if (score !== a.priority_score) await sb.from("cp_accounts").update({ priority_score: score }).eq("id", a.id);
 
     // Alert-worthy: new news, or a newly posted individual role. Hacker News alone and role-count changes are not.

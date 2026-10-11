@@ -10,8 +10,8 @@ const { normalizeDomain } = await import("../_shared/db.ts");
 const { redact } = await import("../_shared/log.ts");
 const { isNotFitReason, notFitLabel, NOT_FIT_REASONS } = await import("../_shared/notfit.ts");
 const { exclusion, extraFacts, fitBreakdown, fitReasons, industryScore, industryWords, motionScore, toolsScore } = await import("../_shared/firmo.ts");
-const { fitState, heatOf, isFundingSignal, priorityScore, tierOf } = await import("../_shared/score.ts");
-const { buildHiring, isListing, rolesFromSnippet } = await import("../_shared/signals.ts");
+const { fitState, heatOf, isFundingSignal, priorityScore, roundTiming, scoreAccount, tierOf } = await import("../_shared/score.ts");
+const { buildHiring, isListing, jobInsights, rolesFromSnippet, salesMotion, toolsFromHiring } = await import("../_shared/signals.ts");
 const { USEFUL_NEWS } = await import("../_shared/relevance.ts");
 const { dedupeRounds, roundKey } = await import("../_shared/predictleads.ts");
 const { classify, normalizeEvents, plAllowed, toSignal } = await import("../_shared/predictleads.ts");
@@ -468,7 +468,7 @@ Deno.test("hiring: an unreachable board means unknown, never zero roles", () => 
   const jobs = [{ title: "Account Executive", url: "u1", source: "ashby" }, { title: "Engineer", url: "u2", source: "ashby" }];
   const ok = buildHiring(jobs, false, true, re);
   assertEquals(ok.unknown, false);
-  assertEquals(ok.signals.at(-1)!.detail, { totalOpenings: 2, salesOpenings: 1 });
+  assertEquals([ok.signals.at(-1)!.detail?.totalOpenings, ok.signals.at(-1)!.detail?.salesOpenings], [2, 1]);
   const partial = buildHiring(jobs, true, true, re); // another board timed out
   assertEquals(partial.unknown, true);
   assertEquals(partial.signals.length, 1); // the role is kept
@@ -579,4 +579,55 @@ Deno.test("not a fit: a fixed list of reasons, each with a label", () => {
   assertFalse(isNotFitReason("because"));
   assertFalse(isNotFitReason(undefined));
   assertEquals(notFitLabel("mystery"), "mystery");
+});
+
+Deno.test("sales style: the homepage invites a demo, a free start, both or neither", () => {
+  assertEquals(salesMotion("<a>Book a demo</a><p>Talk to sales</p>"), "sales_led");
+  assertEquals(salesMotion("<button>Start free</button> <span>No credit card required</span>"), "self_serve");
+  assertEquals(salesMotion("<a>Request a demo</a> or <a>Start for free</a>"), "both");
+  assertEquals(salesMotion("<h1>We build things</h1><script>var demo = 'book a demo'</script>"), null); // script text is not page text
+  assertEquals(salesMotion(""), null);
+});
+
+Deno.test("job posts: seniority, founding roles, tools and problems are read from the sales roles", () => {
+  const job = (title: string, desc = "") => ({ title, url: "u", source: "lever", desc });
+  const i = jobInsights([job("Head of Sales"), job("Founding Account Executive", "You will be our first sales hire. Experience with Salesforce and Gong, improving forecasting and pipeline hygiene.")]);
+  assertEquals(i.leader, true);
+  assertEquals(i.founding, true);
+  assertEquals(i.tools, ["salesforce", "gong"]);
+  assertEquals(i.pains, ["forecasting", "pipeline"]);
+  const plain = jobInsights([job("Account Executive", "Close deals.")]);
+  assertEquals([plain.leader, plain.founding, plain.tools, plain.pains], [false, false, [], []]);
+  assertEquals(jobInsights([job("Sales Rep", "We hold a close relationship with customers and do outreach and segment our market")]).tools, []); // everyday words are not tools
+  assertEquals(jobInsights([job("Sales Rep", "Daily work in Close CRM and Outreach.io")]).tools, ["outreach", "close"]);
+  // The summary carries the insights, and the tools can be read back from it.
+  const h = buildHiring([{ title: "Head of Sales", url: "u", source: "lever", desc: "Use HubSpot" }], false, true, /sales/i);
+  assertEquals(toolsFromHiring(h.signals), ["hubspot"]);
+  assertEquals(toolsFromHiring([]), []);
+});
+
+Deno.test("scoring: leadership and founding roles add hiring points; a well-timed round adds a little news points", () => {
+  apply(clean({}));
+  const sum = (d: Record<string, unknown>) => ({ kind: "hiring" as const, title: "x", detail: { salesOpenings: 1, totalOpenings: 5, ...d } });
+  const base = priorityScore([sum({})]).parts.hiring;
+  assertEquals(priorityScore([sum({ leader: true })]).parts.hiring, base + 8);
+  assertEquals(priorityScore([sum({ leader: true, founding: true })]).parts.hiring, base + 14);
+  assertEquals(priorityScore([sum({ leader: true })].concat(Array(5).fill(sum({ salesOpenings: 3 }))) as never).parts.hiring <= 40, true); // never above the hiring cap
+  const now = Date.parse("2026-10-11T00:00:00Z");
+  const ago = (d: number) => new Date(now - d * 86_400_000).toISOString();
+  assertEquals(roundTiming(ago(200), now), 1); // inside 90 to 270 days
+  assertEquals(roundTiming(ago(30), now), 0.6); // just raised
+  assertEquals(roundTiming(ago(350), now), 0.4); // fading
+  assertEquals(roundTiming(ago(900), now), 0);
+  assertEquals(roundTiming(null, now), 0);
+  assert(priorityScore([], 15, 1).parts.news > priorityScore([], 15, 0).parts.news);
+  const a = { employees: 100, stage: "Series A", country: "US", firmo_at: "2026-01-01", last_round_date: ago(200).slice(0, 10) };
+  assertEquals(scoreAccount([], { ...a, last_round_date: null }).parts.fit, scoreAccount([], a).parts.fit); // timing is not a fit change
+});
+
+Deno.test("settings: the funding window is validated", () => {
+  assertEquals(clean({}).roundWindow, [90, 270]);
+  assertEquals(clean({ roundWindow: [30, 120] }).roundWindow, [30, 120]);
+  assertEquals(clean({ roundWindow: [400, 10] }).roundWindow, [400, 401]); // never an empty window
+  assertEquals(clean({ roundWindow: "x" }).roundWindow, [90, 270]);
 });

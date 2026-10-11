@@ -2,8 +2,8 @@ import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import { askClaude } from "./claude.ts";
 import { collectSignals } from "./signals.ts";
-import { fetchFirmo, firmoLine, fitPoints, saveFirmo } from "./firmo.ts";
-import { fitState, heatOf, priorityScore, tierOf } from "./score.ts";
+import { fetchFirmo, firmoLine, saveFirmo } from "./firmo.ts";
+import { fitState, heatOf, scoreAccount, tierOf } from "./score.ts";
 import { reasonLine } from "./today.ts";
 import { queueThreshold } from "./fitgate.ts";
 import { refreshAccountFields } from "./hsfields.ts";
@@ -131,7 +131,7 @@ export async function processLead(l: LeadInput): Promise<{ id: string; label: La
       if (signals.length) {
         await sb.from("cp_signals").upsert(signals.map((s) => ({ account_id: acct!.id, kind: s.kind, title: s.title.slice(0, 300), url: s.url, detail: s.detail ?? {} })), { onConflict: "account_id,kind,title", ignoreDuplicates: true });
       }
-      const sc = priorityScore(signals, fitPoints(acct));
+      const sc = scoreAccount(signals, acct);
       const upd: Record<string, unknown> = { priority_score: sc.score, last_scanned_at: new Date().toISOString() };
       if (acct.status === "new" && sc.score >= queueThreshold()) { upd.status = "queued"; upd.why_now = reasonLine(signals as never); }
       await sb.from("cp_accounts").update(upd).eq("id", acct.id);

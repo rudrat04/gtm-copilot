@@ -11,8 +11,7 @@ import {
   pushContact,
   tierLabel,
 } from "../_shared/hubspot.ts";
-import { priorityScore, tierOf } from "../_shared/score.ts";
-import { fitPoints } from "../_shared/firmo.ts";
+import { scoreAccount, tierOf } from "../_shared/score.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
 type Row = {
@@ -64,7 +63,7 @@ async function companyContext(accountId: string) {
   ]);
   const dossier = (d?.content ?? null) as Dossier | null;
   const signals = (sigs ?? []).map((s) => ({ ...s, detail: { ...(s.detail ?? {}), detected_at: s.detected_at } }));
-  const sc = priorityScore(signals, fitPoints(a));
+  const sc = scoreAccount(signals, a);
   const scores: CompanyScores = {
     fit: dossier?.icp_fit?.score ?? a.icp_score ?? null,
     priority: sc.score,
