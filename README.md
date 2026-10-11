@@ -61,15 +61,15 @@ flowchart LR
 
 ## A day in the life
 
-| When (UTC) | Job | Result |
+| When (IST, UTC in brackets) | Job | Result |
 |---|---|---|
 | every minute | `meeting-brief` | Briefs for new meetings, "how did it go?" emails, cancel/move alerts, lead reminders |
 | every 30 min | `crm-sync` | Reads HubSpot back |
-| 01:00 | `signal-watch` | Re-reads sources for queued accounts, stores new signals, up to 3 instant hot alerts |
-| 02:30 | `daily-digest` | Today list emailed, HubSpot to-dos created |
-| Mondays 05:00 | `discover` | Finds new companies |
-| Mondays 06:00-06:55 | `signal-scan` | Full weekly scan and scoring |
-| 03:17 | `cp-logs-cleanup` | Deletes logs older than 30 days |
+| 06:30 (01:00) | `signal-watch` | Re-reads sources for queued accounts, stores new signals, up to 3 instant hot alerts |
+| 08:00 (02:30) | `daily-digest` | Today list emailed, HubSpot to-dos created |
+| Mondays 10:30 (05:00) | `discover` | Finds new companies |
+| Mondays 11:30-12:25 (06:00-06:55) | `signal-scan` | Full weekly scan and scoring |
+| 08:47 (03:17) | `cp-logs-cleanup` | Deletes logs older than 30 days |
 
 Everything emails the owner only.
 

@@ -11,6 +11,7 @@ import { contactsFor } from "../_shared/contacts.ts";
 import { fetchSite } from "../_shared/signals.ts";
 import { BudgetError } from "../_shared/claude.ts";
 import { tierOf } from "../_shared/score.ts";
+import { meetsFit, queueThreshold, worthShowing } from "../_shared/fitgate.ts";
 import { clean, loadProfile, REGIONS, saveProfile, STAGES } from "../_shared/profile.ts";
 import { runDiscovery } from "../_shared/discover.ts";
 import { applyLossReason, isLossReason, verifyLoss } from "../_shared/lossreason.ts";
@@ -28,7 +29,7 @@ const VIEWS: Record<string, string[]> = {
   parked: ["snoozed", "not_now"],
 };
 
-/** Next Monday 06:00 UTC strictly after now (the weekly scan window opens then). */
+/** Next Monday 06:00 UTC (11:30 IST) strictly after now (the weekly scan window opens then). */
 function nextScan(now = new Date()): string {
   const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 6, 0, 0));
   const add = (8 - d.getUTCDay()) % 7; // days until Monday (1)
@@ -110,9 +111,9 @@ async function accountsView(admin: boolean) {
     const f = fitBreakdown(a);
     const outside = f.known && (f.size === 0 || f.stage === 0);
     const deliberate = a.source === "research" || a.source === "discovered" || a.source === "hubspot" || !!a.lost_at; // someone chose or the system found it
-    const low = !deliberate && (outside || (a.priority_score ?? 0) < 30) && a.outreach_status === "open";
+    const low = !deliberate && !worthShowing(a) && a.outreach_status === "open";
     const isNew = a.source === "discovered" && a.outreach_status === "open" && Date.now() - Date.parse(a.created_at) < 14 * DAY;
-    return { a, low: low || (a.source === "discovered" && outside && a.outreach_status === "open"), outside, isNew };
+    return { a, low: low || (a.source === "discovered" && !meetsFit(fitState(a)) && a.outreach_status === "open"), outside, isNew }; // found by the system and below the fit bar: hidden too
   });
   const shown = rows.filter((r) => !r.low).map((r) => r.a.id);
   const ids = shown.length ? shown : ["00000000-0000-0000-0000-000000000000"];
@@ -188,22 +189,26 @@ async function meetingsView(admin: boolean) {
 
 /** Everything the Setup tab needs: the editable profile, discovery status and a few counts. */
 async function setupView() {
-  const [profile, { data: disc }, { count: unknown }, { data: ai }] = await Promise.all([
+  const [profile, { data: disc }, { count: unknown }, { data: ai }, { data: fitRows }] = await Promise.all([
     loadProfile(),
     sb.from("cp_discovered").select("status,found_at").order("found_at", { ascending: false }).limit(60),
     sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("firmo_at", null),
     sb.from("cp_ai_spend_today").select("usd").single(),
+    sb.from("cp_accounts").select("employees,stage,country,firmo_at,source,lost_at,outreach_status").limit(1000),
   ]);
+  const fitCounts = { matches: 0, close: 0, unknown: 0, outside: 0 };
+  for (const r of fitRows ?? []) fitCounts[fitState(r)]++;
   const month = Date.now() - 30 * DAY;
   return {
     profile,
     options: { stages: STAGES, regions: REGIONS },
     discovery: {
-      schedule: "Mondays at 05:00 UTC, an hour before the signal scan",
+      schedule: "Mondays at 10:30 IST, an hour before the signal scan",
       last: disc?.[0]?.found_at ?? null,
       added_30d: (disc ?? []).filter((d) => d.status === "added" && Date.parse(d.found_at) > month).length,
     },
     unknown_fit: unknown ?? 0,
+    fit_counts: fitCounts,
     ai: { today_usd: Number(ai?.usd ?? 0), cap_usd: icp.ai.dailyBudgetUsd },
   };
 }
@@ -282,7 +287,7 @@ async function enrichCompanies(rescoreAll = false, only?: string[]) {
       const mine = (sigs ?? []).filter((s) => s.account_id === r.id).map((s) => ({ ...s, url: null, detail: { ...(s.detail ?? {}), detected_at: s.detected_at } }));
       const score = priorityScore(mine as never, fitPoints(r)).score;
       const upd: Record<string, unknown> = { priority_score: score };
-      if (r.status === "new" && score >= 30) { upd.status = "queued"; upd.why_now = reasonLine(mine as never); }
+      if (r.status === "new" && score >= queueThreshold()) { upd.status = "queued"; upd.why_now = reasonLine(mine as never); }
       await sb.from("cp_accounts").update(upd).eq("id", r.id);
       out.rescored++;
     }

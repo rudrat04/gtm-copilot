@@ -3,6 +3,8 @@ import { log } from "./log.ts";
 import { askClaude, parseJson } from "./claude.ts";
 import { fetchSite } from "./signals.ts";
 import { fetchFirmo, fitBreakdown, saveFirmo } from "./firmo.ts";
+import { meetsFit } from "./fitgate.ts";
+import { fitState } from "./score.ts";
 import icp from "./icp.json" with { type: "json" };
 
 // Finds new companies for the pipeline from public sources, so reps do not have to hunt for them.
@@ -140,8 +142,8 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean } = {}
       firmo = await fetchFirmo(c.domain);
       if (firmo) {
         const f = fitBreakdown({ employees: firmo.employees, stage: firmo.stage, country: firmo.country, firmo_at: "now" });
-        if (f.known && (f.size === 0 || f.stage === 0)) {
-          await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason: `Outside target size or stage (${firmo.employees ?? "?"} people, ${firmo.stage ?? "unknown stage"})` }, { onConflict: "domain" });
+        if (f.known && !meetsFit(fitState({ employees: firmo.employees, stage: firmo.stage, country: firmo.country, firmo_at: "now" }))) {
+          await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason: `Below the fit bar (${firmo.employees ?? "?"} people, ${firmo.stage ?? "unknown stage"})` }, { onConflict: "domain" });
           summary.rejected++;
           continue;
         }

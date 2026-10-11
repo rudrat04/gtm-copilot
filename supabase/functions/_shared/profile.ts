@@ -1,5 +1,6 @@
 import { sb } from "./db.ts";
 import icp from "./icp.json" with { type: "json" };
+import { MIN_FITS, type MinFit } from "./fitgate.ts";
 
 // The editable part of the ICP. Defaults come from icp.json; the owner's saved changes live in cp_state
 // ("profile") and are laid over the defaults at the start of every request, so every module keeps reading
@@ -19,6 +20,8 @@ export type Profile = {
   personas: { title: string; match: string[] }[]; // job titles we want to contact
   founderBelow: number;                     // a founder is the buyer only under this many people
   discovery: boolean;                       // weekly auto-discovery on or off
+  minFit: MinFit;                           // the fit bar: companies below it are hidden everywhere
+  minScore: number;                         // the score needed to count as ready
 };
 
 // Snapshot of the defaults, taken before anything is applied.
@@ -34,6 +37,8 @@ const DEFAULT: Profile = {
   personas: icp.personas.map((p) => ({ title: p.title, match: [...p.match] })),
   founderBelow: (icp.personas.find((p) => "onlyIfEmployeesBelow" in p) as { onlyIfEmployeesBelow?: number } | undefined)?.onlyIfEmployeesBelow ?? 30,
   discovery: true,
+  minFit: icp.fit.minFit as MinFit,
+  minScore: icp.fit.minScore,
 };
 
 const list = (v: unknown, fallback: string[], max = 25): string[] => {
@@ -68,6 +73,8 @@ export function clean(input: unknown): Profile {
     personas: DEFAULT.personas.map((p) => ({ title: p.title, match: list(given.find((g) => g.title === p.title)?.match, p.match, 20) })),
     founderBelow: num(i.founderBelow, DEFAULT.founderBelow, 2, 1000),
     discovery: i.discovery !== false,
+    minFit: MIN_FITS.find((m) => m === i.minFit) ?? DEFAULT.minFit,
+    minScore: num(i.minScore, DEFAULT.minScore, 0, 90),
   };
 }
 
@@ -88,6 +95,8 @@ export function apply(p: Profile) {
     if ("onlyIfEmployeesBelow" in persona) (persona as { onlyIfEmployeesBelow: number }).onlyIfEmployeesBelow = p.founderBelow;
   }
   (icp.discovery as { enabled?: boolean }).enabled = p.discovery;
+  icp.fit.minFit = p.minFit;
+  icp.fit.minScore = p.minScore;
 }
 
 export async function loadProfile(): Promise<Profile> {

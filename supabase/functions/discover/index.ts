@@ -4,7 +4,7 @@ import { serve } from "../_shared/log.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 import { runDiscovery } from "../_shared/discover.ts";
 
-// Weekly (cron, Mondays 05:00 UTC): finds new companies from public sources and adds the ones that fit.
+// Weekly (cron, Mondays 05:00 UTC, 10:30 IST): finds new companies from public sources and adds the ones that fit.
 // New companies are then scored by the signal scan an hour later. The owner can pass {"dry":true} to preview or {"firmo":false} to skip company-fact lookups (no search credits).
 serve("discover", async (req) => {
   if (!(await jobAllowed(req))) return json({ error: "Not allowed" }, 401);

@@ -9,7 +9,6 @@ const REVOPS = /revops|revenue operations|sales operations|sales ops/i;
 const BASELINE_FIT = 15;
 const DAY = 86_400_000;
 
-export const QUEUE_THRESHOLD = 30;
 
 export type Score = {
   score: number;

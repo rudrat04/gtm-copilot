@@ -1,8 +1,9 @@
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import { askClaude } from "./claude.ts";
+import { meetsFit } from "./fitgate.ts";
 import { fitState, type FitState, tierOf } from "./score.ts";
-import { firmoLine, fitBreakdown } from "./firmo.ts";
+import { firmoLine } from "./firmo.ts";
 import { autoFindContacts, type Contact, contactsFor } from "./contacts.ts";
 import icp from "./icp.json" with { type: "json" };
 
@@ -138,8 +139,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
       return Number.isNaN(pub) ? Date.parse(s.detected_at) : pub; // a news item is as fresh as its publish date
     };
     const newest = meaningful.length ? Math.max(...meaningful.map(seenAt)) : 0;
-    const fit = fitBreakdown(a);
-    const clearMiss = fit.known && fit.size === 0; // clearly outside the target company size
+    const clearMiss = !meetsFit(fitState(a)); // below the owner's fit bar (Setup tab); by default, clearly outside the target size or stage
     const last = lastOutcome.get(a.id);
     const lastAction = last && last.kind !== "reopened" ? `${last.kind.replace("_", " ")} ${ageLabel(last.created_at)}` : null;
     const base = {
@@ -170,7 +170,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     } else if (!clearMiss && goneDark(a, newest, now, icp.followUp.days.length)) {
       it = { ...base, key: `dark-${a.id}`, type: "revive", label: "Gone quiet, new signal", urgency: 270 + (a.priority_score ?? 0) / 10,
         headline: `No reply after ${a.touches} touches (first contact ${ageLabel(a.contacted_at)}), but something new happened`, due: null };
-    } else if (a.outreach_status === "open" && a.status === "queued" && tier !== "tier_3" && !clearMiss && newest && now - newest < cfg.newDays * DAY) {
+    } else if (a.outreach_status === "open" && a.status === "queued" && tier !== "tier_3" && !clearMiss && (a.priority_score ?? 0) >= icp.fit.minScore && newest && now - newest < cfg.newDays * DAY) {
       const hot = now - newest < cfg.hotHours * HOUR;
       it = { ...base, key: `hot-${a.id}`, type: hot ? "hot" : "new", label: hot ? "Hot now" : "New this week",
         urgency: (hot ? 500 : 350) + (a.priority_score ?? 0) / 10, headline: hot ? "New signal in the last 48 hours" : "New signal this week", due: null };

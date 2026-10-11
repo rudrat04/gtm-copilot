@@ -1,6 +1,7 @@
 import { json, sb } from "../_shared/db.ts";
 import { collectSignals } from "../_shared/signals.ts";
-import { priorityScore, QUEUE_THRESHOLD } from "../_shared/score.ts";
+import { priorityScore } from "../_shared/score.ts";
+import { queueThreshold } from "../_shared/fitgate.ts";
 import { reasonLine } from "../_shared/today.ts";
 import { fitPoints } from "../_shared/firmo.ts";
 import { log, serve } from "../_shared/log.ts";
@@ -40,7 +41,7 @@ async function scanOne(a: Account) {
   // Accounts that clear the threshold enter the Queue with a plain-English reason. Drafts are written
   // on demand (the "Draft email" button), so no AI is spent on emails nobody asked for.
   const open = a.status === "new" || a.status === "queued";
-  if (open && score >= QUEUE_THRESHOLD) {
+  if (open && score >= queueThreshold()) {
     update.why_now = reasonLine(signals as never);
     update.status = "queued";
   }

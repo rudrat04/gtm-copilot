@@ -5,6 +5,7 @@ import { collectSignals } from "./signals.ts";
 import { fetchFirmo, firmoLine, fitPoints, saveFirmo } from "./firmo.ts";
 import { fitState, heatOf, priorityScore, tierOf } from "./score.ts";
 import { reasonLine } from "./today.ts";
+import { queueThreshold } from "./fitgate.ts";
 import { refreshAccountFields } from "./hsfields.ts";
 import { createTask, pushCompany, pushContact } from "./hubspot.ts";
 import { ownerEmail, sendMail } from "./google.ts";
@@ -132,7 +133,7 @@ export async function processLead(l: LeadInput): Promise<{ id: string; label: La
       }
       const sc = priorityScore(signals, fitPoints(acct));
       const upd: Record<string, unknown> = { priority_score: sc.score, last_scanned_at: new Date().toISOString() };
-      if (acct.status === "new" && sc.score >= 30) { upd.status = "queued"; upd.why_now = reasonLine(signals as never); }
+      if (acct.status === "new" && sc.score >= queueThreshold()) { upd.status = "queued"; upd.why_now = reasonLine(signals as never); }
       await sb.from("cp_accounts").update(upd).eq("id", acct.id);
       fit = fitState(acct);
       heat = heatOf(signals.map((s) => ({ kind: s.kind, title: s.title, detail: s.detail as Record<string, unknown> | undefined, detected_at: new Date().toISOString() })), fitState(acct));

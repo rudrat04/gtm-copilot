@@ -16,6 +16,7 @@ const { cleanContext, contextLine, labelFor, validate } = await import("../_shar
 const { companyDomain, parsePost } = await import("../_shared/discover.ts");
 const { rank } = await import("../_shared/people.ts");
 const { clean } = await import("../_shared/profile.ts");
+const { meetsFit, worthShowing } = await import("../_shared/fitgate.ts");
 
 const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString();
@@ -267,4 +268,29 @@ Deno.test("hubspot columns: email status options", () => {
   assertEquals(emailStatusOption("accept_all"), "accept_all");
   assertEquals(emailStatusOption("webmail"), "unknown");
   assertEquals(emailStatusOption(null), "unknown");
+});
+
+Deno.test("fit gate: the bar hides what is below it; the default hides only outside range", () => {
+  assert(meetsFit("matches", "matches"));
+  assertFalse(meetsFit("close", "matches"));
+  assert(meetsFit("close", "close") && meetsFit("matches", "close"));
+  assertFalse(meetsFit("unknown", "close"));
+  assert(meetsFit("unknown", "unknown"));
+  assertFalse(meetsFit("outside", "unknown"));
+  assert(meetsFit("outside", "outside")); // show everything
+  const a = (o: Record<string, unknown>) => ({ employees: 100, stage: "Series A", country: "US", firmo_at: "2026-01-01", priority_score: 50, ...o });
+  const cfg = (minFit: string, minScore: number) => ({ minFit: minFit as never, minScore });
+  assert(worthShowing(a({}), cfg("matches", 30)));
+  assertFalse(worthShowing(a({ priority_score: 20 }), cfg("matches", 30)));
+  assertFalse(worthShowing(a({ employees: 5000 }), cfg("unknown", 0))); // outside range
+  assert(worthShowing(a({ firmo_at: null }), cfg("unknown", 0))); // not checked yet is still shown by default
+  assertFalse(worthShowing(a({ firmo_at: null }), cfg("close", 0)));
+});
+
+Deno.test("profile: fit bar and score are validated", () => {
+  assertEquals(clean({ minFit: "matches", minScore: 45 }).minFit, "matches");
+  assertEquals(clean({ minFit: "banana", minScore: 999 }).minFit, "unknown");
+  assertEquals(clean({ minScore: 999 }).minScore, 90);
+  assertEquals(clean({ minScore: -5 }).minScore, 0);
+  assertEquals(clean({}).minScore, 30);
 });

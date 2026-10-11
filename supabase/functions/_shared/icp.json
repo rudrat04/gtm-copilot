@@ -112,8 +112,12 @@
     "tier_1": 70,
     "tier_2": 45
   },
+  "fit": {
+    "minFit": "unknown",
+    "minScore": 30
+  },
   "schedule": {
-    "label": "Every Monday at 06:00 UTC",
+    "label": "Every Monday at 11:30 IST",
     "cron": "*/5 6 * * 1",
     "staleDays": 6
   },

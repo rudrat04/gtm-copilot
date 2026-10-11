@@ -98,6 +98,7 @@
   .tag { display: inline-flex; align-items: center; gap: 4px; background: var(--raised); border: 1px solid var(--line); border-radius: 99px; padding: 2px 4px 2px 10px; font-size: 13px; }
   .tag button { background: none; border: 0; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; padding: 0 5px; border-radius: 99px; } .tag button:hover { color: var(--bad); }
   .tagbox input { flex: 1 1 120px; min-width: 90px; border: 0; outline: 0; background: transparent; font: inherit; font-size: 13.5px; color: var(--ink); padding: 3px 2px; }
+  .field select { width: 100%; max-width: 380px; padding: 9px 10px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; }
   .numrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; } .numrow input { width: 96px; padding: 8px 10px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; }
   .toggles { display: grid; gap: 8px; } .toggle { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer; } .toggle input { margin-top: 4px; accent-color: var(--accent); } .toggle span small { display: block; color: var(--muted); font-size: 12.5px; }
   .chip.sel { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -948,6 +949,13 @@ function drawSetup() {
       <hr class="hr">
       ${tagField("hiringRoles", "Job titles that count as a hiring signal", "A company hiring for any of these is treated as scaling its sales team.")}
     </article>
+    <article class="card"><p class="label">Which companies to show</p>
+      <div class="field"><label for="minfit">Lowest fit to show</label>
+        <select id="minfit" data-sel="minFit" aria-label="Lowest fit to show">${[["matches", "Fits only"], ["close", "Fits and partly fits"], ["unknown", "Also fit unknown (not checked yet)"], ["outside", "Everything, even outside range"]].map(([v, t]) => `<option value="${v}"${P.minFit === v ? " selected" : ""}>${t}</option>`).join("")}</select>
+        <p class="help">Right now: ${esc(d.fit_counts.matches)} fit, ${esc(d.fit_counts.close)} partly fit, ${esc(d.fit_counts.unknown)} not checked, ${esc(d.fit_counts.outside)} outside range. Companies below your choice move to <b>Low fit</b> in Accounts and never appear in Today, alerts, discovery or automatic contact lookups. Hiding "fit unknown" also hides companies whose size has not been checked yet.</p></div>
+      <div class="field"><span class="lbl">Lowest score to count as ready</span><div class="numrow"><input type="number" min="0" max="90" step="5" data-num="minScore" value="${esc(P.minScore)}" aria-label="Lowest score to count as ready"> out of 100</div>
+        <p class="help">A company needs at least this score to enter the queue. Lower it to see more companies, raise it to see fewer.</p></div>
+    </article>
     <div class="actions" style="margin:0 0 18px"><button class="btn primary" data-save>Save changes</button><span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : "Demo mode: unlock to save changes."}</span></div>
 
     <article class="card"><p class="label">Finding new companies</p>
@@ -1012,6 +1020,7 @@ async function loadSetup() {
   box.addEventListener("change", (e) => {
     const t = e.target;
     if (t.dataset.num) setPath(P, t.dataset.num, Number(t.value));
+    if (t.dataset.sel) setPath(P, t.dataset.sel, t.value);
     if (t.dataset.sig) setPath(P, `signals.${t.dataset.sig}`, t.checked);
     if (t.matches("[data-disc]")) P.discovery = t.checked;
   });

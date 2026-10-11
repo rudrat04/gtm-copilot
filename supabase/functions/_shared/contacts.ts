@@ -1,8 +1,8 @@
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import { searchAndStore } from "./people.ts";
-import { tierOf } from "./score.ts";
-import { fitBreakdown } from "./firmo.ts";
+import { fitState, tierOf } from "./score.ts";
+import { meetsFit } from "./fitgate.ts";
 import icp from "./icp.json" with { type: "json" };
 
 // "Who do I contact?" for an account. Today, alerts and the morning email lead with a person, so every
@@ -63,9 +63,8 @@ export async function autoFindContacts(a: { id: string; domain: string; priority
   // Do not spend a search credit on a company that clearly misses the target size or stage.
   const { data: firm } = await sb.from("cp_accounts").select("employees,stage,country,firmo_at").eq("id", a.id).maybeSingle();
   if (firm) {
-    const f = fitBreakdown(firm);
-    if (f.known && (f.size === 0 || f.stage === 0)) {
-      await log("info", "auto_contact_skipped", { account: a.domain, message: "Outside the target size or stage" });
+    if (!meetsFit(fitState(firm))) {
+      await log("info", "auto_contact_skipped", { account: a.domain, message: "Below the fit bar set in Setup" });
       return false;
     }
   }
