@@ -217,7 +217,7 @@ Deno.test("HubSpot notes: escaped, labelled, and a draft says it was not sent", 
   assert(d.includes("Hi {{first_name}},<br>Hello"));
 });
 
-const { countryName, hsSource, hsStatus, signalFacts } = await import("../_shared/hsfields.ts");
+const { countryName, hsSource, hsStatus, newsType, signalFacts } = await import("../_shared/hsfields.ts");
 
 Deno.test("hubspot columns: status and source mapping, country names", () => {
   const a = (o: Record<string, unknown>) => ({ outreach_status: "open", lost_at: null, won_at: null, ...o });
@@ -249,4 +249,15 @@ Deno.test("hubspot columns: newest real signal, funding type, open roles", () =>
   assertEquals(f.openRoles, 3);
   assertEquals(f.news?.title, "Acme raises $20M Series B");
   assertEquals(signalFacts([]).latest, null);
+});
+
+Deno.test("hubspot columns: news headlines map to signal types, ATS comes from the job board", () => {
+  assertEquals(newsType("Acme names Jane Roe as new Chief Revenue Officer"), "NEW_CRO");
+  assertEquals(newsType("Acme hires VP of Sales from Salesforce"), "NEW_VP_SALES");
+  assertEquals(newsType("Acme raises $20M Series B"), "FUNDING");
+  assertEquals(newsType("Acme launches a new dashboard"), null);
+  assertEquals(newsType("The CRO of Spotify talks about ads"), null); // a CRO mention is not a hire
+  const row = (kind: string, title: string, detail: Record<string, unknown>) => ({ kind, title, url: null, detail, detected_at: "2026-10-09T00:00:00Z" });
+  assertEquals(signalFacts([row("hiring", "Hiring: Account Executive", { source: "lever" })]).ats, "Lever");
+  assertEquals(signalFacts([row("hiring", "Hiring: AE (Hacker News Who is hiring)", { source: "hn_hiring" })]).ats, null);
 });

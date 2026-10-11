@@ -100,7 +100,6 @@ export function companyFields(s: CompanyScores): { key: string; label: string; v
     { key: "gtm_signal_score", label: "Signal score", value: s.signal },
     { key: "gtm_intent_score", label: "Intent score", value: s.intent },
     { key: "hs_ideal_customer_profile", label: "ICP tier", value: s.tier },
-    { key: "gtm_industry", label: "Fit industry", value: "b2b_saas" },
     { key: "gtm_why_now", label: "Why now", value: s.whyNow || null },
     { key: "gtm_why_fit", label: "Why fit", value: s.whyFit || null },
     { key: "gtm_last_scored_at", label: "Last scored at", value: s.scoredAt },
@@ -139,7 +138,7 @@ export async function pushCompany(i: CompanyInput) {
   if (!found.ok) throw new Error(`HubSpot search ${found.status}`);
 
   const gtm = Object.fromEntries(companyFields(i.scores).map((f) => [f.key, f.value]));
-  const optional = ["hs_ideal_customer_profile", "gtm_industry", "gtm_last_scored_at"];
+  const optional = ["hs_ideal_customer_profile", "gtm_last_scored_at"];
 
   let id: string = found.body.results?.[0]?.id;
   let created = false;

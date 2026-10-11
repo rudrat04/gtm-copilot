@@ -42,6 +42,16 @@ export const countryName = (code: string | null): string | null => {
   try { return new Intl.DisplayNames(["en"], { type: "region" }).of(code.toUpperCase()) ?? code; } catch { return code; }
 };
 
+const ATS_NAME: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby" };
+
+/** Reads a news headline into one of HubSpot's signal types. Words are matched conservatively; anything unclear stays blank. */
+export function newsType(title: string): string | null {
+  if (/\b(chief revenue officer|cro)\b/i.test(title) && /\b(hires?|hired|appoints?|names?|named|joins?|new)\b/i.test(title)) return "NEW_CRO";
+  if (/\b(vp|vice president|head) (of )?sales\b/i.test(title) && /\b(hires?|hired|appoints?|names?|named|joins?|new)\b/i.test(title)) return "NEW_VP_SALES";
+  if (/\b(raises?|raised|funding|series [a-e]|seed round|seed funding)\b/i.test(title)) return "FUNDING";
+  return null;
+}
+
 /** Newest real signal (a news item or a newly posted role), the open sales roles count, and the newest news headline. */
 export function signalFacts(rows: SigRow[]) {
   const isSummary = (s: SigRow) => s.kind === "hiring" && !!s.detail && "salesOpenings" in s.detail;
@@ -50,11 +60,12 @@ export function signalFacts(rows: SigRow[]) {
   const latest = real[0] ?? null;
   const summary = rows.filter(isSummary).sort((a, b) => Date.parse(b.detected_at) - Date.parse(a.detected_at))[0];
   const news = real.find((s) => s.kind === "news") ?? null;
-  const funding = (t: string) => /\b(raises?|raised|funding|series [a-e]|seed|round)\b/i.test(t);
+  const ats = real.find((s) => s.kind === "hiring" && ATS_NAME[String(s.detail?.source ?? "")]);
   return {
     latest,
     latestAt: latest ? new Date(when(latest)).toISOString() : null,
-    latestType: latest ? (latest.kind === "hiring" ? "SALES_HIRING" : funding(latest.title) ? "FUNDING" : null) : null,
+    latestType: latest ? (latest.kind === "hiring" ? "SALES_HIRING" : newsType(latest.title)) : null,
+    ats: ats ? ATS_NAME[String(ats.detail?.source)] : null,
     openRoles: summary && typeof summary.detail?.salesOpenings === "number" ? summary.detail.salesOpenings as number : null,
     news,
   };
@@ -63,19 +74,23 @@ export function signalFacts(rows: SigRow[]) {
 const compact = (o: Record<string, string | null | undefined>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== "")) as Record<string, string>;
 
 export async function companyExtras(a: Acct): Promise<Extras> {
-  const [{ data: sigs }, { data: dossier }] = await Promise.all([
+  const [{ data: sigs }, { data: dossier }, { data: demo }] = await Promise.all([
     sb.from("cp_signals").select("kind,title,url,detail,detected_at").eq("account_id", a.id).order("detected_at", { ascending: false }).limit(60),
     sb.from("cp_dossiers").select("content").eq("account_id", a.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    sb.from("cp_leads").select("created_at").eq("account_id", a.id).eq("intent", "demo").neq("label", "not_fit").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const f = signalFacts((sigs ?? []) as SigRow[]);
+  // A demo request from the company is the strongest signal there is, so it wins when it is newer than everything else.
+  const demoWins = !!demo && (!f.latestAt || Date.parse(demo.created_at) > Date.parse(f.latestAt));
   const status = hsStatus(a);
   const summary = (dossier?.content as { summary?: string } | null)?.summary;
   const now = new Date().toISOString();
   return {
     always: compact({
-      gtm_latest_signal_name: f.latest ? clip(f.latest.title, 250) : null,
-      gtm_latest_signal_type: f.latestType,
-      gtm_latest_signal_at: f.latestAt,
+      gtm_latest_signal_name: demoWins ? "Requested a demo" : f.latest ? clip(f.latest.title, 250) : null,
+      gtm_latest_signal_type: demoWins ? "DEMO_REQUEST" : f.latestType,
+      gtm_latest_signal_at: demoWins ? iso(demo!.created_at) : f.latestAt,
+      gtm_ats: f.ats,
       gtm_hiring_open_roles: f.openRoles != null ? String(f.openRoles) : null,
       gtm_recent_news: f.news ? clip(f.news.title, 250) : null,
       gtm_ai_summary: summary ? clip(summary, 500) : null,
@@ -96,6 +111,8 @@ export async function companyExtras(a: Acct): Promise<Extras> {
       total_money_raised: a.raised_usd != null ? String(a.raised_usd) : null,
       website: a.domain ? `https://${a.domain}` : null,
       type: "PROSPECT",
+      // Only for companies our own screening kept as B2B software; inbound and imported ones are left for a person to set.
+      gtm_industry: a.source === "fixture" || a.source === "discovered" ? "b2b_saas" : null,
     }),
     owner: icp.owner.hubspotOwnerId,
   };
