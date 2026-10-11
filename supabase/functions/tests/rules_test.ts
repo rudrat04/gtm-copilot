@@ -26,6 +26,7 @@ const { apply, clean } = await import("../_shared/profile.ts");
 const { default: icp } = await import("../_shared/icp.json", { with: { type: "json" } });
 const { meetsFit, worthShowing } = await import("../_shared/fitgate.ts");
 const { alertEmail } = await import("../_shared/templates.ts");
+const { cleanBrand, DEFAULT_BRAND } = await import("../_shared/brand.ts");
 
 const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString();
@@ -748,4 +749,15 @@ Deno.test("alert and email settings are clamped and reach the shared config", ()
     apply(clean({}));
   }
   assertEquals([icp.alerts.maxPerDay, icp.today.cap], [3, 8]);
+});
+
+Deno.test("brand: text is cleaned and only small image data URLs are accepted as a logo", () => {
+  assertEquals(cleanBrand({}), DEFAULT_BRAND);
+  assertEquals(cleanBrand({ name: "  Acme <b>Copilot</b>  ", tagline: "x".repeat(200) }).name, "Acme b Copilot /b");
+  assertEquals(cleanBrand({ tagline: "x".repeat(200) }).tagline.length, 80);
+  const png = "data:image/png;base64,iVBORw0KGgo=";
+  assertEquals(cleanBrand({ logo: png }).logo, png);
+  assertEquals(cleanBrand({ logo: "https://evil.example/x.png" }).logo, "");
+  assertEquals(cleanBrand({ logo: "data:text/html;base64,PHNjcmlwdD4=" }).logo, "");
+  assertEquals(cleanBrand({ logo: "data:image/png;base64," + "A".repeat(300_001) }).logo, "");
 });

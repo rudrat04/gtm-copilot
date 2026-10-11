@@ -16,6 +16,7 @@ import { meetsFit, queueThreshold, worthShowing } from "../_shared/fitgate.ts";
 import { clean, DEPARTMENTS, INDUSTRIES, loadProfile, REGIONS, saveProfile, SENIORITIES, STAGES } from "../_shared/profile.ts";
 import { REGION_GROUPS, RULE_TYPES } from "../_shared/lists.ts";
 import { addToWatchlist, setWatched } from "../_shared/watchlist.ts";
+import { cleanBrand, loadBrand, saveBrand } from "../_shared/brand.ts";
 import { suggestProfile } from "../_shared/suggest.ts";
 import { rerankPeople } from "../_shared/people.ts";
 import { runDiscovery } from "../_shared/discover.ts";
@@ -407,6 +408,13 @@ serve("queue", async (req) => {
     if (!admin && !signed) return json({ mode: "dry_run", message: "Demo mode: nothing was saved. Unlock to record a loss reason." });
     const r = await applyLossReason(body.account_id, body.reason);
     return "error" in r ? json({ error: r.error }, 404) : json({ mode: "live", ...r });
+  }
+  if (body.action === "brand") return json(await loadBrand()); // public: it is only the name, tagline and logo
+  if (body.action === "brand_save") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to change the look." });
+    const b = cleanBrand(body.brand);
+    await saveBrand(b);
+    return json({ mode: "live", ...b });
   }
   if (body.action === "setup") return json({ ...(await setupView()), admin });
   if (body.action === "profile_save") {
