@@ -35,6 +35,8 @@ curl -X POST https://tecgblsoylrshcqneevf.supabase.co/functions/v1/inbound \
 | `company`, `role`, `message` | Optional. At most 3 links in a message, or it is treated as spam. |
 | `intent` | `demo`, `pricing` or `question` (default `question`). A demo or pricing request from a business email is routed as a hot lead. |
 | `source` | Free text, shown in the Inbound tab. |
+| `utm_source`, `utm_medium`, `utm_campaign` | Optional. Short words (60 characters at most). Shown to the owner as "Came from ...", in the alert email and in the HubSpot to-do. |
+| `referrer`, `page` | Optional. Send `document.referrer` and `location.pathname`. Only the referrer's host and the page path are kept; query strings and tokens are dropped. |
 | `website` | Honeypot. Leave empty; a filled value is silently ignored. |
 
 Response (about 10 to 12 seconds, because the company is checked first):

@@ -10,7 +10,7 @@ const { normalizeDomain } = await import("../_shared/db.ts");
 const { redact } = await import("../_shared/log.ts");
 const { fitBreakdown } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, priorityScore, tierOf } = await import("../_shared/score.ts");
-const { labelFor, validate } = await import("../_shared/inbound.ts");
+const { cleanContext, contextLine, labelFor, validate } = await import("../_shared/inbound.ts");
 const { companyDomain, parsePost } = await import("../_shared/discover.ts");
 const { rank } = await import("../_shared/people.ts");
 const { clean } = await import("../_shared/profile.ts");
@@ -182,4 +182,17 @@ Deno.test("goneDark: only after the sequence, with a newer signal that is under 
   assertFalse(goneDark(base, sig("2026-09-25T00:00:00Z"), now, 3)); // older than the last touch
   assertFalse(goneDark(base, sig("2026-09-10T00:00:00Z"), now, 3)); // stale
   assertFalse(goneDark(base, 0, now, 3)); // no signal at all
+});
+
+Deno.test("lead context: keeps UTM words, host and path only; builds one sentence", () => {
+  const c = cleanContext({ utm_source: "google", utm_medium: "cpc", utm_campaign: "q4 demo<script>", referrer: "https://www.news.example.com/a?token=SECRET", page: "/pricing?email=a@b.c#x" });
+  assertEquals(c.utm_campaign, "q4 demoscript");
+  assertEquals(c.referrer_host, "news.example.com");
+  assertEquals(c.landing_path, "/pricing");
+  assertEquals(contextLine(c), "Came from google / cpc / q4 demoscript, landed on /pricing");
+  assertEquals(contextLine({ referrer_host: "news.example.com" }), "Came from news.example.com");
+  assertEquals(contextLine({ landing_path: "/pricing" }), "Landed on /pricing");
+  assertEquals(contextLine({}), "");
+  assertEquals(cleanContext({ referrer: "not a url", page: "" }), {});
+  assertFalse(JSON.stringify(c).includes("SECRET"));
 });

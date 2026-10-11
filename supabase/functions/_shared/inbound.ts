@@ -20,7 +20,8 @@ const DISPOSABLE = new Set(["mailinator.com", "guerrillamail.com", "10minutemail
 const DAY = 86_400_000;
 
 export type Intent = "demo" | "pricing" | "question";
-export type LeadInput = { name: string; email: string; company?: string; role?: string; message?: string; intent: Intent; source: string };
+export type LeadContext = { utm_source?: string; utm_medium?: string; utm_campaign?: string; referrer_host?: string; landing_path?: string };
+export type LeadInput = { name: string; email: string; company?: string; role?: string; message?: string; intent: Intent; source: string; ctx?: LeadContext };
 export type Step = { step: string; detail: string; ms: number };
 export type Label = "hot" | "warm" | "review" | "not_fit";
 
@@ -28,6 +29,27 @@ const LABEL_TEXT: Record<Label, string> = { hot: "Hot lead", warm: "Warm lead", 
 const INTENT_TEXT: Record<Intent, string> = { demo: "asked for a demo", pricing: "asked about pricing", question: "sent a question" };
 const shortName = (n: string) => { const p = n.trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[p.length - 1][0]}.` : p[0]; };
 const titleCase = (s: string) => s.replace(/[-_.]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** Keeps only short, harmless context: UTM words, the referrer's host and the landing path. Query strings and tokens are never stored. */
+export function cleanContext(raw: Record<string, unknown>): LeadContext {
+  const word = (v: unknown, n: number) => String(v ?? "").replace(/[^\w .+/-]/g, "").trim().slice(0, n) || undefined;
+  const host = (v: unknown) => { try { return new URL(String(v)).hostname.replace(/^www\./, "").slice(0, 80) || undefined; } catch { return undefined; } };
+  const path = (v: unknown) => {
+    const t = String(v ?? "").trim();
+    if (!t) return undefined;
+    try { return new URL(t, "https://x.invalid").pathname.slice(0, 100) || undefined; } catch { return undefined; }
+  };
+  const ctx: LeadContext = { utm_source: word(raw.utm_source, 60), utm_medium: word(raw.utm_medium, 60), utm_campaign: word(raw.utm_campaign, 60), referrer_host: host(raw.referrer), landing_path: path(raw.page) };
+  return Object.fromEntries(Object.entries(ctx).filter(([, v]) => v)) as LeadContext;
+}
+
+/** One plain sentence for the rep, or an empty string when nothing was captured. */
+export function contextLine(c: LeadContext | null | undefined): string {
+  if (!c) return "";
+  const from = c.utm_source ? [c.utm_source, c.utm_medium, c.utm_campaign].filter(Boolean).join(" / ") : c.referrer_host ?? "";
+  const parts = [from ? `Came from ${from}` : "", c.landing_path ? `${from ? "landed" : "Landed"} on ${c.landing_path}` : ""].filter(Boolean);
+  return parts.join(", ");
+}
 
 export function validate(raw: Record<string, unknown>): { ok: true; lead: LeadInput } | { ok: false; error: string } {
   const name = String(raw.name ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
@@ -37,7 +59,7 @@ export function validate(raw: Record<string, unknown>): { ok: true; lead: LeadIn
   const message = String(raw.message ?? "").trim().slice(0, 1000);
   if ((message.match(/https?:\/\//g) ?? []).length > 2) return { ok: false, error: "That message looks like spam." };
   const intent = (["demo", "pricing", "question"] as const).find((i) => i === raw.intent) ?? "question";
-  return { ok: true, lead: { name, email, company: String(raw.company ?? "").trim().slice(0, 80) || undefined, role: String(raw.role ?? "").trim().slice(0, 80) || undefined, message: message || undefined, intent, source: String(raw.source ?? "website").slice(0, 40) } };
+  return { ok: true, lead: { name, email, company: String(raw.company ?? "").trim().slice(0, 80) || undefined, role: String(raw.role ?? "").trim().slice(0, 80) || undefined, message: message || undefined, intent, source: String(raw.source ?? "website").slice(0, 40), ctx: cleanContext(raw) } };
 }
 
 /** Rules, no AI: how urgent is this person? */
@@ -77,7 +99,7 @@ export async function processLead(l: LeadInput): Promise<{ id: string; label: La
   const domain = l.email.split("@")[1];
   const business = !FREEMAIL.has(domain) && !DISPOSABLE.has(domain);
   const disposable = DISPOSABLE.has(domain);
-  const { data: row } = await sb.from("cp_leads").insert({ name: l.name, email: l.email, domain: business ? domain : null, company: l.company ?? null, role: l.role ?? null, message: l.message ?? null, intent: l.intent, source: l.source }).select("id").single();
+  const { data: row } = await sb.from("cp_leads").insert({ name: l.name, email: l.email, domain: business ? domain : null, company: l.company ?? null, role: l.role ?? null, message: l.message ?? null, intent: l.intent, source: l.source, ...l.ctx }).select("id").single();
   const id = row!.id as string;
   mark("Received", `${INTENT_TEXT[l.intent]}`);
 
@@ -146,7 +168,7 @@ export async function processLead(l: LeadInput): Promise<{ id: string; label: La
       }
       taskId = await createTask({
         subject: `Reply to ${l.name}${companyName ? ` (${companyName})` : ""}: ${INTENT_TEXT[l.intent]}`.slice(0, 240),
-        html: `<p><b>${esc(LABEL_TEXT[label])}.</b> ${esc(why)}</p>${l.message ? `<p>“${esc(l.message)}”</p>` : ""}<p>Reply within ${icp.inbound.slaMinutes} minutes. ${esc(l.email)}</p>`,
+        html: `<p><b>${esc(LABEL_TEXT[label])}.</b> ${esc(why)}</p>${contextLine(l.ctx) ? `<p>${esc(contextLine(l.ctx))}.</p>` : ""}${l.message ? `<p>“${esc(l.message)}”</p>` : ""}<p>Reply within ${icp.inbound.slaMinutes} minutes. ${esc(l.email)}</p>`,
         dueIso: new Date(Date.now() + icp.inbound.slaMinutes * 60_000).toISOString(), priority: label === "hot" ? "HIGH" : "MEDIUM", ownerId: icp.owner.hubspotOwnerId, companyId, contactId,
       });
     } catch (e) {
@@ -183,6 +205,7 @@ async function alertOwner(l: LeadInput, c: { label: Label; why: string; companyN
     `${LABEL_TEXT[c.label].toUpperCase()}: ${l.name}${l.role ? `, ${l.role}` : ""}${c.companyName ? ` at ${c.companyName}` : ""}`,
     `${l.email}`, `They ${INTENT_TEXT[l.intent]}.`,
     l.message ? `\n"${l.message}"` : "",
+    contextLine(l.ctx) ? `\n${contextLine(l.ctx)}.` : "",
     `\nWhy now: ${c.why}`,
     c.facts || fitText ? `\n${[fitText, c.facts].filter(Boolean).join(" · ")}` : "",
     c.signalLines.length ? c.signalLines.map((s) => `  - ${s}`).join("\n") : "",
@@ -195,6 +218,7 @@ async function alertOwner(l: LeadInput, c: { label: Label; why: string; companyN
      <div style="font-size:20px;font-weight:700;margin-top:4px">${esc(l.name)}${l.role ? `, ${esc(l.role)}` : ""}</div>
      ${muted(`${c.companyName ? `${esc(c.companyName)} · ` : ""}${link(`mailto:${l.email}`, l.email)} · ${esc(INTENT_TEXT[l.intent])}`, 14)}
      ${l.message ? quote("They wrote:", l.message) : ""}
+     ${contextLine(l.ctx) ? muted(esc(contextLine(l.ctx)), 14) : ""}
      ${quote("Why now.", c.why)}
      ${h2("The company")}${muted(esc([fitText, c.facts].filter(Boolean).join(" · ") || "Nothing known yet"), 14)}
      ${c.signalLines.length ? `<ul style="margin:6px 0;padding-left:20px">${c.signalLines.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}

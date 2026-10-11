@@ -755,6 +755,7 @@ function leadCard(l, own, sla) {
     <h3 class="title">${esc(l.name)}${l.company ? ` <span class="sub" style="font-weight:400">· ${esc(l.company)}</span>` : ""}</h3>
     <div class="meta">${l.role ? `${esc(l.role)} · ` : ""}${own ? `<a href="mailto:${esc(l.email)}">${esc(l.email)}</a>` : esc(l.email)}</div>
     ${l.label !== "not_fit" ? fitLine(l.fit, l.facts) : ""}
+    ${l.context ? `<div class="meta" style="margin-top:6px">${esc(l.context)}</div>` : ""}
     ${l.message ? `<div class="why">“${esc(l.message)}”</div>` : ""}
     ${l.why ? `<div class="why"><b>Why now.</b> ${esc(l.why)}</div>` : ""}
     ${sigs ? `<ul class="sigs">${sigs}</ul>` : ""}
@@ -767,7 +768,8 @@ function drawInbound() {
   if (!$("leadformbox")) $("inbody").innerHTML = `<div id="instats"></div><div id="leadformbox">${leadForm()}</div><div id="leadlist"></div>`; // the form is drawn once, so a result stays visible
   $("instats").innerHTML = `<div class="tiles"><div class="tile"><b>${esc(st.last_30d)}</b><span>leads in 30 days</span></div>
       <div class="tile"><b style="color:${st.waiting ? "var(--warn)" : "inherit"}">${esc(st.waiting)}</b><span>waiting for a reply</span></div>
-      <div class="tile"><b>${st.median_response_seconds == null ? "–" : esc(dur(st.median_response_seconds))}</b><span>median time to reply (target ${esc(d.sla_minutes)} min)</span></div></div>`;
+      <div class="tile"><b>${st.median_response_seconds == null ? "–" : esc(dur(st.median_response_seconds))}</b><span>median time to reply (target ${esc(d.sla_minutes)} min)</span></div></div>
+      ${st.by_source?.length ? `<p class="meta" style="margin:-4px 0 0">By source, 30 days: ${st.by_source.map((x) => `${esc(x.name)} ${esc(x.count)}`).join(" · ")}</p>` : ""}`;
   $("leadlist").innerHTML = d.leads.length ? `<p class="label" style="margin:22px 0 10px">Leads</p>${d.leads.map((l) => leadCard(l, d.admin, d.sla_minutes)).join("")}` : `<div class="card empty">No leads yet. Send one above.</div>`;
 }
 
@@ -784,7 +786,8 @@ $("inbody").addEventListener("submit", async (e) => {
   btn.disabled = true; out.innerHTML = `<p class="meta" style="margin-top:14px">Checking the company, its fit and any buying signals…</p>`;
   const t0 = Date.now();
   try {
-    const r = await api("inbound", { ...data, source: "demo form" });
+    const q = new URLSearchParams(location.search), ctx = { utm_source: q.get("utm_source"), utm_medium: q.get("utm_medium"), utm_campaign: q.get("utm_campaign"), referrer: document.referrer, page: location.pathname };
+    const r = await api("inbound", { ...data, ...ctx, source: "demo form" });
     const total = ((Date.now() - t0) / 1000).toFixed(1);
     out.innerHTML = `<p class="label" style="margin:16px 0 0">${r.duplicate ? "Already received today" : "What just happened"} · ${esc(total)} s in total</p>
       <ol class="steps">${(r.timeline || []).map((s) => `<li><span class="t">${(s.ms / 1000).toFixed(1)}s</span><span><b>${esc(s.step)}.</b> ${esc(s.detail)}</span></li>`).join("")}</ol>
