@@ -123,6 +123,10 @@ Deno.test("discovery: reading a Hacker News hiring post", () => {
 
 Deno.test("people: ranking titles against the target roles", () => {
   assertEquals(rank("VP of Sales", 80).persona, "Head of Sales / VP Sales");
+  assertEquals(rank("Vice President of Sales", 80).persona, "Head of Sales / VP Sales"); // spelled out is the same title
+  assertEquals(rank("Chief Revenue Officer", 80).persona, "Head of Sales / VP Sales");
+  assertEquals(rank("Chief Executive Officer", 10).persona, "Founder / CEO");
+  assertEquals(rank("Co-Founder", 10).persona, "Founder / CEO");
   assert(rank("VP, Sales", 80).relevance >= 100); // "VP, Sales" and "VP of Sales" are the same title
   assertEquals(rank("VP, Sales", 80).relevance, rank("VP of Sales", 80).relevance);
   assertEquals(rank("Head of RevOps", 80).persona, "Head of RevOps");

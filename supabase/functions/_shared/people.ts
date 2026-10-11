@@ -40,8 +40,16 @@ export function seniorityOf(title: string): string {
 }
 
 // "VP of Sales", "VP, Sales" and "vp sales" must all be the same title.
-const norm = (s: string) =>
-  s.toLowerCase().replace(/[,&/|\-]/g, " ").replace(/\b(of|the|and|for)\b/g, " ").replace(/\s+/g, " ").trim();
+// Spelled-out titles and their short forms are the same title: "Vice President of Sales" = "VP Sales", "Chief Revenue Officer" = "CRO".
+const SHORT: [RegExp, string][] = [
+  [/\bvice presidents?\b/g, "vp"], [/\bchief revenue officer\b/g, "cro"], [/\bchief executive officer\b/g, "ceo"],
+  [/\bchief operating officer\b/g, "coo"], [/\bchief marketing officer\b/g, "cmo"], [/\bco founders?\b/g, "cofounder"],
+];
+export const norm = (s: string) => {
+  let t = s.toLowerCase().replace(/[,&/|\-]/g, " ");
+  for (const [re, to] of SHORT) t = t.replace(re, to);
+  return t.replace(/\b(of|the|and|for)\b/g, " ").replace(/\s+/g, " ").trim();
+};
 
 /** The loose "other senior sales titles" fallbacks only make sense while one of the owner's personas is a sales or revenue buyer. */
 const salesBuyer = () => icp.personas.some((p) => p.match.some((m) => /sales|revenue|revops|cro/i.test(m)));
