@@ -11,7 +11,7 @@ const { redact } = await import("../_shared/log.ts");
 const { isNotFitReason, notFitLabel, NOT_FIT_REASONS } = await import("../_shared/notfit.ts");
 const { exclusion, extraFacts, fitBreakdown, fitReasons, industryScore, industryWords, motionScore, toolsScore } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, isFundingSignal, priorityScore, roundTiming, scoreAccount, tierOf } = await import("../_shared/score.ts");
-const { buildHiring, isListing, jobInsights, rolesFromSnippet, salesMotion, toolsFromHiring } = await import("../_shared/signals.ts");
+const { buildHiring, isListing, usesTool, jobInsights, rolesFromSnippet, salesMotion, toolsFromHiring } = await import("../_shared/signals.ts");
 const { USEFUL_NEWS } = await import("../_shared/relevance.ts");
 const { dedupeRounds, roundKey } = await import("../_shared/predictleads.ts");
 const { classify, normalizeEvents, plAllowed, toSignal } = await import("../_shared/predictleads.ts");
@@ -698,4 +698,28 @@ Deno.test("location choices: groups and single countries both resolve to country
   assertEquals(codesFor("DACH (Germany, Austria, Switzerland)"), ["DE", "AT", "CH"]);
   assertEquals(codesFor("Mars"), []);
   assertEquals(new Set(REGIONS).size, REGIONS.length);
+});
+
+Deno.test("signals you add: rules are cleaned, tools match loosely, and tool and competitor rules add points", () => {
+  const p = clean({ signalRules: [
+    { id: "a1", type: "competitor", words: ["Outreach", "Gong"], on: true },
+    { id: "a2", type: "weird", words: ["x"] },
+    { id: "a3", type: "tool", words: [] },
+    { type: "watch", words: ["switching CRM"], on: false },
+  ] }).signalRules;
+  assertEquals(p.length, 2);
+  assertEquals(p[0], { id: "a1", type: "competitor", words: ["Outreach", "Gong"], on: true });
+  assertEquals(p[1].on, false);
+  assertEquals(clean({ signalRules: Array.from({ length: 30 }, (_, i) => ({ type: "tool", words: [`t${i}`] })) }).signalRules.length, 12);
+  assertEquals(usesTool(["salesforce-crm", "stripe"], "Salesforce"), true);
+  assertEquals(usesTool(["hubspot"], "hub"), false); // short words must match exactly
+  assertEquals(usesTool([], "hubspot"), false);
+  const base = priorityScore([], 15).score;
+  const tool = priorityScore([{ kind: "tech", title: "Uses hubspot", detail: { rule: "r1", ruleType: "tool" } }], 15);
+  const comp = priorityScore([{ kind: "tech", title: "Uses a competitor: gong", detail: { rule: "r2", ruleType: "competitor" } }], 15);
+  assertEquals([tool.score - base, comp.score - base], [5, 10]);
+  assertEquals(tool.parts.custom, 5);
+  const many = priorityScore(["a", "b", "c", "d"].map((w) => ({ kind: "tech" as const, title: `Uses a competitor: ${w}`, detail: { rule: "r2", ruleType: "competitor" } })), 15);
+  assertEquals(many.parts.custom, 12); // capped
+  assertEquals(heatOf([{ kind: "tech", title: "Uses a competitor: gong", detail: { ruleType: "competitor" }, detected_at: new Date().toISOString() }], "matches"), "warm"); // never hot on its own
 });

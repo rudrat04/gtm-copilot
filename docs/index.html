@@ -348,7 +348,7 @@ const bullets = (a) => (a?.length ? `<ul class="plain">${a.map((x) => `<li>${esc
 /* ============ signals: a short, tidy list ============ */
 function sigRow(s, hidden = false) {
   const summary = /\d+ open roles/.test(s.title);
-  const k = s.kind === "hn" ? ["HN", "hn"] : s.kind === "news" ? ["News", "news"] : ["Hiring", "hiring"];
+  const k = s.kind === "hn" ? ["HN", "hn"] : s.kind === "news" ? ["News", "news"] : s.kind === "tech" ? ["Tools", "news"] : ["Hiring", "hiring"];
   let text = s.title.replace(/^Hiring:\s*/i, "").replace(/^Hacker News:\s*/i, "").trim();
   if (summary) text = `Currently ${text}`;
   const stamp = s.published || s.first_seen, days = (Date.now() - Date.parse(stamp)) / 864e5;
@@ -1240,6 +1240,13 @@ function drawSetup() {
       </div>
       <hr class="hr">
       ${tagField("hiringRoles", "Job titles that count as a hiring signal", "A company hiring for any of these is treated as scaling its sales team.")}
+      <hr class="hr">
+      <p class="lbl" style="font-weight:600;font-size:14px;margin:0 0 4px">Signals you add</p>
+      <p class="help" style="margin:0 0 10px">Anything else that tells you a company is worth a call. They count the next time companies are checked (daily for companies in your queue, weekly for the rest).</p>
+      ${P.signalRules.map((r, i) => { const t = d.options.rule_types.find((x) => x.key === r.type) || {}; return `<div class="persona" data-ri="${i}">
+        <div class="phead"><b style="flex:1">${esc(t.label || r.type)}</b><label class="toggle" style="margin:0"><input type="checkbox" data-chk="signalRules.${i}.on" ${r.on ? "checked" : ""} aria-label="On"><span>On</span></label><button type="button" class="btn ghost sm" data-rrm="${i}">Remove</button></div>
+        ${tagField(`signalRules.${i}.words`, t.words || "Words", t.help)}</div>`; }).join("")}
+      ${P.signalRules.length >= 12 ? "" : `<div class="field" style="margin-bottom:0"><span class="lbl">Add a signal</span><div class="chips" style="margin:0">${d.options.rule_types.map((t) => `<button type="button" class="chip" data-radd="${esc(t.key)}" title="${esc(t.help)}">+ ${esc(t.label)}</button>`).join("")}</div></div>`}
     </article>
     <article class="card"><p class="label">Which companies to show</p>
       <div class="field"><label for="minfit">Lowest fit to show</label>
@@ -1360,6 +1367,10 @@ async function loadSetup() {
       } catch (err) { say(err.message); sg.disabled = false; sg.textContent = "Suggest my settings"; }
       return;
     }
+    const ra = e.target.closest("[data-radd]");
+    if (ra) { const t = SETUP.options.rule_types.find((x) => x.key === ra.dataset.radd); P.signalRules.push({ id: `r${Date.now().toString(36)}`, type: t.key, words: [...t.starter], on: true }); drawSetup(); const box2 = $("setupbody").querySelector(`[data-ri="${P.signalRules.length - 1}"] [data-add]`); box2?.focus(); return; }
+    const rr = e.target.closest("[data-rrm]");
+    if (rr) { P.signalRules.splice(Number(rr.dataset.rrm), 1); drawSetup(); return; }
     const rm = e.target.closest("[data-rm]");
     if (rm) { const path = rm.closest("[data-tags]").dataset.tags, list = getPath(P, path); setPath(P, path, list.filter((x) => x !== rm.dataset.rm)); drawSetup(); return; }
     const pr = e.target.closest("[data-premove]");

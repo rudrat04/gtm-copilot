@@ -66,6 +66,7 @@
     }
   ],
   "signals": {
+    "rules": [],
     "hiringRoles": [
       "sdr",
       "bdr",

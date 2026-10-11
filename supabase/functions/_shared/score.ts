@@ -7,6 +7,7 @@ const REVOPS = /revops|revenue operations|sales operations|sales ops/i;
 
 // Account fit is a fixed baseline for the curated list. Real fit comes from the dossier.
 const BASELINE_FIT = 15;
+const RULE_CAP = 12; // most points tool and competitor rules can add
 const DAY = 86_400_000;
 
 
@@ -23,7 +24,7 @@ export function isFundingSignal(s: { title: string; detail?: Record<string, unkn
 
 export type Score = {
   score: number;
-  parts: { hiring: number; news: number; community: number; fit: number };
+  parts: { hiring: number; news: number; community: number; custom: number; fit: number };
   signalScore: number; // all signals, 0-100
   intentScore: number; // hiring + funding only, 0-100
   funded: boolean;
@@ -88,7 +89,16 @@ export function priorityScore(signals: Dated[], fit: number = BASELINE_FIT, timi
   const hn = signals.filter((s) => s.kind === "hn").reduce((a, s) => a + decay(ageDays(s), 30, 90), 0);
   const community = Math.min(w.tech, hn * 4);
 
-  const parts = { hiring, news: Math.round(newsPts), community: Math.round(community), fit: Math.round(fit) };
+  // Tools and competitors the owner asked to watch: a competitor in use counts most. News-based rules already count as news above.
+  const seenRule = new Set<string>();
+  const custom = Math.min(RULE_CAP, signals.filter((s) => s.kind === "tech" && s.detail?.ruleType).reduce((a, s) => {
+    const key = `${s.detail?.rule}|${s.title}`;
+    if (seenRule.has(key)) return a;
+    seenRule.add(key);
+    return a + (s.detail?.ruleType === "competitor" ? 10 : 5);
+  }, 0));
+
+  const parts = { hiring, news: Math.round(newsPts), community: Math.round(community), custom, fit: Math.round(fit) };
   const score = Math.min(100, Object.values(parts).reduce((a, b) => a + b, 0));
   const signalMax = w.hiring + w.news + w.tech;
   const intentMax = w.hiring + w.news;
@@ -139,6 +149,6 @@ export function heatOf(sigs: Sig[], fit: FitState): Heat {
   const fresh = real.some((s) => age(s) < 7);
   const funding = sigs.some((s) => s.kind === "news" && isFundingSignal(s) && age(s) < 30);
   if (fresh || funding || sales >= 2) return "hot";
-  if (sales >= 1 || real.some((s) => age(s) < 60) || sigs.some((s) => s.kind === "hn" && age(s) < 30)) return "warm";
+  if (sales >= 1 || real.some((s) => age(s) < 60) || sigs.some((s) => s.kind === "hn" && age(s) < 30) || sigs.some((s) => s.kind === "tech" && s.detail?.ruleType)) return "warm";
   return "watching";
 }

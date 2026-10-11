@@ -1,7 +1,7 @@
 import { sb } from "./db.ts";
 import icp from "./icp.json" with { type: "json" };
 import { MIN_FITS, type MinFit } from "./fitgate.ts";
-import { INDUSTRIES, REGIONS, STAGES } from "./lists.ts";
+import { INDUSTRIES, REGIONS, RULE_TYPES, STAGES } from "./lists.ts";
 
 export { INDUSTRIES, REGIONS, STAGES };
 
@@ -27,10 +27,15 @@ export type Persona = { title: string; match: string[]; weight: number; hubspot:
 export const DEPARTMENTS = ["Executive", "Sales", "Marketing", "Revenue operations", "Operations", "Finance", "Engineering", "Product", "Customer success", "People / HR", "IT"];
 export const SENIORITIES = [["founder_c", "Founder / C-level"], ["vp", "VP"], ["head_director", "Head / Director"], ["manager", "Manager"], ["ic", "Individual contributor"]] as const;
 export const PRODUCT_MAX = 1500;
+
+/** A signal the owner added: what kind, what to look for, and whether it is on. Weights are automatic by kind. */
+export type SignalRule = { id: string; type: string; words: string[]; on: boolean };
+export const MAX_RULES = 12;
 export const MAX_PERSONAS = 8;
 
 export type Profile = {
   product: { description: string; website: string }; // what the owner sells: the suggestion for everything else is made from this
+  signalRules: SignalRule[];                // extra signals: tools, competitors, press, changes, watch phrases
   competitors: string[];                    // competitor names or domains, for the "uses a competitor" signal and the never-show list
   industries: string[];
   employeesMin: number;
@@ -59,6 +64,7 @@ const BASE_WEIGHTS = { ...icp.signals.weights };
 const DEFAULT: Profile = {
   product: { description: "", website: "" },
   competitors: [],
+  signalRules: [],
   industries: [...icp.company.industries],
   employeesMin: icp.company.employeesMin,
   employeesMax: icp.company.employeesMax,
@@ -116,6 +122,19 @@ function cleanPersonas(raw: unknown): Persona[] {
   return out.length ? out : DEFAULT.personas.map((p) => ({ ...p, match: [...p.match], seniority: [] }));
 }
 
+function cleanRules(raw: unknown): SignalRule[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SignalRule[] = [];
+  for (const r of raw.slice(0, MAX_RULES * 2) as Record<string, unknown>[]) {
+    const type = RULE_TYPES.find((t) => t.key === r?.type)?.key;
+    const words = list(r?.words, [], 10, true);
+    if (!type || !words.length) continue;
+    out.push({ id: String(r?.id ?? "").replace(/[^a-z0-9]/gi, "").slice(0, 12) || `r${out.length + 1}${type}`, type, words, on: r?.on !== false });
+    if (out.length >= MAX_RULES) break;
+  }
+  return out;
+}
+
 function cleanWindow(raw: unknown): [number, number] {
   const r = Array.isArray(raw) ? raw : [];
   const lo = num(r[0], DEFAULT.roundWindow[0], 0, 720);
@@ -158,6 +177,7 @@ export function clean(input: unknown): Profile {
   return {
     product: { description: String(pr.description ?? "").trim().slice(0, PRODUCT_MAX), website: cleanSite(pr.website) },
     competitors: list(i.competitors, [], 15, true),
+    signalRules: cleanRules(i.signalRules),
     industries: industriesOut,
     employeesMin: min,
     employeesMax: max,
@@ -189,6 +209,7 @@ export function apply(p: Profile) {
   icp.company.stages = p.stages;
   icp.company.regions = p.regions;
   icp.signals.hiringRoles = p.hiringRoles;
+  (icp.signals as { rules: SignalRule[] }).rules = p.signalRules.map((r) => ({ ...r, words: [...r.words] }));
   icp.signals.weights.hiring = p.signals.hiring ? BASE_WEIGHTS.hiring : 0;
   icp.signals.weights.news = p.signals.news ? BASE_WEIGHTS.news : 0;
   icp.signals.weights.tech = p.signals.community ? BASE_WEIGHTS.tech : 0;

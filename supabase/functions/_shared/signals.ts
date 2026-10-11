@@ -254,28 +254,24 @@ export function isListing(title: string): boolean {
 }
 
 export async function newsSignals(name: string, segment = ""): Promise<Signal[]> {
-  const segWords = segment.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 3);
   const q = encodeURIComponent(`"${name}" (SaaS OR startup OR software OR funding OR launch OR hiring) when:60d`);
   const res = await get(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`);
   if (!res) return [];
-  const xml = await res.text();
+  return newsItems(await res.text(), name, segment).map((it) => ({ kind: "news" as const, title: it.title, url: it.url, detail: { published: it.published } })).slice(0, 5);
+}
+
+/** Dated news items from a Google News feed that are about this company: the name is in the title and the title is on topic. */
+function newsItems(xml: string, name: string, segment: string): { title: string; url?: string; published: string }[] {
+  const segWords = segment.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 3);
   const needle = name.toLowerCase();
-  const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-  return items.map((m) => {
-    const title = /<title>([\s\S]*?)<\/title>/.exec(m[1])?.[1] ?? "";
-    const link = /<link>([\s\S]*?)<\/link>/.exec(m[1])?.[1];
-    const date = /<pubDate>([\s\S]*?)<\/pubDate>/.exec(m[1])?.[1];
-    return {
-      kind: "news" as const,
-      title: title.replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").trim(),
-      url: link,
-      detail: { published: date },
-    };
-  }).filter((s) => {
+  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((m) => ({
+    title: (/<title>([\s\S]*?)<\/title>/.exec(m[1])?.[1] ?? "").replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").trim(),
+    url: /<link>([\s\S]*?)<\/link>/.exec(m[1])?.[1],
+    published: /<pubDate>([\s\S]*?)<\/pubDate>/.exec(m[1])?.[1] ?? "",
+  })).filter((s) => {
     const t = s.title.toLowerCase();
-    const onTopic = TECH_CONTEXT.test(t) || segWords.some((w) => t.includes(w));
-    return t.includes(needle) && onTopic && !NOISE.test(t) && !isListing(s.title) && !!s.detail.published; // a dated article about the company, not a directory page
-  }).slice(0, 5);
+    return t.includes(needle) && (TECH_CONTEXT.test(t) || segWords.some((w) => t.includes(w))) && !NOISE.test(t) && !isListing(s.title) && !!s.published;
+  });
 }
 
 export async function hnSignals(name: string, domain: string): Promise<Signal[]> {
@@ -301,6 +297,41 @@ export async function hnSignals(name: string, domain: string): Promise<Signal[]>
   }
 }
 
+// ---- Signals the owner added in Setup (tools, competitors, press, changes, watch phrases) ----
+
+type Rule = { id: string; type: string; words: string[]; on: boolean };
+const normTool = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
+/** Does a company's tool list contain this tool? Equal, or the same product with a suffix ("salesforce" matches "salesforce-crm"). Pure. */
+export function usesTool(tech: string[], word: string): boolean {
+  const w = normTool(word);
+  return !!w && tech.some((t) => { const n = normTool(t); return n === w || (w.length >= 4 && n.startsWith(w)); });
+}
+
+/** Tool and competitor rules read the stored tool list; press, change and watch rules search news about the company (free, dated, same namesake guard as news). */
+export async function ruleSignals(name: string, domain: string, segment: string, rules: Rule[]): Promise<Signal[]> {
+  const on = rules.filter((r) => r.on && r.words.length);
+  if (!on.length) return [];
+  const out: Signal[] = [];
+  const techRules = on.filter((r) => r.type === "tool" || r.type === "competitor");
+  if (techRules.length) {
+    const { data } = await sb.from("cp_accounts").select("tech").eq("domain", domain).maybeSingle();
+    const tech = (data?.tech ?? []) as string[];
+    for (const r of techRules) for (const w of r.words) {
+      if (usesTool(tech, w)) out.push({ kind: "tech", title: r.type === "competitor" ? `Uses a competitor: ${w}` : `Uses ${w}`, detail: { rule: r.id, ruleType: r.type } });
+    }
+  }
+  const newsRules = on.filter((r) => r.type === "press" || r.type === "change" || r.type === "watch").slice(0, 4);
+  const found = await Promise.all(newsRules.map(async (r) => {
+    const q = encodeURIComponent(`"${name}" (${r.words.slice(0, 8).map((w) => `"${w}"`).join(" OR ")}) when:90d`);
+    const res = await get(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`);
+    return res ? { r, items: newsItems(await res.text(), name, segment) } : { r, items: [] };
+  }));
+  for (const { r, items } of found) for (const it of items.filter((x) => r.words.some((w) => x.title.toLowerCase().includes(w.toLowerCase()))).slice(0, 2)) { // the headline itself must contain one of the words (Google also returns loose matches)
+    out.push({ kind: "news", title: it.title, url: it.url, detail: { published: it.published, newsType: "rule", rule: r.id, ruleType: r.type } });
+  }
+  return out;
+}
+
 export async function collectSignals(name: string, domain: string, segment = "") {
   const site = await fetchSite(domain);
   const [hiring, news, hn] = await Promise.all([
@@ -320,6 +351,8 @@ export async function collectSignals(name: string, domain: string, segment = "")
   );
 
   const signals: Signal[] = [...(rel.jobsOk ? hiring.signals : []), ...rel.headlines];
+  const have = new Set(signals.map((s) => s.title));
+  for (const s of await ruleSignals(name, domain, segment, ((icp.signals as { rules?: Rule[] }).rules ?? [])).catch(() => [])) if (!have.has(s.title)) signals.push(s);
   const hiringUnknown = hiring.unknown && rel.jobsOk; // a board could not be reached: callers fall back on the stored open-role count
 
   // A company we discovered because it posted sales roles on Hacker News keeps that as a hiring signal while the post is recent.

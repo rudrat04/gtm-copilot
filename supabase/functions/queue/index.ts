@@ -14,7 +14,7 @@ import { tierOf } from "../_shared/score.ts";
 import { activeFlags, flagAction } from "../_shared/flags.ts";
 import { meetsFit, queueThreshold, worthShowing } from "../_shared/fitgate.ts";
 import { clean, DEPARTMENTS, INDUSTRIES, loadProfile, REGIONS, saveProfile, SENIORITIES, STAGES } from "../_shared/profile.ts";
-import { REGION_GROUPS } from "../_shared/lists.ts";
+import { REGION_GROUPS, RULE_TYPES } from "../_shared/lists.ts";
 import { suggestProfile } from "../_shared/suggest.ts";
 import { rerankPeople } from "../_shared/people.ts";
 import { runDiscovery } from "../_shared/discover.ts";
@@ -237,7 +237,7 @@ async function setupView() {
   const month = Date.now() - 30 * DAY;
   return {
     profile,
-    options: { stages: STAGES, regions: REGIONS, region_groups: Object.keys(REGION_GROUPS).length, industries: INDUSTRIES, departments: DEPARTMENTS, seniorities: SENIORITIES, not_fit_reasons: NOT_FIT_REASONS },
+    options: { stages: STAGES, regions: REGIONS, region_groups: Object.keys(REGION_GROUPS).length, rule_types: RULE_TYPES, industries: INDUSTRIES, departments: DEPARTMENTS, seniorities: SENIORITIES, not_fit_reasons: NOT_FIT_REASONS },
     discovery: {
       schedule: "Mondays at 10:30 IST, an hour before the signal scan",
       last: disc?.[0]?.found_at ?? null,
