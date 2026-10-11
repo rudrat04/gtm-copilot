@@ -15,6 +15,7 @@ import { clean, loadProfile, REGIONS, saveProfile, STAGES } from "../_shared/pro
 import { runDiscovery } from "../_shared/discover.ts";
 import { applyLossReason, isLossReason, verifyLoss } from "../_shared/lossreason.ts";
 import { applyDebrief, endsAt, OUTCOME_LABEL, OUTCOMES, type Outcome, verify } from "../_shared/debrief.ts";
+import { refreshAllFields } from "../_shared/hsfields.ts";
 import { checkConnections, healthView } from "../_shared/health.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
@@ -349,6 +350,10 @@ serve("queue", async (req) => {
     const rescored = await enrichCompanies(true); // fit and weights changed: recompute every score (no credits)
     await log("info", "profile_saved", { detail: { rescored: rescored.rescored } });
     return json({ mode: "live", ...(await setupView()), rescored: rescored.rescored });
+  }
+  if (body.action === "hubspot_refresh") {
+    if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
+    return json({ mode: "live", ...(await refreshAllFields({ dry: body.dry === true })) });
   }
   if (body.action === "health") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);

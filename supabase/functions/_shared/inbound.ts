@@ -5,6 +5,7 @@ import { collectSignals } from "./signals.ts";
 import { fetchFirmo, firmoLine, fitPoints, saveFirmo } from "./firmo.ts";
 import { fitState, heatOf, priorityScore, tierOf } from "./score.ts";
 import { reasonLine } from "./today.ts";
+import { refreshAccountFields } from "./hsfields.ts";
 import { createTask, pushCompany, pushContact } from "./hubspot.ts";
 import { ownerEmail, sendMail } from "./google.ts";
 import { button, esc, h2, layout, link, muted, quote } from "./emailhtml.ts";
@@ -176,6 +177,7 @@ export async function processLead(l: LeadInput): Promise<{ id: string; label: La
     }
     if (accountId) {
       await sb.from("cp_people").upsert({ account_id: accountId, provider: "inbound", first_name: l.name.split(" ")[0], last_name: l.name.split(" ").slice(1).join(" "), title: l.role ?? "Inbound lead", persona: null, relevance: 90, email: l.email, email_status: "unknown", email_revealed: true, hubspot_contact_id: contactId }, { onConflict: "account_id,email" });
+      await refreshAccountFields(accountId); // fills the extra HubSpot columns and the owner on the company and the new contact
     }
   }
   if (label === "not_fit") mark("Routed", "Marked as not a fit, so nobody is interrupted");

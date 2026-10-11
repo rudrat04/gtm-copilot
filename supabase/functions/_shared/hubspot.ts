@@ -324,6 +324,39 @@ export async function moveDeal(dealId: string, stage: DealStage): Promise<boolea
   return r.ok;
 }
 
+// ---- Extra columns (see hsfields.ts) ----
+
+export type Extras = { always: Record<string, string>; blankOnly: Record<string, string>; owner?: string };
+const blank = (v: unknown) => v === null || v === undefined || String(v).trim() === "";
+
+/** One PATCH with everything; if HubSpot rejects it (an option it does not know), retry one property at a time so a single bad value never blocks the rest. */
+async function patchProps(path: string, props: Record<string, string>, domain: string): Promise<boolean> {
+  if (!Object.keys(props).length) return true;
+  const r = await hs(path, { method: "PATCH", body: JSON.stringify({ properties: props }) }, [400]);
+  if (r.ok) return true;
+  if (r.status !== 400) return false;
+  const rejected: string[] = [];
+  for (const [k, v] of Object.entries(props)) {
+    const one = await hs(path, { method: "PATCH", body: JSON.stringify({ properties: { [k]: v } }) }, [400]);
+    if (!one.ok) rejected.push(k);
+  }
+  if (rejected.length) await log("warn", "hubspot_extras_rejected", { account: domain, message: "HubSpot did not accept some columns", detail: { rejected } });
+  return rejected.length < Object.keys(props).length;
+}
+
+async function applyExtras(kind: "companies" | "contacts", id: string, x: Extras, domain: string): Promise<boolean> {
+  const keys = [...Object.keys(x.blankOnly), "hubspot_owner_id"];
+  const cur = await hs(`/crm/v3/objects/${kind}/${id}?properties=${keys.join(",")}`, {}, [404]);
+  if (!cur.ok) return false; // deleted in HubSpot, or unreachable
+  const have = cur.body.properties ?? {};
+  const props: Record<string, string> = { ...x.always };
+  for (const [k, v] of Object.entries(x.blankOnly)) if (blank(have[k])) props[k] = v;
+  if (x.owner && blank(have.hubspot_owner_id)) props.hubspot_owner_id = x.owner;
+  return await patchProps(`/crm/v3/objects/${kind}/${id}`, props, domain);
+}
+export const applyCompanyExtras = (id: string, x: Extras, domain: string) => applyExtras("companies", id, x, domain);
+export const applyContactExtras = (id: string, x: Extras, domain: string) => applyExtras("contacts", id, x, domain);
+
 /** Records why a deal we opened was lost. Only ever called for deals we created. */
 export async function setDealLostReason(dealId: string, reason: string): Promise<boolean> {
   const r = await hs(`/crm/v3/objects/deals/${dealId}`, { method: "PATCH", body: JSON.stringify({ properties: { closed_lost_reason: reason.slice(0, 200) } }) }, [400]);

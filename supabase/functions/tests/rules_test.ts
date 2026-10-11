@@ -216,3 +216,37 @@ Deno.test("HubSpot notes: escaped, labelled, and a draft says it was not sent", 
   assert(d.includes("&quot;q&quot;"));
   assert(d.includes("Hi {{first_name}},<br>Hello"));
 });
+
+const { countryName, hsSource, hsStatus, signalFacts } = await import("../_shared/hsfields.ts");
+
+Deno.test("hubspot columns: status and source mapping, country names", () => {
+  const a = (o: Record<string, unknown>) => ({ outreach_status: "open", lost_at: null, won_at: null, ...o });
+  assertEquals(hsStatus(a({})), "new");
+  assertEquals(hsStatus(a({ outreach_status: "contacted" })), "prospecting");
+  assertEquals(hsStatus(a({ outreach_status: "replied" })), "engaged");
+  assertEquals(hsStatus(a({ outreach_status: "meeting" })), "qualified");
+  assertEquals(hsStatus(a({ outreach_status: "snoozed" })), "nurture");
+  assertEquals(hsStatus(a({ outreach_status: "not_now", lost_at: "2026-10-01" })), "closed_lost");
+  assertEquals(hsStatus(a({ outreach_status: "not_now" })), "nurture");
+  assertEquals(hsStatus(a({ won_at: "2026-10-01", lost_at: "2026-09-01" })), "customer");
+  assertEquals(hsSource("inbound"), "demo_form");
+  assertEquals(hsSource("hubspot"), "hubspot");
+  assertEquals(hsSource("discovered"), "api");
+  assertEquals(countryName("GB"), "United Kingdom");
+  assertEquals(countryName(null), null);
+});
+
+Deno.test("hubspot columns: newest real signal, funding type, open roles", () => {
+  const row = (kind: string, title: string, detail: Record<string, unknown>, detected_at: string) => ({ kind, title, url: null, detail, detected_at });
+  const f = signalFacts([
+    row("hiring", "1 open roles, 3 in sales/RevOps", { salesOpenings: 3, totalOpenings: 9 }, "2026-10-09T00:00:00Z"),
+    row("hn", "Hacker News: Acme", { points: 2 }, "2026-10-10T00:00:00Z"),
+    row("news", "Acme raises $20M Series B", { published: "Fri, 02 Oct 2026 07:00:00 GMT" }, "2026-10-08T00:00:00Z"),
+    row("hiring", "Account Executive", {}, "2026-10-01T00:00:00Z"),
+  ]);
+  assertEquals(f.latest?.title, "Acme raises $20M Series B");
+  assertEquals(f.latestType, "FUNDING");
+  assertEquals(f.openRoles, 3);
+  assertEquals(f.news?.title, "Acme raises $20M Series B");
+  assertEquals(signalFacts([]).latest, null);
+});

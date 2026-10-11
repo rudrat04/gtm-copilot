@@ -1,6 +1,7 @@
 import { json, normalizeDomain, sb } from "../_shared/db.ts";
 import { isAdmin } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
+import { refreshAccountFields } from "../_shared/hsfields.ts";
 import { hunterBalance, rank, searchAndStore } from "../_shared/people.ts";
 import {
   type CompanyScores,
@@ -195,6 +196,7 @@ async function push(accountId: string, personIds: string[] | undefined, admin: b
 
     await sb.from("cp_accounts").update({ status: "pushed", hubspot_company_id: company.companyId, priority_score: ctx.scores.priority }).eq("id", accountId);
     if (draft) await sb.from("cp_outreach_drafts").update({ status: "approved" }).eq("id", draft.id);
+    await refreshAccountFields(accountId); // signals, status, facts and owner columns; failures are logged, never block the push
     await log("info", "push_complete", { account: a.domain, detail: { contacts: contacts.length, used_dossier: ctx.hasDossier } });
     return json({ mode: "live", company, contacts, used_dossier: ctx.hasDossier });
   } catch (e) {

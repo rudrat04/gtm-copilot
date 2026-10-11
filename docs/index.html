@@ -965,6 +965,10 @@ function drawSetup() {
       <div id="factsout"></div>
     </article>
 
+    ${own ? `<article class="card"><p class="label">HubSpot columns</p>
+      <p class="meta" style="margin:0 0 10px">Fills company and contact columns in HubSpot (size, city, funding, latest signal, status, owner) from what we already know. Facts are only written where HubSpot is blank, and nothing is deleted. They also update on every push and every action you record.</p>
+      <div class="actions" style="margin:0"><button class="btn ghost" data-hsrefresh>Update HubSpot columns</button></div><div id="hsout"></div></article>` : ""}
+
     ${own ? `<article class="card" id="healthcard"><p class="label">Health</p><p class="meta" style="margin:0">Loading…</p></article>` : ""}
 
     <details class="how"><summary>How scoring and signals work</summary><div id="icpbody"></div></details>`;
@@ -1024,6 +1028,20 @@ async function loadSetup() {
         if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
         SETUP = { ...r, admin: true }; P = JSON.parse(JSON.stringify(r.profile)); drawSetup(); drawHealth(); say(`Saved. Recalculated ${r.rescored} companies.`); ACC = null;
       } catch (err) { say(err.message); btn.disabled = false; }
+    }
+    if (btn.matches("[data-hsrefresh]")) {
+      btn.disabled = true;
+      try {
+        const d = await api("queue", { action: "hubspot_refresh", dry: true });
+        if (d.mode === "dry_run") { say(d.message); btn.disabled = false; return; }
+        if (!d.companies) { $("hsout").innerHTML = `<p class="meta">No companies in HubSpot yet.</p>`; btn.disabled = false; return; }
+        if (!confirm(`Update ${d.companies} companies and ${d.contacts} contacts in HubSpot? Blank fields only; nothing is deleted.`)) { btn.disabled = false; return; }
+        $("hsout").innerHTML = `<p class="meta">Updating…</p>`;
+        const r = await api("queue", { action: "hubspot_refresh" });
+        $("hsout").innerHTML = `<p class="meta">Updated ${esc(r.companies)} companies and ${esc(r.contacts)} contacts.</p>`;
+      } catch (err) { $("hsout").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
+      btn.disabled = false;
+      return;
     }
     if (btn.matches("[data-checkconn]")) {
       btn.disabled = true; say("Checking…");

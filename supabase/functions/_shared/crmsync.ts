@@ -1,5 +1,6 @@
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
+import { refreshAccountFields } from "./hsfields.ts";
 import { createDeal, createTask, type DealStage, type LeadStatus, logNote, moveDeal, setLeadStatus } from "./hubspot.ts";
 import { esc } from "./emailhtml.ts";
 import icp from "./icp.json" with { type: "json" };
@@ -80,6 +81,7 @@ export async function syncOutcome(accountId: string, kind: SyncKind, ctx: { note
       await sb.from("cp_tasks").insert({ key: `post:${kind}:${accountId}:${Date.now()}`, account_id: accountId, hubspot_task_id: taskId }); // so completing it can be read back
     });
   }
+  await step("Columns updated", async () => { if (!(await refreshAccountFields(accountId)).company) throw new Error("columns"); }); // status columns follow the action
   await log("info", "crm_synced", { account: a.domain, detail: { kind, actions } });
   return { synced: actions.length > 0, actions };
 }
