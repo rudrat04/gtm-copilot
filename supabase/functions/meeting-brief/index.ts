@@ -6,6 +6,7 @@ import { type CalEvent, getEvent, googleConfigured, listChangedEvents, ownerEmai
 import { lookupForBrief, tierLabel } from "../_shared/hubspot.ts";
 import { buildBrief, buildBriefHtml } from "../_shared/brief.ts";
 import { tierOf } from "../_shared/score.ts";
+import { briefNoteHtml, noteToHubSpot } from "../_shared/hsnotes.ts";
 import { sendDueDebriefs } from "../_shared/debrief.ts";
 import { nudgeOverdueLeads } from "../_shared/inbound.ts";
 
@@ -157,7 +158,8 @@ async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry" | "
   await sb.from("cp_meetings").update({
     status: "briefed", brief, account_id: accountId, emailed_at: new Date().toISOString(), error: null,
   }).eq("calendar_event_id", ev.id);
-  await log("info", "brief_sent", { account: domain, detail: { attendees: ext.length, researched: !!researched, hubspot: !!hubspot } });
+  const noted = await noteToHubSpot(accountId, briefNoteHtml(ev.summary ?? "(no title)", when, brief), "meeting brief"); // the brief also lives on the HubSpot record
+  await log("info", "brief_sent", { account: domain, detail: { attendees: ext.length, researched: !!researched, hubspot: !!hubspot, noted } });
   return "briefed";
 }
 

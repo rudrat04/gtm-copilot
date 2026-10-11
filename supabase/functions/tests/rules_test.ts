@@ -10,6 +10,7 @@ const { normalizeDomain } = await import("../_shared/db.ts");
 const { redact } = await import("../_shared/log.ts");
 const { fitBreakdown } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, priorityScore, tierOf } = await import("../_shared/score.ts");
+const { briefNoteHtml, draftNoteHtml } = await import("../_shared/hsnotes.ts");
 const { isLossReason, LOSS_LABEL, LOSS_REASONS } = await import("../_shared/lossreason.ts");
 const { cleanContext, contextLine, labelFor, validate } = await import("../_shared/inbound.ts");
 const { companyDomain, parsePost } = await import("../_shared/discover.ts");
@@ -203,4 +204,15 @@ Deno.test("loss reasons: a fixed list, each with a label; anything else is refus
   for (const r of LOSS_REASONS) assert(isLossReason(r) && LOSS_LABEL[r].length > 0);
   assertFalse(isLossReason("because"));
   assertFalse(isLossReason(undefined));
+});
+
+Deno.test("HubSpot notes: escaped, labelled, and a draft says it was not sent", () => {
+  const b = briefNoteHtml("Intro <call>", "Mon 12 Oct", "Line one\nLine <b>two</b>");
+  assert(b.includes("Internal. Not shared with the guest."));
+  assertFalse(b.includes("<b>two</b>"));
+  assert(b.includes("Line one<br>Line &lt;b&gt;two"));
+  const d = draftNoteHtml({ persona: "VP Sales", subject: "Quick \"q\"", body: "Hi {{first_name}},\nHello" });
+  assert(d.includes("not sent"));
+  assert(d.includes("&quot;q&quot;"));
+  assert(d.includes("Hi {{first_name}},<br>Hello"));
 });
