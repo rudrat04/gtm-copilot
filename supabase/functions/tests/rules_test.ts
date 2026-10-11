@@ -8,7 +8,7 @@ Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test");
 
 const { normalizeDomain } = await import("../_shared/db.ts");
 const { redact } = await import("../_shared/log.ts");
-const { fitBreakdown } = await import("../_shared/firmo.ts");
+const { extraFacts, fitBreakdown } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, isFundingSignal, priorityScore, tierOf } = await import("../_shared/score.ts");
 const { buildHiring, isListing, rolesFromSnippet } = await import("../_shared/signals.ts");
 const { USEFUL_NEWS } = await import("../_shared/relevance.ts");
@@ -497,4 +497,21 @@ Deno.test("predictleads: one funding round counts once", () => {
   assertEquals(dedupeRounds(fresh, []).map((s) => s.title), [fresh[0].title, fresh[2].title]); // the second investor is the same round
   assertEquals(dedupeRounds([fresh[1]], [{ title: fresh[0].title, published: "2026-08-31T00:00:00Z" }]), []); // already stored
   assertEquals(dedupeRounds([sig("Acme Series B", "2027-06-01")], [{ title: "Acme Series B", published: "2026-01-01T00:00:00Z" }]).length, 1); // far apart: a different event
+});
+
+Deno.test("hunter facts: industry, tools, tags and description are read from the company lookup", () => {
+  // The field names come from Hunter's Company Enrichment documentation.
+  const f = extraFacts({
+    category: { sector: "Information Technology", industryGroup: "Software & Services", industry: "Software", subIndustry: "Software" },
+    tech: ["HubSpot", "cloudflare", " Ruby "], techCategories: ["crm"], tags: ["SaaS", "B2B"], description: "  We build   a CRM\nfor teams.  ", linkedin: { handle: "company/acme" },
+  });
+  assertEquals(f.industry, "Information Technology / Software & Services / Software"); // repeated words are not repeated
+  assertEquals(f.tech, ["hubspot", "cloudflare", "ruby"]);
+  assertEquals(f.tags, ["saas", "b2b"]);
+  assertEquals(f.blurb, "We build a CRM for teams.");
+  assertEquals(f.linkedin, "company/acme");
+  const empty = extraFacts({});
+  assertEquals([empty.industry, empty.tags, empty.tech, empty.blurb, empty.linkedin], [null, [], [], null, null]);
+  assertEquals(extraFacts({ tech: "not a list", description: 5 }).tech, []);
+  assertEquals(extraFacts({ description: "x".repeat(500) }).blurb!.length, 300);
 });

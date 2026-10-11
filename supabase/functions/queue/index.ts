@@ -309,6 +309,19 @@ async function enrichCompanies(rescoreAll = false, only?: string[]) {
   return out;
 }
 
+/**
+ * Owner only. Adds industry, tools, tags and a description to companies that already have size and stage, best accounts first
+ * and only ones that pass the fit bar (0.2 Hunter credit each). `dry` just says how many and what it would cost.
+ */
+async function refreshFacts(limit: number, dry: boolean) {
+  const { data } = await sb.from("cp_accounts").select("id,priority_score,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,domain,name,known_as")
+    .not("firmo_at", "is", null).is("facts2_at", null).order("priority_score", { ascending: false, nullsFirst: false }).limit(300);
+  const todo = (data ?? []).filter((a) => worthShowing(a));
+  const ids = todo.slice(0, Math.max(1, Math.min(25, limit))).map((a) => a.id);
+  if (dry) return { dry: true, missing: todo.length, will_look_up: ids.length, credits: Math.round(ids.length * 0.2 * 10) / 10 };
+  return { dry: false, missing: todo.length, ...(await enrichCompanies(false, ids)) };
+}
+
 /** Writes the outreach draft only when someone asks for it. The owner generates; everyone can read a saved one. */
 async function draft(accountId: string, admin: boolean) {
   const { data: a } = await sb.from("cp_accounts").select("id,name,domain").eq("id", accountId).maybeSingle();
@@ -401,6 +414,10 @@ serve("queue", async (req) => {
   if (body.action === "enrich_company" && typeof body.account_id === "string") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can look up company size and stage (0.2 search credit)." });
     return json({ mode: "live", ...(await enrichCompanies(false, [body.account_id])) });
+  }
+  if (body.action === "refresh_facts") {
+    if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
+    return json({ mode: "live", ...(await refreshFacts(Number(body.limit) || 10, body.dry !== false)) });
   }
   if (body.action === "enrich_companies") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);

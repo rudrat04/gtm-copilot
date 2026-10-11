@@ -18,7 +18,27 @@ export type Firmo = {
   founded: number | null;
   country: string | null;
   city: string | null;
+  industry: string | null;
+  tags: string[];
+  tech: string[];
+  blurb: string | null;
+  linkedin: string | null;
 };
+
+/** Industry, tools, tags and description from the same Hunter lookup (no extra credit). Pure, so it can be tested. */
+// deno-lint-ignore no-explicit-any -- an external JSON payload
+export function extraFacts(x: any): Pick<Firmo, "industry" | "tags" | "tech" | "blurb" | "linkedin"> {
+  const c = x?.category ?? {};
+  const industry = [...new Set([c.sector, c.industryGroup, c.industry, c.subIndustry].filter((v) => typeof v === "string" && v.trim()).map((v: string) => v.trim()))].join(" / ");
+  const list = (v: unknown, max: number) => (Array.isArray(v) ? v : []).filter((t) => typeof t === "string" && t.trim()).map((t: string) => t.trim().toLowerCase()).slice(0, max);
+  return {
+    industry: industry || null,
+    tags: list(x?.tags, 20),
+    tech: list(x?.tech, 80),
+    blurb: typeof x?.description === "string" && x.description.trim() ? x.description.trim().replace(/\s+/g, " ").slice(0, 300) : null,
+    linkedin: typeof x?.linkedin?.handle === "string" ? x.linkedin.handle.slice(0, 120) : null,
+  };
+}
 
 /** The funding stage is the type of the most recent round. */
 function latestRound(rounds: { date?: string; type?: string }[]): { stage: string | null; date: string | null } {
@@ -62,6 +82,7 @@ export async function fetchFirmo(domain: string): Promise<Firmo | null> {
     founded: x.foundedYear ?? null,
     country: x.geo?.countryCode ?? null,
     city: x.geo?.city ?? null,
+    ...extraFacts(x),
   };
   await log("info", "firmo_fetched", { account: domain, detail: { employees: firmo.employees, stage: firmo.stage, country: firmo.country }, ms: Date.now() - started });
   return firmo;
@@ -71,6 +92,7 @@ export async function saveFirmo(accountId: string, f: Firmo) {
   await sb.from("cp_accounts").update({
     employees: f.employees, employee_band: f.band, raised_usd: f.raised, stage: f.stage, last_round_date: f.lastRoundDate,
     founded_year: f.founded, country: f.country, hq_city: f.city, firmo_at: new Date().toISOString(),
+    industry: f.industry, tags: f.tags, tech: f.tech, blurb: f.blurb, linkedin_handle: f.linkedin, facts2_at: new Date().toISOString(),
   }).eq("id", accountId);
 }
 
