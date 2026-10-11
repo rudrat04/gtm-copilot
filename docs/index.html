@@ -92,6 +92,7 @@
   .attn .flag { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); } .attn .flag:first-of-type { border-top: 0; } .attn b.bad { color: var(--bad); }
   .fitwhy { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; font-size: 12.5px; color: var(--muted); } .fitwhy .fw b { font-weight: 700; } .fitwhy .good b { color: var(--good); } .fitwhy .warn b { color: var(--warn); } .fitwhy .bad b { color: var(--bad); }
   .weights { display: flex; flex-wrap: wrap; gap: 10px 16px; } .weights label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); } .weights input { width: 84px; padding: 8px 10px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; }
+  .whylist { text-align: left; max-width: 560px; margin: 12px auto 0; padding-left: 20px; font-size: 13.5px; color: var(--soft); } .warnx { color: var(--warn); }
   .needs { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border: 1px dashed var(--line); border-radius: 14px; color: var(--soft); font-size: 14px; }
   .sigs-more { margin-top: 4px; }
   .field { margin: 0 0 16px; } .field > label, .field > .lbl { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
@@ -141,7 +142,7 @@
   .person .pact { flex: none; align-self: center; }
   .ptag { font-size: 11.5px; color: var(--good); font-weight: 600; margin-left: 6px; }
   .pill { font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); }
-  .pill.ok { color: var(--good); }
+  .pill.ok { color: var(--good); } .pill.bad { color: var(--bad); }
   .pv table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
   .pv td { padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: top; } .pv td:first-child { color: var(--muted); width: 38%; }
   .pv h4 { font-size: 12px; margin: 10px 0 2px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
@@ -377,12 +378,13 @@ function tCard(i) {
   const sub = c ? `${esc(c.title)} at <b>${esc(a.name)}</b>` : esc(a.name);
   const mail = c?.email ? (c.email.includes("***") ? `<span>${esc(c.email)}</span>` : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : "";
   const facts = fitLine(a.fit_state, a.firmo);
+  const whoWhy = c ? `<div class="meta" style="margin-top:4px">${c.persona ? `Matches your "${esc(c.persona)}" buyer type.` : "A relevant senior contact."}${c.known ? ` <b class="warnx">${esc(c.note || "Already in your HubSpot.")}</b>` : ""}</div>` : "";
   const why = `<div class="why"><b>Why today.</b> ${esc(i.why || i.reason)}</div>`;
   const note = fu ? `<div class="status-line due">${esc(i.headline)}</div>` : i.type === "revive" ? `<div class="status-line">${esc(i.headline)}</div>${why}` : why;
   return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
     <div class="card-head"><div>
       <div class="eyebrow"><span class="badge ${TODAY_BADGE[i.type] || ""}">${esc(i.label)}</span></div>
-      <h3 class="title">${title}</h3><div class="sub">${sub}</div>
+      <h3 class="title">${title}</h3><div class="sub">${sub}</div>${whoWhy}
       ${mail ? `<div class="meta">${mail}</div>` : ""}${facts}
     </div></div>
     ${note}
@@ -390,6 +392,16 @@ function tCard(i) {
     ${c2 ? `<div class="meta" style="margin-top:12px">Also consider <b>${esc(c2.name)}</b>, ${esc(c2.title)}</div>` : ""}
     ${i.last_action && !fu ? `<div class="meta" style="margin-top:6px">Last action: ${esc(i.last_action)}</div>` : ""}
     ${actionsHtml({ outreach: a.outreach, hasContacts: !!c, hasDraft: false })}</article>`;
+}
+
+/** When Today is empty, say what is holding things back, each with where to fix it. */
+function emptyWhy(d) {
+  const b = d.blocked || {}, n = (d.needs || []).length, bits = [];
+  if (n) bits.push(`<b>${n}</b> strong compan${n > 1 ? "ies have" : "y has"} a fresh signal but no contact yet. Use <b>Find people</b> in Accounts.`);
+  if (b.below_fit) bits.push(`<b>${b.below_fit}</b> with a fresh signal ${b.below_fit > 1 ? "are" : "is"} below your fit bar. Change it in <b>Setup</b>, "Which companies to show".`);
+  if (b.low_score) bits.push(`<b>${b.low_score}</b> with a fresh signal score under your minimum. Lower it in <b>Setup</b>.`);
+  if (b.parked) bits.push(`<b>${b.parked}</b> with a fresh signal ${b.parked > 1 ? "are" : "is"} parked (not now or snoozed).`);
+  return bits.length ? `<ul class="whylist">${bits.map((x) => `<li>${x}</li>`).join("")}</ul>` : "";
 }
 
 async function loadToday() {
@@ -407,7 +419,7 @@ async function loadToday() {
       ${d.attention.items.map((f) => `<div class="flag" data-flag="${esc(f.key)}"><div><b class="${f.severity === "urgent" ? "bad" : ""}">${esc(f.title)}</b>${f.detail ? `<div class="meta">${esc(f.detail)} · ${esc(ago(f.since))}</div>` : ""}</div>
         <div class="actions" style="margin:0"><button class="btn ghost sm" data-flagdo="snooze">Snooze 3 days</button><button class="btn ghost sm" data-flagdo="dismiss">Dismiss</button></div></div>`).join("")}</article>` : "";
     $("tlist").innerHTML = att + lds + deb + (d.items.map(tCard).join("") ||
-      `<div class="card empty">Nothing ready to contact today.<br>People with a fresh signal and follow-ups due appear here.</div>`) + needs;
+      `<div class="card empty">Nothing ready to contact today.<br>People with a fresh signal and follow-ups due appear here.${emptyWhy(d)}</div>`) + needs;
     const c = $("c-today"); c.textContent = d.items.length; c.hidden = !d.items.length;
   } catch (e) { $("tlist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
@@ -446,7 +458,7 @@ function nextStep(a) {
   if (s === "meeting") return "";
   if (s === "replied") return `<button class="btn primary sm" data-life="meeting">Meeting booked</button>`;
   if (!c && a.fit === "unknown") return `<button class="btn primary sm" data-act="firmo" title="Looks up size and stage. Uses 0.2 search credit">Check size</button>`;
-  if (!c) return `<button class="btn primary sm" data-act="people"${a.searched ? "" : ` title="Uses 1 search credit"`}>${a.searched ? "See people" : "Find people"}</button>`;
+  if (!c) return `<button class="btn primary sm" data-act="people"${a.searched ? "" : ` title="Uses 1 to 2 search credits"`}>${a.searched ? "See people" : "Find people"}</button>`;
   if (!c.revealed && c.email) return `<button class="btn primary sm" data-act="enrich1" data-pid="${esc(c.id)}">Enrich ${esc(c.name.split(" ")[0])}</button>`;
   if (c.revealed && !c.pushed) return `<button class="btn primary sm" data-act="push">Add to HubSpot</button>`;
   return `<button class="btn primary sm" data-life="contacted">${s === "contacted" ? "Contacted again" : "Mark contacted"}</button>`;
@@ -455,7 +467,7 @@ function nextStep(a) {
 function contactLine(a) {
   const c = a.contacts[0]; if (!c) return a.searched ? `<div class="contact meta">No relevant person found yet</div>` : "";
   const mail = c.revealed && c.email ? (c.email.includes("***") ? esc(c.email) : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : c.email ? "email found, not revealed" : "no email";
-  return `<div class="contact"><b>${esc(c.name)}</b> · ${esc(c.title)} · ${mail}${c.pushed ? ` <span class="ptag">In HubSpot</span>` : ""}${a.contacts.length > 1 ? ` <span class="meta">+${a.contacts.length - 1} more</span>` : ""}</div>`;
+  return `<div class="contact"><b>${esc(c.name)}</b> · ${esc(c.title)} · ${mail}${c.persona ? ` <span class="ptag" title="Matches your buyer type">${esc(c.persona)}</span>` : ""}${c.known ? ` <span class="ptag warnx" title="${esc(c.note || "")}">Already in your HubSpot</span>` : c.pushed ? ` <span class="ptag">In HubSpot</span>` : ""}${a.contacts.length > 1 ? ` <span class="meta">+${a.contacts.length - 1} more</span>` : ""}</div>`;
 }
 
 const NOT_FIT = { too_big: "Too big", too_small: "Too small", wrong_industry: "Wrong industry", competitor: "Competitor", agency_b2c: "Agency or B2C", wrong_region: "Wrong region", customer: "Already a customer", other: "Other" };
@@ -494,7 +506,7 @@ function drawAccounts() {
   $("ahead").innerHTML = `<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""}</span>
       <span>Signals refresh ${d.scan.active ? esc(d.scan.label) : "(paused)"} · next ${esc(day(d.scan.next_scan))}</span></div>
     <div class="toolbar"><div class="chips">${FILTERS.filter(([k]) => counts[k] || k === aview || k === "all").map(([k, l]) => `<button class="chip${k === aview ? " on" : ""}" data-view="${k}">${l}<i>${counts[k]}</i></button>`).join("")}</div>
-      <input id="asearch" type="search" placeholder="Search" aria-label="Search companies" value="${esc(aq)}"></div>`;
+      <input id="asearch" type="search" placeholder="Search" aria-label="Search companies" value="${esc(aq)}">${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</div>`;
   $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${aview === "all" ? "Nothing here yet." : "No companies in this view."}</div>`;
   const s = $("asearch"); if (aq) { s.focus(); s.setSelectionRange(aq.length, aq.length); }
 }
@@ -504,7 +516,23 @@ async function loadAccounts(quiet) {
   try { ACC = await api("queue", { action: "accounts" }); drawAccounts(); }
   catch (e) { $("alist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
-$("ahead").addEventListener("click", (e) => { const b = e.target.closest("[data-view]"); if (b) { aview = b.dataset.view; drawAccounts(); } });
+$("ahead").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-view]"); if (b) { aview = b.dataset.view; drawAccounts(); return; }
+  const bf = e.target.closest("[data-bulkfind]"); if (!bf) return;
+  bf.disabled = true; say("Checking who to search…");
+  try {
+    const p = await api("queue", { action: "find_people_bulk", limit: 5, dry: true });
+    if (p.mode === "dry_run") { say(p.message); return; }
+    if (!p.plan.length) { say(`No hot or warm company without people${p.waiting ? "" : " that passes your fit bar"}.`); return; }
+    const bal = p.balance ? ` You have ${p.balance.remaining} of ${p.balance.available} credits left this month.` : "";
+    if (!confirm(`Search for people at ${p.plan.length} compan${p.plan.length > 1 ? "ies" : "y"}?\n\n${p.plan.map((x) => `${x.name} (${x.heat})`).join("\n")}\n\nCost: ${p.credits_min} to ${p.credits_max} search credits (1 each, a second only if the first finds fewer than 3 people).${bal}`)) return;
+    say("Searching…");
+    const r = await api("queue", { action: "find_people_bulk", limit: 5, dry: false });
+    const found = r.done.reduce((a, d) => a + d.stored, 0);
+    say(`Searched ${r.done.length} compan${r.done.length === 1 ? "y" : "ies"}, found ${found} people, used ${r.spent} credit${r.spent === 1 ? "" : "s"}.${r.stopped ? ` Stopped: ${r.stopped}.` : ""}`);
+    ACC = null; loadAccounts(true);
+  } catch (err) { say(err.message); } finally { bf.disabled = false; }
+});
 $("ahead").addEventListener("input", (e) => { if (e.target.id === "asearch") { aq = e.target.value; drawAccounts(); } });
 
 /* ============ card actions (shared by Today and Accounts) ============ */
@@ -645,13 +673,15 @@ function mountPeople(box, accountName, domain, autoload) {
     const email = p.email_revealed
       ? `<b>${esc(p.email)}</b> <span class="pill ${st[1]}">${st[0]}${p.email_confidence ? " · " + esc(p.email_confidence) + "%" : ""}</span>`
       : `<span class="mask">${esc(p.email || "no email found")}</span>`;
-    const action = p.pushed ? `<span class="pill ok">In HubSpot</span>`
+    const blockedPerson = p.hs_status === "opted_out" || p.hs_status === "bounced";
+    const action = blockedPerson ? `<span class="pill bad" title="${esc(p.hs_note || "")}">${p.hs_status === "opted_out" ? "Opted out" : "Bounced"}</span>`
+      : p.pushed ? `<span class="pill ok">In HubSpot</span>`
       : p.email_revealed ? `<span class="pill ok">Enriched</span>`
       : p.email ? `<div class="menu"><button class="btn ghost sm" data-tog>Enrich ▾</button><div class="menu-list" hidden>
           <button data-en="email">Email</button><button disabled title="Needs a paid data provider">Phone (paid provider)</button><button disabled title="Needs a paid data provider">Email + phone (paid provider)</button></div></div>` : "";
     return `<div class="person${p.persona ? "" : " dim"}" data-pid="${esc(p.id)}"><div>
       <div><span class="pn">${esc(p.name)}</span>${p.persona ? `<span class="ptag">${esc(p.persona)} · ${esc(p.persona_score)}</span>` : ""}</div>
-      <div class="pt">${esc(p.title)} at ${esc(accountName)}${p.department ? ` · ${esc(p.department)}` : ""}</div>
+      <div class="pt">${esc(p.title)} at ${esc(accountName)}${p.department ? ` · ${esc(p.department)}` : ""}</div>${p.hs_status === "known" ? `<div class="pt warnx">${esc(p.hs_note || "Already in your HubSpot.")}</div>` : ""}
       <div class="pe">${email}</div></div><div class="pact">${action}</div></div>`;
   };
 
@@ -669,7 +699,7 @@ function mountPeople(box, accountName, domain, autoload) {
     try {
       const d = await api("people", { action: "find", domain });
       accountId = d.account_id; people = d.people; company = d.company;
-      msg = d.locked ? d.message : people.length ? (d.cached ? "" : "Found with 1 search credit.") : "No matching people found for this company.";
+      msg = d.locked ? d.message : people.length ? (d.cached ? "" : `Found with ${d.credits_spent ?? 1} search credit${d.credits_spent === 2 ? "s" : ""}.`) : "No matching people found for this company.";
       draw();
     } catch (err) { msg = err.message; draw(); }
   };

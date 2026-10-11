@@ -19,6 +19,7 @@ type Row = {
   department: string | null; persona: string | null; relevance: number; email: string | null;
   email_status: string | null; email_confidence: number | null; email_revealed: boolean;
   phone_revealed: boolean; hubspot_contact_id: string | null; account_id: string;
+  hs_status?: "known" | "opted_out" | "bounced" | null; hs_note?: string | null;
 };
 
 const maskEmail = (e: string | null) => (e ? `***@${e.split("@")[1]}` : null);
@@ -39,6 +40,8 @@ function view(r: Row, admin: boolean) {
     email: admin && r.email_revealed ? r.email : maskEmail(r.email),
     email_revealed: admin && r.email_revealed,
     pushed: !!r.hubspot_contact_id,
+    hs_status: r.hs_status ?? null,
+    hs_note: r.hs_note ?? null,
   };
 }
 
@@ -122,6 +125,7 @@ async function enrich(personId: string, what: string, admin: boolean) {
   }
   if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to reveal the email." });
   if (!p.email) return json({ error: "No email found for this person" }, 404);
+  if (p.hs_status === "opted_out" || p.hs_status === "bounced") return json({ error: p.hs_note ?? "HubSpot says this person should not be emailed" }, 409);
 
   await sb.from("cp_people").update({ email_revealed: true, enriched_at: new Date().toISOString() }).eq("id", personId);
   await log("info", "person_enriched", { account: p.email.split("@")[1], detail: { what, status: p.email_status } });
@@ -130,7 +134,7 @@ async function enrich(personId: string, what: string, admin: boolean) {
 
 const personaValue = (title: string | null) => icp.personas.find((p) => p.title === title)?.hubspot ?? null;
 const personaLabel = (v: string | null) =>
-  ({ sales_leader: "Sales leader", revops: "Revenue operations", Founder: "Founder" } as Record<string, string>)[v ?? ""] ?? "No persona";
+  ({ sales_leader: "Sales leader", revops: "Revenue operations", Founder: "Founder" } as Record<string, string>)[v ?? ""] ?? (v ? v.replace(/_/g, " ") : "No persona");
 
 /** Shows exactly what a push would write, so nothing is a surprise. Safe for public visitors. */
 async function preview(accountId: string, admin: boolean) {
@@ -165,8 +169,10 @@ async function push(accountId: string, personIds: string[] | undefined, admin: b
 
   let q = sb.from("cp_people").select("*").eq("account_id", accountId).eq("email_revealed", true);
   if (personIds?.length) q = q.in("id", personIds);
-  const { data: people } = await q;
-  if (!people?.length) return json({ error: "Enrich at least one person before pushing" }, 409);
+  const { data: all } = await q;
+  const people = (all ?? []).filter((p) => p.hs_status !== "opted_out" && p.hs_status !== "bounced"); // never add someone who opted out or bounced
+  const skipped = (all ?? []).length - people.length;
+  if (!people.length) return json({ error: skipped ? "Everyone selected opted out or bounced in HubSpot" : "Enrich at least one person before pushing" }, 409);
 
   const { data: draft } = await sb.from("cp_outreach_drafts").select("*").eq("account_id", accountId)
     .in("status", ["pending", "approved"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -197,7 +203,7 @@ async function push(accountId: string, personIds: string[] | undefined, admin: b
     if (draft) await sb.from("cp_outreach_drafts").update({ status: "approved" }).eq("id", draft.id);
     await refreshAccountFields(accountId); // signals, status, facts and owner columns; failures are logged, never block the push
     await log("info", "push_complete", { account: a.domain, detail: { contacts: contacts.length, used_dossier: ctx.hasDossier } });
-    return json({ mode: "live", company, contacts, used_dossier: ctx.hasDossier });
+    return json({ mode: "live", company, contacts, used_dossier: ctx.hasDossier, skipped });
   } catch (e) {
     await log("error", "push_failed", { account: a.domain, message: (e as Error).message });
     return json({ error: (e as Error).message }, 502);

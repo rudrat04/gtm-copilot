@@ -123,6 +123,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     is_new: !(s.kind === "hiring" && s.detail && "salesOpenings" in s.detail) && now - Date.parse(s.detected_at) < 7 * DAY,
   }));
   const items: TodayItem[] = [];
+  const blocked = { below_fit: 0, low_score: 0, parked: 0 }; // fresh signals that did not make the list, and why
   const meta = new Map<string, { name: string; tier: string; type: string; touches: number; lastAction: string | null; sigs: SigRow[]; hash: string }>();
 
   for (const a of accounts) {
@@ -174,6 +175,11 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
       const hot = now - newest < cfg.hotHours * HOUR;
       it = { ...base, key: `hot-${a.id}`, type: hot ? "hot" : "new", label: hot ? "Hot now" : "New this week",
         urgency: (hot ? 500 : 350) + (a.priority_score ?? 0) / 10, headline: hot ? "New signal in the last 48 hours" : "New signal this week", due: null };
+    }
+    if (!it && newest && now - newest < cfg.newDays * DAY && a.status === "queued") {
+      if (a.outreach_status === "open" && clearMiss) blocked.below_fit++;
+      else if (a.outreach_status === "open" && (a.priority_score ?? 0) < icp.fit.minScore) blocked.low_score++;
+      else if (["not_now", "snoozed"].includes(a.outreach_status)) blocked.parked++;
     }
     if (it) {
       const h = hash("v3|" + sigs.map((s) => s.title).sort().join("|") + `|${a.outreach_status}|${a.touches}|${it.type}`); // v3 invalidates older cached sentences
@@ -233,7 +239,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
   const counts: Record<string, number> = {};
   for (const it of shown) counts[it.type] = (counts[it.type] ?? 0) + 1;
   await log("info", "today_built", { detail: { shown: shown.length, hidden: ready.length - shown.length, needs: needs.length, counts, admin } });
-  return { generated_at: new Date().toISOString(), cap: cfg.cap, counts, hidden: Math.max(0, ready.length - shown.length), needs, debriefs: debriefs ?? 0, leads: leads ?? 0, items: shown };
+  return { generated_at: new Date().toISOString(), cap: cfg.cap, counts, hidden: Math.max(0, ready.length - shown.length), needs, debriefs: debriefs ?? 0, leads: leads ?? 0, blocked, items: shown };
 }
 
 

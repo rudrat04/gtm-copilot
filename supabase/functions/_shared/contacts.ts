@@ -18,6 +18,8 @@ export type Contact = {
   email_status: string | null;
   revealed: boolean; // email enriched (revealed) by the owner
   pushed: boolean;   // already in HubSpot
+  known: boolean;    // a HubSpot contact we did not add: someone may already be talking to them
+  note: string | null; // why: "Already in your HubSpot..."
 };
 
 const maskEmail = (e: string | null) => (e ? `***@${e.split("@")[1]}` : null);
@@ -27,14 +29,17 @@ export async function contactsFor(accountIds: string[], admin: boolean, limit = 
   const out = new Map<string, Contact[]>();
   if (!accountIds.length) return out;
   const { data } = await sb.from("cp_people")
-    .select("id,account_id,first_name,last_name,title,persona,email,email_status,relevance,email_confidence,email_revealed,hubspot_contact_id")
+    .select("id,account_id,first_name,last_name,title,persona,email,email_status,relevance,email_confidence,email_revealed,hubspot_contact_id,hs_status,hs_note")
     .in("account_id", accountIds).gte("relevance", 50) // individual contributors are not the buyer
+    .or("hs_status.is.null,hs_status.eq.known") // never suggest someone who opted out or whose address bounced
     .order("relevance", { ascending: false }).order("email_confidence", { ascending: false, nullsFirst: false });
 
   const by = new Map<string, NonNullable<typeof data>>();
   for (const p of data ?? []) (by.get(p.account_id) ?? by.set(p.account_id, []).get(p.account_id)!).push(p);
 
-  for (const [id, rows] of by) {
+  for (const [id, all] of by) {
+    // People nobody is already talking to come first; a known contact is still shown, marked, after them.
+    const rows = [...all].sort((a, b) => Number(a.hs_status === "known") - Number(b.hs_status === "known"));
     const picked: typeof rows = [];
     if (rows[0]) picked.push(rows[0]);
     const other = rows.find((r) => r.persona !== rows[0].persona && !picked.includes(r));
@@ -49,6 +54,8 @@ export async function contactsFor(accountIds: string[], admin: boolean, limit = 
       email_status: p.email_status,
       revealed: !!p.email_revealed,
       pushed: !!p.hubspot_contact_id,
+      known: p.hs_status === "known",
+      note: p.hs_note ?? null,
     })));
   }
   return out;

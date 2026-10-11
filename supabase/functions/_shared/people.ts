@@ -1,6 +1,7 @@
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import icp from "./icp.json" with { type: "json" };
+import { guardPeople } from "./guard.ts";
 
 /** A person as returned by any provider, before ranking. */
 export type FoundPerson = {
@@ -79,6 +80,27 @@ export async function rerankPeople(): Promise<number> {
 
 // ---- Hunter adapter ----
 
+// Abbreviations in the job-title words, written out the way people put them on a profile (Hunter matches common equivalents).
+const TITLE_FORMS: Record<string, string[]> = {
+  cro: ["Chief Revenue Officer"], ceo: ["Chief Executive Officer", "CEO"], coo: ["Chief Operating Officer"], cmo: ["Chief Marketing Officer"],
+  revops: ["Revenue Operations", "RevOps"], "vp sales": ["VP of Sales", "VP Sales", "Vice President of Sales"], "vp revenue": ["VP of Revenue", "Vice President of Revenue"],
+  "sales ops": ["Sales Operations"], "co-founder": ["Co-Founder"],
+};
+
+/** The job titles to ask Hunter for, from the owner's buyer types (best-weighted first), at most 14 so the request stays short. Pure. */
+export function personaTitles(personas: { match: string[]; weight: number }[] = icp.personas): string[] {
+  const out: string[] = [];
+  const add = (t: string) => { if (!out.some((x) => x.toLowerCase() === t.toLowerCase())) out.push(t); };
+  for (const p of [...personas].sort((a, b) => b.weight - a.weight)) {
+    for (const word of p.match) {
+      const key = word.toLowerCase().trim();
+      const forms = TITLE_FORMS[key] ?? [key.replace(/\b\w/g, (c) => c.toUpperCase())];
+      forms.forEach(add);
+    }
+  }
+  return out.slice(0, 14);
+}
+
 const HUNTER_MONTHLY_CAP = Number(Deno.env.get("HUNTER_MONTHLY_CAP") ?? 40); // free plan has 50
 
 export const hunter: PeopleProvider = {
@@ -98,32 +120,23 @@ export const hunter: PeopleProvider = {
       throw new Error("Monthly people-search limit reached");
     }
 
-    const started = Date.now();
-    const url = `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}` +
-      `&type=personal&department=executive,sales,management,operations&limit=10`;
-    const res = await fetch(url, { headers: { "X-API-KEY": key }, signal: AbortSignal.timeout(20000) });
-    const body = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      await log("error", "provider_request_failed", {
-        account: domain,
-        message: `Hunter ${res.status}`,
-        detail: { provider: "hunter", status: res.status, errors: JSON.stringify(body.errors ?? body).slice(0, 300) },
-        ms: Date.now() - started,
-      });
-      throw new Error(`Hunter ${res.status}`);
+    // 1) Ask for the owner's buyer-type titles, so the 10 results the free plan allows are the right 10. A search with no results costs nothing.
+    // 2) If that finds fewer than 3 people, add the broader department search (it can cost one more credit).
+    const titles = personaTitles();
+    const first = titles.length ? await domainSearch(domain, key, `&job_titles=${encodeURIComponent(titles.join(","))}`) : null;
+    const merged = new Map<string, Record<string, unknown>>();
+    for (const e of first?.emails ?? []) merged.set(String(e.value), e);
+    let credits = first?.credits ?? 0;
+    if (!first || merged.size < 3) {
+      const used2 = await monthlyUsed();
+      if (used2 + credits < HUNTER_MONTHLY_CAP) {
+        const second = await domainSearch(domain, key, "&department=executive,sales,management,operations");
+        credits += second.credits;
+        for (const e of second.emails) if (!merged.has(String(e.value))) merged.set(String(e.value), e);
+      }
     }
-
     // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
-    const emails = (body.data?.emails ?? []) as Record<string, any>[];
-    // Hunter charges 1 credit for a domain search that returns results, 0 when nothing is found.
-    const credits = emails.length ? 1 : 0;
-    await sb.from("cp_provider_usage").insert({ provider: "hunter", action: "domain_search", credits, account: domain });
-    await log("info", "provider_search", {
-      account: domain,
-      detail: { provider: "hunter", results: emails.length, credits, indexed_total: body.meta?.results },
-      ms: Date.now() - started,
-    });
+    const emails = [...merged.values()] as Record<string, any>[];
 
     return {
       credits,
@@ -140,6 +153,40 @@ export const hunter: PeopleProvider = {
     };
   },
 };
+
+async function monthlyUsed(): Promise<number> {
+  const since = new Date();
+  since.setUTCDate(1);
+  since.setUTCHours(0, 0, 0, 0);
+  const { data } = await sb.from("cp_provider_usage").select("credits").eq("provider", "hunter").gte("created_at", since.toISOString());
+  return (data ?? []).reduce((a, r) => a + Number(r.credits), 0);
+}
+
+/** One Hunter domain search. A search that returns people costs 1 credit, one that finds nothing costs 0. */
+async function domainSearch(domain: string, key: string, filter: string): Promise<{ emails: Record<string, unknown>[]; credits: number }> {
+  const started = Date.now();
+  const url = `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&type=personal${filter}&limit=10`;
+  const res = await fetch(url, { headers: { "X-API-KEY": key }, signal: AbortSignal.timeout(20000) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    await log("error", "provider_request_failed", {
+      account: domain,
+      message: `Hunter ${res.status}`,
+      detail: { provider: "hunter", status: res.status, errors: JSON.stringify(body.errors ?? body).slice(0, 300) },
+      ms: Date.now() - started,
+    });
+    throw new Error(`Hunter ${res.status}`);
+  }
+  const emails = (body.data?.emails ?? []) as Record<string, unknown>[];
+  const credits = emails.length ? 1 : 0;
+  await sb.from("cp_provider_usage").insert({ provider: "hunter", action: "domain_search", credits, account: domain });
+  await log("info", "provider_search", {
+    account: domain,
+    detail: { provider: "hunter", filter: filter.startsWith("&job_titles") ? "job_titles" : "department", results: emails.length, credits, indexed_total: body.meta?.results },
+    ms: Date.now() - started,
+  });
+  return { emails, credits };
+}
 
 /** The active provider. Swap this one line (or read an env var) to change data sources. */
 export function provider(): PeopleProvider {
@@ -184,6 +231,7 @@ export async function searchAndStore(account: { id: string; domain: string }): P
   if (rows.length) {
     const { error } = await sb.from("cp_people").upsert(rows, { onConflict: "account_id,email", ignoreDuplicates: true });
     if (error) await log("error", "people_store_failed", { account: account.domain, message: error.message });
+    await guardPeople({ accountId: account.id }); // opted out, bounced or already in HubSpot? (read-only, never throws)
   }
   return { stored: rows.length, credits: found.credits };
 }

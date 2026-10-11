@@ -19,7 +19,9 @@ const { briefNoteHtml, draftNoteHtml } = await import("../_shared/hsnotes.ts");
 const { isLossReason, LOSS_LABEL, LOSS_REASONS } = await import("../_shared/lossreason.ts");
 const { cleanContext, contextLine, labelFor, validate } = await import("../_shared/inbound.ts");
 const { companyDomain, parsePost } = await import("../_shared/discover.ts");
-const { rank } = await import("../_shared/people.ts");
+const { personaTitles, rank } = await import("../_shared/people.ts");
+const { guardStatus } = await import("../_shared/guard.ts");
+const { pickTop } = await import("../_shared/bulkfind.ts");
 const { apply, clean } = await import("../_shared/profile.ts");
 const { meetsFit, worthShowing } = await import("../_shared/fitgate.ts");
 
@@ -630,4 +632,42 @@ Deno.test("settings: the funding window is validated", () => {
   assertEquals(clean({ roundWindow: [30, 120] }).roundWindow, [30, 120]);
   assertEquals(clean({ roundWindow: [400, 10] }).roundWindow, [400, 401]); // never an empty window
   assertEquals(clean({ roundWindow: "x" }).roundWindow, [90, 270]);
+});
+
+Deno.test("people search: the job titles asked for come from the buyer types", () => {
+  apply(clean({}));
+  const t = personaTitles();
+  assert(t.length > 0 && t.length <= 14);
+  assert(t.includes("VP of Sales") && t.includes("Chief Revenue Officer") && t.includes("Revenue Operations")); // abbreviations are written out
+  assertEquals(t.indexOf("VP of Sales") < t.indexOf("Chief Executive Officer"), true); // the best-weighted buyer type comes first
+  assertEquals(new Set(t.map((x) => x.toLowerCase())).size, t.length); // no repeats
+  apply(clean({ personas: [{ title: "Marketing lead", match: ["head of marketing", "cmo"], weight: 90, hubspot: null, onlyBelow: null }] }));
+  try {
+    assertEquals(personaTitles(), ["Head Of Marketing", "Chief Marketing Officer"]);
+  } finally {
+    apply(clean({}));
+  }
+  assertEquals(personaTitles([]), []);
+});
+
+Deno.test("already-known guard: opted out and bounced are never suggested; known is marked; ours is fine", () => {
+  const hs = (o: Record<string, unknown> = {}) => ({ id: "1", optedOut: false, bounced: false, lastContacted: null, ...o });
+  assertEquals(guardStatus(undefined, false), { status: null, note: null }); // not in HubSpot: nothing to say
+  assertEquals(guardStatus(hs({ optedOut: true }), false).status, "opted_out");
+  assertEquals(guardStatus(hs({ optedOut: true }), true).status, "opted_out"); // even a contact we added
+  assertEquals(guardStatus(hs({ bounced: true }), false).status, "bounced");
+  assertEquals(guardStatus(hs(), true), { status: null, note: null }); // we added them ourselves
+  const k = guardStatus(hs({ lastContacted: "2026-09-12T10:00:00Z" }), false);
+  assertEquals(k.status, "known");
+  assert(k.note!.includes("2026-09-12") && k.note!.includes("Check before reaching out"));
+  assertEquals(guardStatus(hs(), false).status, "known");
+});
+
+Deno.test("bulk find: hot first, then warm, by score; watching is never searched; capped", () => {
+  const r = (name: string, heat: string, priority: number | null) => ({ name, heat, priority });
+  const rows = [r("a", "warm", 60), r("b", "hot", 40), r("c", "watching", 90), r("d", "hot", 70), r("e", "warm", 80), r("f", "hot", null)];
+  assertEquals(pickTop(rows, 10).map((x) => x.name), ["d", "b", "f", "e", "a"]);
+  assertEquals(pickTop(rows, 2).map((x) => x.name), ["d", "b"]);
+  assertEquals(pickTop(Array.from({ length: 20 }, (_, i) => r(`x${i}`, "hot", i)), 99).length, 8); // never more than the cap
+  assertEquals(pickTop([r("z", "watching", 99)], 5), []);
 });

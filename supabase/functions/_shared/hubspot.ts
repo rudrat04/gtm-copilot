@@ -368,6 +368,32 @@ async function applyExtras(kind: "companies" | "contacts", id: string, x: Extras
 export const applyCompanyExtras = (id: string, x: Extras, domain: string) => applyExtras("companies", id, x, domain);
 export const applyContactExtras = (id: string, x: Extras, domain: string) => applyExtras("contacts", id, x, domain);
 
+export type HsContact = { id: string; optedOut: boolean; bounced: boolean; lastContacted: string | null };
+
+/** Which of these emails already exist as HubSpot contacts, and are they opted out or bouncing? Read-only. */
+export async function lookupContactsByEmail(emails: string[]): Promise<Map<string, HsContact>> {
+  const out = new Map<string, HsContact>();
+  const list = [...new Set(emails.map((e) => e.toLowerCase()))];
+  for (let i = 0; i < list.length; i += 90) {
+    const r = await hs("/crm/v3/objects/contacts/search", {
+      method: "POST",
+      body: JSON.stringify({
+        filterGroups: [{ filters: [{ propertyName: "email", operator: "IN", values: list.slice(i, i + 90) }] }],
+        properties: ["email", "hs_email_optout", "hs_email_hard_bounce_reason_enum", "notes_last_contacted"], limit: 100,
+      }),
+    }, [400]);
+    if (!r.ok) continue;
+    for (const c of r.body.results ?? []) {
+      const p = c.properties ?? {};
+      if (!p.email) continue;
+      out.set(String(p.email).toLowerCase(), {
+        id: c.id, optedOut: String(p.hs_email_optout) === "true", bounced: !!p.hs_email_hard_bounce_reason_enum, lastContacted: p.notes_last_contacted || null,
+      });
+    }
+  }
+  return out;
+}
+
 /** Companies HubSpot marks as customers (lifecycle stage "customer"), so we never treat them as prospects. */
 export async function readCustomerCompanies(limit = 100): Promise<{ id: string; domain: string | null }[]> {
   const r = await hs("/crm/v3/objects/companies/search", {

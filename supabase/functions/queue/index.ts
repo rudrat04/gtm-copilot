@@ -20,6 +20,8 @@ import { applyLossReason, isLossReason, verifyLoss } from "../_shared/lossreason
 import { applyDebrief, endsAt, OUTCOME_LABEL, OUTCOMES, type Outcome, verify } from "../_shared/debrief.ts";
 import { refreshAllFields } from "../_shared/hsfields.ts";
 import { isNotFitReason, markNotFit, NOT_FIT_REASONS } from "../_shared/notfit.ts";
+import { planBulkFind, runBulkFind } from "../_shared/bulkfind.ts";
+import { guardPeople } from "../_shared/guard.ts";
 import { cleanSignals } from "../_shared/cleanup.ts";
 import { plCap, plConfigured, plUsed, refreshFromPredictLeads } from "../_shared/predictleads.ts";
 import { getPropertyOptions } from "../_shared/hubspot.ts";
@@ -421,6 +423,17 @@ serve("queue", async (req) => {
   if (body.action === "enrich_company" && typeof body.account_id === "string") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can look up company size and stage (0.2 search credit)." });
     return json({ mode: "live", ...(await enrichCompanies(false, [body.account_id])) });
+  }
+  if (body.action === "find_people_bulk") {
+    if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
+    const plan = await planBulkFind(Number(body.limit) || 5);
+    if (body.dry !== false) return json({ mode: "live", dry: true, ...plan });
+    const run = await runBulkFind(plan.plan);
+    return json({ mode: "live", dry: false, ...run, spent: run.done.reduce((a, d) => a + d.credits, 0) });
+  }
+  if (body.action === "guard_people") {
+    if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
+    return json({ mode: "live", ...(await guardPeople({ limit: 200 })) });
   }
   if (body.action === "refresh_facts") {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
