@@ -294,3 +294,56 @@ Deno.test("profile: fit bar and score are validated", () => {
   assertEquals(clean({ minScore: -5 }).minScore, 0);
   assertEquals(clean({}).minScore, 30);
 });
+
+const flagsMod = await import("../_shared/flags.ts");
+
+Deno.test("watch rules: each check fires only when it should", () => {
+  const now = Date.parse("2026-10-20T12:00:00Z");
+  const h = (n: number) => now - n * 3_600_000;
+  const d = (n: number) => new Date(now - n * 86_400_000).toISOString();
+  // hot and untouched
+  assert(flagsMod.hotUntouched({ outreach_status: "open" }, true, "hot", h(60), now, 48));
+  assertFalse(flagsMod.hotUntouched({ outreach_status: "open" }, true, "hot", h(10), now, 48)); // still fresh
+  assertFalse(flagsMod.hotUntouched({ outreach_status: "open" }, false, "hot", h(60), now, 48)); // nobody to contact yet
+  assertFalse(flagsMod.hotUntouched({ outreach_status: "contacted" }, true, "hot", h(60), now, 48));
+  assertFalse(flagsMod.hotUntouched({ outreach_status: "open" }, true, "warm", h(60), now, 48));
+  // follow-up overdue
+  assert(flagsMod.followupOverdue({ outreach_status: "contacted", next_followup_at: d(3) }, now, 2));
+  assertFalse(flagsMod.followupOverdue({ outreach_status: "contacted", next_followup_at: d(1) }, now, 2));
+  assertFalse(flagsMod.followupOverdue({ outreach_status: "replied", next_followup_at: d(9) }, now, 2));
+  // replied, no next step
+  assert(flagsMod.repliedStale({ outreach_status: "replied", last_touch_at: d(6) }, now, 5));
+  assertFalse(flagsMod.repliedStale({ outreach_status: "replied", last_touch_at: d(2) }, now, 5));
+  // meeting without a debrief
+  const m = { status: "briefed", outcome: null, starts_at: d(3), ends_at: null as string | null };
+  assert(flagsMod.meetingStale(m, now, 2));
+  assertFalse(flagsMod.meetingStale({ ...m, outcome: "went_well" }, now, 2));
+  assertFalse(flagsMod.meetingStale({ ...m, starts_at: d(1) }, now, 2));
+  assertFalse(flagsMod.meetingStale({ ...m, starts_at: d(40) }, now, 2)); // too old to chase
+  // lead past target
+  const l = { status: "new", label: "hot", alerted_at: new Date(now - 50 * 60_000).toISOString(), created_at: new Date(now - 55 * 60_000).toISOString() };
+  assert(flagsMod.leadLate(l, now, 15, 30));
+  assertFalse(flagsMod.leadLate(l, now, 30, 30)); // 50 min is inside 30 + 30
+  assertFalse(flagsMod.leadLate({ ...l, status: "contacted" }, now, 15, 30));
+  assertFalse(flagsMod.leadLate({ ...l, label: "not_fit" }, now, 15, 30));
+  // stuck deal
+  assert(flagsMod.dealStuck({ hubspot_deal_id: "1", deal_stage: "qualifiedtobuy" }, now - 20 * 86_400_000, now, 14));
+  assertFalse(flagsMod.dealStuck({ hubspot_deal_id: "1", deal_stage: "closedlost" }, now - 20 * 86_400_000, now, 14));
+  assertFalse(flagsMod.dealStuck({ hubspot_deal_id: null, deal_stage: null }, now - 20 * 86_400_000, now, 14));
+  assertFalse(flagsMod.dealStuck({ hubspot_deal_id: "1", deal_stage: "qualifiedtobuy" }, now - 3 * 86_400_000, now, 14));
+  // thin pipeline
+  assert(flagsMod.thinPipeline(1, 3));
+  assertFalse(flagsMod.thinPipeline(3, 3));
+});
+
+Deno.test("watch settings: validated, limited and complete", () => {
+  const w = clean({ watch: { urgent: false, checks: { hotUntouched: { on: false, n: 99999 }, dealStuck: { n: 1 }, bogus: { n: 5 } } } }).watch;
+  assertEquals(w.urgent, false);
+  assertEquals(w.todoForUrgent, true);
+  assertEquals(w.checks.hotUntouched.on, false);
+  assertEquals(w.checks.hotUntouched.n, 336); // clamped to the maximum
+  assertEquals(w.checks.dealStuck.n, 3); // clamped to the minimum
+  assertEquals(w.checks.followupOverdue, { on: true, n: 2 }); // untouched defaults fill in
+  assertFalse("bogus" in w.checks);
+  assertEquals(Object.keys(w.checks).length, 10);
+});

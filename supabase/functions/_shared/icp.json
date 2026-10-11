@@ -168,5 +168,51 @@
     "note": "A form submit is enriched, scored against the profile and routed to the owner with an email and a HubSpot to-do. If nobody has responded after the response target, one reminder is sent.",
     "hubspotPerDay": 15,
     "allPerDay": 100
+  },
+  "watch": {
+    "urgent": true,
+    "todoForUrgent": true,
+    "checks": {
+      "hotUntouched": {
+        "on": true,
+        "n": 48
+      },
+      "followupOverdue": {
+        "on": true,
+        "n": 2
+      },
+      "leadPastTarget": {
+        "on": true,
+        "n": 30
+      },
+      "meetingNoDebrief": {
+        "on": true,
+        "n": 2
+      },
+      "repliedNoNext": {
+        "on": true,
+        "n": 5
+      },
+      "dealStuck": {
+        "on": true,
+        "n": 14
+      },
+      "thinPipeline": {
+        "on": true,
+        "n": 3
+      },
+      "mismatch": {
+        "on": true,
+        "n": 0
+      },
+      "drift": {
+        "on": true,
+        "n": 7
+      },
+      "system": {
+        "on": true,
+        "n": 0
+      }
+    }
   }
 }

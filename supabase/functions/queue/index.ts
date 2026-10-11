@@ -11,6 +11,7 @@ import { contactsFor } from "../_shared/contacts.ts";
 import { fetchSite } from "../_shared/signals.ts";
 import { BudgetError } from "../_shared/claude.ts";
 import { tierOf } from "../_shared/score.ts";
+import { activeFlags, flagAction } from "../_shared/flags.ts";
 import { meetsFit, queueThreshold, worthShowing } from "../_shared/fitgate.ts";
 import { clean, loadProfile, REGIONS, saveProfile, STAGES } from "../_shared/profile.ts";
 import { runDiscovery } from "../_shared/discover.ts";
@@ -381,7 +382,13 @@ serve("queue", async (req) => {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
     return json({ mode: "live", ...(await enrichCompanies(body.rescore === true)) });
   }
-  if (body.action === "today") return json({ ...(await buildToday(admin)), admin });
+  if (body.action === "today") return json({ ...(await buildToday(admin)), attention: admin ? await activeFlags(5) : { items: [], total: 0 }, admin });
+  if (body.action === "flag_action" && typeof body.key === "string") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to snooze or dismiss." });
+    const act = body.do === "dismiss" ? "dismiss" : "snooze";
+    const ok = await flagAction(body.key, act, [1, 3, 7].includes(Number(body.days)) ? Number(body.days) : 3);
+    return ok ? json({ mode: "live", ok: true }) : json({ error: "Could not update the flag" }, 500);
+  }
   if (body.action === "outcome" && typeof body.account_id === "string") {
     const kind = String(body.kind) as OutcomeKind;
     if (!["contacted", "replied", "meeting", "snooze", "not_now", "reopen"].includes(kind)) return json({ error: "Unknown outcome" }, 400);

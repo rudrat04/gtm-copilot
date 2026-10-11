@@ -111,7 +111,7 @@ To use it for a client's own form, post JSON (`name`, `email`, `company`, `role`
 ```bash
 cd supabase/functions && deno lint && deno test --no-lock --allow-env --allow-read tests/   # unit tests for scoring, fit, labels, parsing, validation and log redaction
 node scripts/check-page.mjs && bash scripts/secret-scan.sh                               # the page parses and keeps its security policy; no secrets committed
-bash scripts/smoke.sh        # 39 security and behaviour checks against the live project, no credits used
+bash scripts/smoke.sh        # 40 security and behaviour checks against the live project, no credits used
 ```
 
 Lint, type checks, unit tests, the page check and the secret scan run on every push in GitHub Actions. The lead webhook and the permission model are documented in [API.md](API.md).

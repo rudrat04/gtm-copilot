@@ -10,6 +10,7 @@ export const worst = (levels: Level[]): Level => levels.reduce((a, b) => (rank[b
 export const JOBS: Record<string, { label: string; everyHours: number }> = {
   "meeting-brief": { label: "Meeting brief (calendar poll)", everyHours: 1 / 60 },
   "crm-sync": { label: "HubSpot read-back", everyHours: 0.5 },
+  "flags-urgent": { label: "Pipeline watch (urgent)", everyHours: 3 },
   "signal-watch": { label: "Daily signal watch", everyHours: 24 },
   "daily-digest": { label: "Daily digest", everyHours: 24 },
   "discover": { label: "Weekly discovery", everyHours: 168 },

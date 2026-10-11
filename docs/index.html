@@ -89,6 +89,7 @@
   .when { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
   .when.fresh { color: var(--good); font-weight: 600; } .when.mid { color: var(--warn); } .when.old { color: var(--bad); }
   .status-line.due { color: var(--ink); font-weight: 600; }
+  .attn .flag { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); } .attn .flag:first-of-type { border-top: 0; } .attn b.bad { color: var(--bad); }
   .needs { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border: 1px dashed var(--line); border-radius: 14px; color: var(--soft); font-size: 14px; }
   .sigs-more { margin-top: 4px; }
   .field { margin: 0 0 16px; } .field > label, .field > .lbl { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
@@ -398,7 +399,10 @@ async function loadToday() {
     const needs = d.needs?.length ? `<div class="needs"><span><b>${d.needs.length} strong account${d.needs.length > 1 ? "s" : ""}</b> with a fresh signal ${d.needs.length > 1 ? "have" : "has"} no contact yet: ${esc(d.needs.slice(0, 3).map((n) => n.name).join(", "))}${d.needs.length > 3 ? "…" : ""}</span><button class="btn ghost sm" data-goto-needs>Find contacts in Accounts</button></div>` : "";
     const deb = d.debriefs ? `<div class="needs" style="margin-bottom:14px"><span><b>${d.debriefs} meeting${d.debriefs > 1 ? "s" : ""}</b> waiting for your debrief</span><button class="btn ghost sm" data-goto-meetings>Open Meetings</button></div>` : "";
     const lds = d.leads ? `<div class="needs" style="margin-bottom:14px"><span><b>${d.leads} new lead${d.leads > 1 ? "s" : ""}</b> waiting for a reply</span><button class="btn ghost sm" data-goto-inbound>Open Inbound</button></div>` : "";
-    $("tlist").innerHTML = lds + deb + (d.items.map(tCard).join("") ||
+    const att = d.attention?.items?.length ? `<article class="card attn"><p class="label">Needs attention${d.attention.total > d.attention.items.length ? ` · ${esc(d.attention.total)} in all` : ""}</p>
+      ${d.attention.items.map((f) => `<div class="flag" data-flag="${esc(f.key)}"><div><b class="${f.severity === "urgent" ? "bad" : ""}">${esc(f.title)}</b>${f.detail ? `<div class="meta">${esc(f.detail)} · ${esc(ago(f.since))}</div>` : ""}</div>
+        <div class="actions" style="margin:0"><button class="btn ghost sm" data-flagdo="snooze">Snooze 3 days</button><button class="btn ghost sm" data-flagdo="dismiss">Dismiss</button></div></div>`).join("")}</article>` : "";
+    $("tlist").innerHTML = att + lds + deb + (d.items.map(tCard).join("") ||
       `<div class="card empty">Nothing ready to contact today.<br>People with a fresh signal and follow-ups due appear here.</div>`) + needs;
     const c = $("c-today"); c.textContent = d.items.length; c.hidden = !d.items.length;
   } catch (e) { $("tlist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
@@ -560,7 +564,14 @@ function wireCards(root, reload) {
   });
 }
 wireCards($("tlist"), () => loadToday());
-$("tlist").addEventListener("click", (e) => { if (e.target.closest("[data-goto-meetings]")) document.querySelector('nav.tabs [data-tab="meetings"]').click(); if (e.target.closest("[data-goto-inbound]")) document.querySelector('nav.tabs [data-tab="inbound"]').click(); if (e.target.closest("[data-goto-needs]")) { aview = "nocontact"; document.querySelector('nav.tabs [data-tab="accounts"]').click(); } });
+$("tlist").addEventListener("click", async (e) => {
+  const fb = e.target.closest("[data-flagdo]");
+  if (fb) {
+    const key = fb.closest("[data-flag]").dataset.flag; fb.disabled = true;
+    try { const r = await api("queue", { action: "flag_action", key, do: fb.dataset.flagdo, days: 3 }); say(r.mode === "dry_run" ? r.message : fb.dataset.flagdo === "dismiss" ? "Dismissed." : "Snoozed for 3 days."); if (r.mode !== "dry_run") loadToday(); else fb.disabled = false; }
+    catch (err) { say(err.message); fb.disabled = false; }
+    return;
+  } if (e.target.closest("[data-goto-meetings]")) document.querySelector('nav.tabs [data-tab="meetings"]').click(); if (e.target.closest("[data-goto-inbound]")) document.querySelector('nav.tabs [data-tab="inbound"]').click(); if (e.target.closest("[data-goto-needs]")) { aview = "nocontact"; document.querySelector('nav.tabs [data-tab="accounts"]').click(); } });
 wireCards($("alist"), () => loadAccounts(true));
 
 // "Show more signals" works everywhere
@@ -926,6 +937,18 @@ function tagField(path, label, help) {
 }
 const chipField = (key, label, options, help) => `<div class="field"><span class="lbl">${esc(label)}</span><div class="chips" style="margin:0">${options.map((o) => `<button type="button" class="chip${P[key].includes(o) ? " sel" : ""}" data-toggle="${key}" data-val="${esc(o)}">${esc(o)}</button>`).join("")}</div>${help ? `<p class="help">${esc(help)}</p>` : ""}</div>`;
 
+const WATCH_ROWS = [
+  ["hotUntouched", "A hot account with a contact is still untouched after", "hours", ""],
+  ["followupOverdue", "A follow-up is overdue by", "days", ""],
+  ["leadPastTarget", "An inbound lead is still unanswered,", "minutes", "after the reply target"],
+  ["meetingNoDebrief", "A meeting has no debrief after", "days", ""],
+  ["repliedNoNext", "Someone replied but there is no next step after", "days", ""],
+  ["dealStuck", "A deal has had no activity for", "days", ""],
+  ["thinPipeline", "Fewer than", "ready accounts with a contact", "(Today will run dry)"],
+  ["mismatch", "Mismatch with HubSpot: a deleted company or an email that will bounce", "", ""],
+  ["drift", "HubSpot columns are out of date or the owner is missing; stale after", "days", ""],
+  ["system", "A scheduled job failed or is running late", "", ""],
+];
 function drawSetup() {
   const d = SETUP, own = !!d.admin;
   $("setupbody").innerHTML = `
@@ -955,6 +978,14 @@ function drawSetup() {
         <p class="help">Right now: ${esc(d.fit_counts.matches)} fit, ${esc(d.fit_counts.close)} partly fit, ${esc(d.fit_counts.unknown)} not checked, ${esc(d.fit_counts.outside)} outside range. Companies below your choice move to <b>Low fit</b> in Accounts and never appear in Today, alerts, discovery or automatic contact lookups. Hiding "fit unknown" also hides companies whose size has not been checked yet.</p></div>
       <div class="field"><span class="lbl">Lowest score to count as ready</span><div class="numrow"><input type="number" min="0" max="90" step="5" data-num="minScore" value="${esc(P.minScore)}" aria-label="Lowest score to count as ready"> out of 100</div>
         <p class="help">A company needs at least this score to enter the queue. Lower it to see more companies, raise it to see fewer.</p></div>
+    </article>
+    <article class="card"><p class="label">Watch and flags</p>
+      <p class="help" style="margin:0 0 12px">The watch looks for things that are off and shows them under <b>Needs attention</b> on Today, in the morning email and, for urgent ones, as a HubSpot to-do. Each problem is flagged once and clears itself when it is fixed. Times are IST.</p>
+      <div class="toggles">
+        <label class="toggle"><input type="checkbox" data-chk="watch.urgent" ${P.watch.urgent ? "checked" : ""}><span>Run the urgent checks every 3 hours<small>Hot accounts left untouched and leads past their reply target. The full pass runs every morning before the email.</small></span></label>
+        <label class="toggle"><input type="checkbox" data-chk="watch.todoForUrgent" ${P.watch.todoForUrgent ? "checked" : ""}><span>Create a HubSpot to-do for urgent flags<small>Only for companies already in HubSpot, at most 3 a run.</small></span></label>
+      </div><hr class="hr">
+      ${WATCH_ROWS.map(([k, before, unit, after]) => `<div class="field" style="margin-bottom:10px"><label class="toggle" style="margin:0"><input type="checkbox" data-chk="watch.checks.${k}.on" ${P.watch.checks[k].on ? "checked" : ""}><span>${esc(before)}${unit ? ` <input type="number" min="0" data-num="watch.checks.${k}.n" value="${esc(P.watch.checks[k].n)}" style="width:72px" aria-label="${esc(before)} ${esc(unit)}"> ${esc(unit)}` : ""}${after ? ` ${esc(after)}` : ""}</span></label></div>`).join("")}
     </article>
     <div class="actions" style="margin:0 0 18px"><button class="btn primary" data-save>Save changes</button><span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : "Demo mode: unlock to save changes."}</span></div>
 
@@ -1021,6 +1052,7 @@ async function loadSetup() {
     const t = e.target;
     if (t.dataset.num) setPath(P, t.dataset.num, Number(t.value));
     if (t.dataset.sel) setPath(P, t.dataset.sel, t.value);
+    if (t.dataset.chk) setPath(P, t.dataset.chk, t.checked);
     if (t.dataset.sig) setPath(P, `signals.${t.dataset.sig}`, t.checked);
     if (t.matches("[data-disc]")) P.discovery = t.checked;
   });

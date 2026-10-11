@@ -4,6 +4,7 @@ import { log, serve } from "../_shared/log.ts";
 import { googleConfigured, ownerEmail, sendMail } from "../_shared/google.ts";
 import { buildToday, hash } from "../_shared/today.ts";
 import { digestEmail, summaryTask, taskFor } from "../_shared/templates.ts";
+import { activeFlags, runWatch } from "../_shared/flags.ts";
 import { createTask } from "../_shared/hubspot.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
@@ -33,8 +34,12 @@ serve("daily-digest", async (req) => {
   const preview = admin && opts.dry === true; // a preview spends no credits and sends nothing
   const today = await buildToday(true, { autoFind: !preview }); // owner view: full names, and writes any missing "Why today" lines
 
+  // The full pipeline watch runs just before the email, so the email carries what needs attention.
+  if (!preview) await runWatch("daily").catch(async (e) => { await log("error", "watch_failed", { message: (e as Error).message }); });
+  const attention = await activeFlags(6);
+
   if (!preview) await sb.from("cp_state").upsert({ key: "digest_last", value: new Date().toISOString(), updated_at: new Date().toISOString() });
-  if (!today.items.length) {
+  if (!today.items.length && !attention.total) {
     await log("info", "digest_skipped_empty", {});
     return json({ sent: false, reason: "Nothing on today's list" });
   }
@@ -50,7 +55,7 @@ serve("daily-digest", async (req) => {
   for (const p of people ?? []) if (!contactFor.has(p.account_id)) contactFor.set(p.account_id, { id: p.hubspot_contact_id!, name: `${p.first_name} ${p.last_name}`.trim() });
 
   // 1) The email.
-  const mail = digestEmail(today.items, today.hidden, links);
+  const mail = digestEmail(today.items, today.hidden, links, attention);
   if (admin && opts.dry === true) return json({ dry: true, subject: mail.subject, body: mail.body, html: mail.html }); // preview only: nothing is sent or created
   let emailed = false;
   try {

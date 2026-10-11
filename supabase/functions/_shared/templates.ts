@@ -63,8 +63,10 @@ function itemBlock(n: number, it: TodayItem, links: Links): string {
   return lines.join("\n");
 }
 
+type Attention = { items: { severity: string; title: string; detail: string | null }[]; total: number };
+
 /** The morning email to the owner. */
-export function digestEmail(items: TodayItem[], hidden: number, links: Links) {
+export function digestEmail(items: TodayItem[], hidden: number, links: Links, attention: Attention = { items: [], total: 0 }) {
   const group = (types: string[]) => items.filter((i) => types.includes(i.type));
   const fresh = group(["hot", "new"]), fu = group(["follow_up"]), mt = group(["meeting"]), rv = group(["revive"]);
   let n = 0;
@@ -72,9 +74,13 @@ export function digestEmail(items: TodayItem[], hidden: number, links: Links) {
     list.length ? `${title}\n${list.map((i) => itemBlock(++n, i, links)).join("\n\n")}\n` : "";
 
   const parts = [`${fresh.length} new`, `${fu.length} follow-ups`, mt.length ? `${mt.length} meetings` : ""].filter(Boolean).join(", ");
+  const attn = attention.items.length
+    ? `NEEDS ATTENTION${attention.total > attention.items.length ? ` (${attention.total}, top ${attention.items.length})` : ""}\n${attention.items.map((a) => `  ${a.severity === "urgent" ? "!" : "-"} ${a.title}${a.detail ? `\n      ${a.detail}` : ""}`).join("\n")}\n`
+    : "";
   const body = [
     `Good morning ${icp.owner.name},`,
-    `Here is who to contact for ${longDate()}.\n`,
+    attn,
+    items.length ? `Here is who to contact for ${longDate()}.\n` : "",
     section("NEW AND HOT", fresh),
     section("FOLLOW-UPS DUE", fu),
     section("MEETINGS", mt),
@@ -82,7 +88,10 @@ export function digestEmail(items: TodayItem[], hidden: number, links: Links) {
     `Open the full list: ${page}`,
     `\n— Account Copilot${hidden ? ` · ${hidden} lower-priority accounts not shown` : ""} · outreach stays manual, nothing is sent for you`,
   ].filter(Boolean).join("\n");
-  return { subject: `Today: ${items.length} prospect${items.length === 1 ? "" : "s"} to focus on (${parts})`, body, html: digestHtml(items, hidden, links) };
+  const subject = items.length
+    ? `Today: ${items.length} prospect${items.length === 1 ? "" : "s"} to focus on (${parts})${attention.total ? ` · ${attention.total} need attention` : ""}`
+    : `${attention.total} thing${attention.total === 1 ? " needs" : "s need"} attention`;
+  return { subject, body, html: digestHtml(items, hidden, links, attention) };
 }
 
 /** An instant alert when a new signal appears on an account you have not contacted yet. */
@@ -141,12 +150,15 @@ function itemHtml(it: TodayItem, links: Links): string {
   ].join(""));
 }
 
-function digestHtml(items: TodayItem[], hidden: number, links: Links): string {
+function digestHtml(items: TodayItem[], hidden: number, links: Links, attention: Attention): string {
   const group = (types: string[]) => items.filter((i) => types.includes(i.type));
   const section = (title: string, list: TodayItem[]) => (list.length ? h2(title) + list.map((i) => itemHtml(i, links)).join("") : "");
   const inner = [
     `<div style="font-size:20px;font-weight:700">Good morning ${h(icp.owner.name)}</div>`,
-    muted(`Here is who to contact for ${h(longDate())}.`, 14),
+    attention.items.length
+      ? h2(`Needs attention${attention.total > attention.items.length ? ` (${attention.total})` : ""}`) + attention.items.map((a) => `<div style="margin:6px 0"><b style="color:${a.severity === "urgent" ? "#dc2626" : "inherit"}">${h(a.title)}</b>${a.detail ? muted(h(a.detail), 13) : ""}</div>`).join("")
+      : "",
+    items.length ? muted(`Here is who to contact for ${h(longDate())}.`, 14) : "",
     section("New and hot", group(["hot", "new"])),
     section("Follow-ups due", group(["follow_up"])),
     section("Meetings", group(["meeting"])),

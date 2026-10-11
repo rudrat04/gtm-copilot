@@ -9,6 +9,14 @@ import { MIN_FITS, type MinFit } from "./fitgate.ts";
 export const STAGES = ["Pre-Seed", "Seed", "Series A", "Series B", "Series C"];
 export const REGIONS = ["US", "UK", "EU", "Canada", "Australia / NZ", "India"];
 
+// The watch checks and the range each number may take (days, hours or minutes; see flags.ts).
+export const WATCH_LIMITS: Record<string, [number, number]> = {
+  hotUntouched: [1, 336], followupOverdue: [1, 30], leadPastTarget: [0, 1440], meetingNoDebrief: [1, 30], repliedNoNext: [1, 60],
+  dealStuck: [3, 180], thinPipeline: [1, 50], mismatch: [0, 0], drift: [1, 90], system: [0, 0],
+};
+export type WatchCheck = { on: boolean; n: number };
+export type Watch = { urgent: boolean; todoForUrgent: boolean; checks: Record<string, WatchCheck> };
+
 export type Profile = {
   industries: string[];
   employeesMin: number;
@@ -22,6 +30,7 @@ export type Profile = {
   discovery: boolean;                       // weekly auto-discovery on or off
   minFit: MinFit;                           // the fit bar: companies below it are hidden everywhere
   minScore: number;                         // the score needed to count as ready
+  watch: Watch;                             // pipeline watch: which checks run and their limits
 };
 
 // Snapshot of the defaults, taken before anything is applied.
@@ -39,6 +48,7 @@ const DEFAULT: Profile = {
   discovery: true,
   minFit: icp.fit.minFit as MinFit,
   minScore: icp.fit.minScore,
+  watch: JSON.parse(JSON.stringify(icp.watch)),
 };
 
 const list = (v: unknown, fallback: string[], max = 25): string[] => {
@@ -50,6 +60,17 @@ const num = (v: unknown, fallback: number, lo: number, hi: number) => {
   const n = Math.round(Number(v));
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
 };
+
+function cleanWatch(raw: unknown): Watch {
+  const w = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const given = (w.checks && typeof w.checks === "object" ? w.checks : {}) as Record<string, { on?: unknown; n?: unknown }>;
+  const checks: Record<string, WatchCheck> = {};
+  for (const [k, [lo, hi]] of Object.entries(WATCH_LIMITS)) {
+    const base = DEFAULT.watch.checks[k];
+    checks[k] = { on: given[k] ? given[k].on !== false : base.on, n: lo === hi ? base.n : num(given[k]?.n, base.n, lo, hi) };
+  }
+  return { urgent: w.urgent !== false, todoForUrgent: w.todoForUrgent !== false, checks };
+}
 
 /** Validates anything coming from the page. Unknown or invalid values fall back to the defaults. */
 export function clean(input: unknown): Profile {
@@ -75,6 +96,7 @@ export function clean(input: unknown): Profile {
     discovery: i.discovery !== false,
     minFit: MIN_FITS.find((m) => m === i.minFit) ?? DEFAULT.minFit,
     minScore: num(i.minScore, DEFAULT.minScore, 0, 90),
+    watch: cleanWatch(i.watch),
   };
 }
 
@@ -97,6 +119,7 @@ export function apply(p: Profile) {
   (icp.discovery as { enabled?: boolean }).enabled = p.discovery;
   icp.fit.minFit = p.minFit;
   icp.fit.minScore = p.minScore;
+  Object.assign(icp.watch, JSON.parse(JSON.stringify(p.watch)));
 }
 
 export async function loadProfile(): Promise<Profile> {

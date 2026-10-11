@@ -255,6 +255,18 @@ export async function lookupForBrief(email: string, domain: string | null) {
   return out;
 }
 
+export type CompanyRead = { id: string; owner: string | null; syncedAt: string | null };
+
+/** Companies still in HubSpot, with owner and last sync time. An id that is missing from the result was deleted or archived. */
+export async function readCompanies(ids: string[]): Promise<Map<string, CompanyRead>> {
+  const out = new Map<string, CompanyRead>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const r = await hs("/crm/v3/objects/companies/batch/read", { method: "POST", body: JSON.stringify({ properties: ["hubspot_owner_id", "gtm_last_synced_at"], inputs: ids.slice(i, i + 100).map((id) => ({ id })) }) }, [207]);
+    for (const c of r.body.results ?? []) out.set(c.id, { id: c.id, owner: c.properties?.hubspot_owner_id || null, syncedAt: c.properties?.gtm_last_synced_at || null });
+  }
+  return out;
+}
+
 export type TaskInput = {
   subject: string;
   html: string;
