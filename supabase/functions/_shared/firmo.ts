@@ -198,7 +198,7 @@ export function fitPoints(a: FitRow): number {
   return fitBreakdown(a).points;
 }
 
-const usd = (n: number) => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${Math.round(n / 1e6)}M` : `$${Math.round(n / 1e3)}K`);
+export const usdShort = (n: number) => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${Math.round(n / 1e6)}M` : `$${Math.round(n / 1e3)}K`);
 
 /** A card-sized explanation of the fit, one line per criterion that matters: "ok", "partly", "no" or "unknown". */
 export function fitReasons(a: FitRow): { key: string; label: string; state: "ok" | "partly" | "no" | "unknown"; text: string }[] {
@@ -223,7 +223,7 @@ export function firmoLine(a: { employee_band?: string | null; employees?: number
   return [
     a.employee_band ? `${a.employee_band} people` : a.employees ? `${a.employees} people` : null,
     a.stage && !/^(other|unknown|undisclosed)$/i.test(a.stage) ? a.stage : null,
-    a.raised_usd ? `${usd(a.raised_usd)} raised` : null,
+    a.raised_usd ? `${usdShort(a.raised_usd)} raised` : null,
     a.hq_city ?? a.country ?? null,
   ].filter(Boolean).join(" · ");
 }

@@ -5,7 +5,7 @@ import { applyOutcome, type OutcomeKind } from "../_shared/lifecycle.ts";
 import { buildToday, reasonLine } from "../_shared/today.ts";
 import { draftNoteHtml, noteToHubSpot } from "../_shared/hsnotes.ts";
 import { writeDraft } from "../_shared/draft.ts";
-import { fetchFirmo, firmoLine, fitBreakdown, fitReasons, saveFirmo } from "../_shared/firmo.ts";
+import { fetchFirmo, firmoLine, fitBreakdown, fitReasons, saveFirmo, usdShort } from "../_shared/firmo.ts";
 import { fitState, heatOf, scoreAccount } from "../_shared/score.ts";
 import { contactsFor } from "../_shared/contacts.ts";
 import { fetchSite } from "../_shared/signals.ts";
@@ -18,7 +18,7 @@ import { rerankPeople } from "../_shared/people.ts";
 import { runDiscovery } from "../_shared/discover.ts";
 import { applyLossReason, isLossReason, verifyLoss } from "../_shared/lossreason.ts";
 import { applyDebrief, endsAt, OUTCOME_LABEL, OUTCOMES, type Outcome, verify } from "../_shared/debrief.ts";
-import { refreshAllFields } from "../_shared/hsfields.ts";
+import { countryName, refreshAllFields } from "../_shared/hsfields.ts";
 import { isNotFitReason, markNotFit, NOT_FIT_REASONS } from "../_shared/notfit.ts";
 import { planBulkFind, runBulkFind } from "../_shared/bulkfind.ts";
 import { guardPeople } from "../_shared/guard.ts";
@@ -107,13 +107,38 @@ async function list(view = "todo", admin = false) {
   };
 }
 
+// The tools worth showing on a card: sales, marketing, support, billing, product analytics and people tools. A website also lists dozens of
+// technical tools (hosting, fonts, frameworks) that say nothing about how the company sells, so they are counted but not shown.
+const BUSINESS_TECH = /^(salesforce|hubspot|salesloft|outreach|gong|apollo|zoominfo|clay|pipedrive|attio|clari|close|zoho.*|dynamics.*|intercom|drift|zendesk|freshdesk|freshworks|help-?scout|segment|mixpanel|amplitude|posthog|heap|hotjar|fullstory|stripe|chargebee|zuora|paddle|recurly|marketo|pardot|mailchimp|sendgrid|customer-io|braze|klaviyo|iterable|calendly|chili-?piper|docusign|pandadoc|notion|slack|zapier|okta|auth0|shopify|netsuite|quickbooks|gusto|rippling|workday|greenhouse|lever|ashby|vanta|drata|linkedin.*|g2.*|crisp|livechat|typeform|webflow|wordpress|squarespace|wix)$/;
+
+/** What the Accounts card shows, with every field present (a missing value is shown as "Unknown" by the page, never hidden). */
+function accountFacts(a: { firmo_at: string | null; employees: number | null; employee_band: string | null; stage: string | null; raised_usd: number | null; last_round_date: string | null; hq_city: string | null; country: string | null; founded_year: number | null; industry: string | null; tags: string[] | null; segment: string | null; tech: string[] | null; sales_motion: string | null; linkedin_handle: string | null }) {
+  const place = [a.hq_city, countryName(a.country)].filter(Boolean).join(", ");
+  const all = a.tech ?? [];
+  const tools = all.filter((t) => BUSINESS_TECH.test(t));
+  return {
+    checked: !!a.firmo_at,
+    employees: a.employees,
+    size: a.employee_band ? `${a.employee_band} people` : a.employees ? `${a.employees} people` : null,
+    stage: a.stage && !/^(other|unknown|undisclosed)$/i.test(a.stage) ? a.stage : null,
+    raised: a.raised_usd ? usdShort(a.raised_usd) : null,
+    last_round: a.last_round_date,
+    location: place || null,
+    founded: a.founded_year,
+    industry: a.industry || (a.tags ?? []).slice(0, 3).join(", ") || null,
+    tools: tools.slice(0, 6), more_tools: Math.max(0, tools.length - 6), tech_count: all.length,
+    motion: a.sales_motion,
+    linkedin: a.linkedin_handle,
+  };
+}
+
 /**
  * Every company worth showing, in one list. Low-fit companies (clearly outside the target size or stage, or with
  * no signal) are flagged `low` so the page can hide them. Skipped discovery candidates are never returned.
  */
 async function accountsView(admin: boolean) {
   const { data: all } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date")
+    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,founded_year,linkedin_handle,last_round_date")
     .order("priority_score", { ascending: false, nullsFirst: false }).limit(400);
   const rows = (all ?? []).map((a) => {
     const f = fitBreakdown(a);
@@ -140,12 +165,13 @@ async function accountsView(admin: boolean) {
   return {
     discovery: { added_30d: (disc ?? []).filter((d) => Date.parse(d.found_at) > Date.now() - 30 * DAY).length, last: disc?.[0]?.found_at ?? null },
     scan: await scanInfo(),
+    good_tools: (icp.company.toolsGood as string[]).map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, "")),
     accounts: rows.map(({ a, low, outside, isNew }) => {
       const mine = (sigsBy.get(a.id) ?? []).filter((s, i, arr) => !isSummary(s) || arr.findIndex(isSummary) === i);
       return {
         id: a.id, name: a.name, domain: a.domain, segment: a.segment, source: a.source, created_at: a.created_at,
         tier: tierOf(a.priority_score), priority: a.priority_score, icp_score: a.icp_score, why_now: a.why_now,
-        firmo: firmoLine(a), outside_icp: outside, fit: fitState(a), fit_reasons: fitReasons(a), excluded: fitBreakdown(a).excluded,
+        facts: accountFacts(a), firmo: firmoLine(a), outside_icp: outside, fit: fitState(a), fit_reasons: fitReasons(a), excluded: fitBreakdown(a).excluded,
         heat: heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)),
         firmo_known: !!a.firmo_at, low, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,

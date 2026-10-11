@@ -5,24 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tecgblsoylrshcqneevf.supabase.co; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light">
 <title>Account Copilot</title>
 <style>
   :root {
-    --bg: #fafaf9; --surface: #ffffff; --raised: #f5f5f4; --ink: #1c1917; --soft: #44403c; --muted: #78716c;
-    --line: #e7e5e4; --accent: #4f46e5; --accent-ink: #ffffff; --good: #15803d; --warn: #b45309; --bad: #b91c1c;
-    --shadow: 0 8px 28px rgba(0, 0, 0, .14);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #0c0a09; --surface: #171412; --raised: #211d1a; --ink: #fafaf9; --soft: #d6d3d1; --muted: #a8a29e;
-      --line: #292524; --accent: #818cf8; --accent-ink: #0c0a09; --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
-      --shadow: 0 8px 28px rgba(0, 0, 0, .5);
-    }
+    color-scheme: light;
+    --bg: #f8f3e8; --surface: #fffdf7; --raised: #f2ecdc; --ink: #28231b; --soft: #4f483b; --muted: #85796a;
+    --line: #e6decb; --accent: #3a4bbf; --accent-ink: #ffffff; --good: #1e7a43; --warn: #a65a0a; --bad: #b3261e;
+    --shadow: 0 8px 26px rgba(90, 66, 20, .14);
+    --card-shadow: 0 1px 2px rgba(90, 66, 20, .06), 0 6px 18px rgba(90, 66, 20, .05);
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
-  main { max-width: 760px; margin: 0 auto; padding: 26px 16px 110px; }
+  main { max-width: 880px; margin: 0 auto; padding: 26px 16px 110px; }
   a { color: inherit; }
   button { font: inherit; color: inherit; }
   [hidden] { display: none !important; }
@@ -59,7 +54,7 @@
   .menu-list hr { border: 0; border-top: 1px solid var(--line); margin: 5px 4px; }
 
   /* ---- cards ---- */
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-bottom: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-bottom: 14px; box-shadow: var(--card-shadow); }
   .card-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
   .eyebrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
   .label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
@@ -122,6 +117,46 @@
   .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; } .toolbar .chips { margin: 0; flex: 1 1 auto; }
   .toolbar input { padding: 6px 12px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 99px; width: 150px; }
   .chip i { font-style: normal; font-weight: 500; opacity: .75; margin-left: 5px; }
+
+
+  /* ---- accounts: filters ---- */
+  .banner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 18px; font-size: 12.5px; color: var(--muted); margin: 0 0 12px; }
+  .banner b { color: var(--soft); font-weight: 600; }
+  .fpanel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 14px; margin: 0 0 16px; box-shadow: var(--card-shadow); }
+  .seg { display: flex; gap: 2px; background: var(--raised); border-radius: 11px; padding: 3px; overflow-x: auto; scrollbar-width: none; }
+  .seg button { flex: 1 0 auto; display: inline-flex; justify-content: center; align-items: center; gap: 7px; background: none; border: 0; border-radius: 9px; padding: 8px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .seg button i { font-style: normal; font-size: 11.5px; font-weight: 700; background: color-mix(in srgb, var(--muted) 16%, transparent); color: var(--muted); border-radius: 99px; padding: 1px 7px; }
+  .seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(90, 66, 20, .18); }
+  .seg button.on i { background: var(--accent); color: var(--accent-ink); }
+  .fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px 12px; margin-top: 12px; }
+  .fgrid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .fgrid select, .fsearch { width: 100%; padding: 8px 10px; font: inherit; font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; }
+  .fgrid select.set { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg)); color: var(--accent); font-weight: 600; }
+  .fsearch { margin-top: 12px; }
+  details.fdet { margin-top: 12px; } details.fdet > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--soft); list-style: none; display: flex; align-items: center; gap: 8px; } details.fdet > summary::-webkit-details-marker { display: none; } details.fdet > summary::before { content: "▸"; color: var(--muted); } details.fdet[open] > summary::before { content: "▾"; }
+  details.fdet .fgrid { margin-top: 10px; }
+  .fbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+  .fbar .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* ---- accounts: card ---- */
+  .acard .ahead { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: start; }
+  .acard h3.title { margin: 0; font-size: 19px; }
+  .acard .domain { font-size: 13px; color: var(--muted); text-decoration: none; margin-left: 8px; font-weight: 500; } .acard .domain:hover { color: var(--accent); text-decoration: underline; }
+  .acard .what { margin: 3px 0 0; font-size: 14px; color: var(--soft); }
+  .acard .tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; }
+  .statepill { font-size: 12px; font-weight: 600; color: var(--soft); background: var(--raised); border-radius: 99px; padding: 3px 10px; white-space: nowrap; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; margin: 16px 0 0; padding: 14px 0 2px; border-top: 1px solid var(--line); }
+  .fact dt { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 0 0 2px; }
+  .fact dd { margin: 0; font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+  .fact dd small { color: var(--muted); font-size: 12.5px; }
+  .unk { color: var(--muted); font-style: italic; }
+  .toolchips { display: flex; flex-wrap: wrap; gap: 4px; } .toolchips span { font-size: 12.5px; background: var(--raised); border-radius: 6px; padding: 1px 7px; } .toolchips span.good { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); font-weight: 600; }
+  .fitrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 12px 0 0; font-size: 13px; }
+  .blk { margin: 14px 0 0; } .blk > .label { margin: 0 0 6px; }
+  .blk .why { margin: 0; }
+  .blk .contact { margin: 0; }
+  .acard .sigs { margin: 0; }
+  @media (max-width: 560px) { .acard .ahead { grid-template-columns: 1fr; } .acard .tags { justify-content: flex-start; } .seg button { padding: 8px 11px; } }
 
   /* ---- panels that open inside a card ---- */
   .panel { margin-top: 14px; padding: 16px; background: var(--raised); border-radius: 11px; }
@@ -425,20 +460,38 @@ async function loadToday() {
 }
 
 /* ============ Accounts: every company, one list ============ */
-let aview = "all", aq = "";
-const FILTERS = [["all", "All"], ["new", "New"], ["nocontact", "No contact yet"], ["tocontact", "Ready to contact"], ["progress", "In progress"], ["parked", "Parked"], ["looked", "Looked up"], ["revival", "Closed-lost"], ["low", "Low fit"]];
+/* ---- Accounts filters. Five views that never overlap, five optional filters, one sort. Remembered between visits. ---- */
 const parkedS = (a) => a.outreach_status === "snoozed" || a.outreach_status === "not_now";
-const FILTER_FN = {
-  all: (a) => !a.low && !parkedS(a),
-  new: (a) => a.is_new && !a.low,
-  nocontact: (a) => !a.low && a.outreach_status === "open" && !a.contacts.length,
-  tocontact: (a) => !a.low && a.outreach_status === "open" && a.contacts.length > 0,
-  progress: (a) => ["contacted", "replied", "meeting"].includes(a.outreach_status),
-  parked: parkedS,
-  looked: (a) => a.source === "research",
-  revival: (a) => !!a.lost_at,
-  low: (a) => a.low,
-};
+const progressS = (a) => ["contacted", "replied", "meeting"].includes(a.outreach_status);
+const VIEWS = [
+  ["open", "Prospects", "Companies worth working that you have not contacted yet", (a) => !a.low && a.outreach_status === "open"],
+  ["progress", "In progress", "Contacted, replied or meeting booked", progressS],
+  ["parked", "Parked", "Snoozed, not now, or closed-lost", parkedS],
+  ["low", "Low fit", "Hidden by default: outside your fit bar or too low a score", (a) => a.low],
+  ["all", "All", "Every company", () => true],
+];
+const SELECTS = [
+  ["heat", "Heat", [["", "Any"], ["hot", "Hot"], ["warm", "Warm"], ["watching", "Watching"]], (a, v) => a.heat === v],
+  ["fit", "Fit", [["", "Any"], ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Not checked"], ["outside", "Outside range"]], (a, v) => a.fit === v],
+  ["contact", "Contact", [["", "Any"], ["has", "Has a contact"], ["none", "No contact yet"]], (a, v) => (v === "has" ? a.contacts.length > 0 : a.contacts.length === 0)],
+  ["hub", "HubSpot", [["", "Any"], ["yes", "In HubSpot"], ["no", "Not in HubSpot"]], (a, v) => (v === "yes" ? a.hubspot : !a.hubspot)],
+  ["origin", "Where from", [["", "Any"], ["new", "New this fortnight"], ["auto", "Found automatically"], ["inbound", "Inbound lead"], ["looked", "Looked up by me"], ["hubspot", "Imported from HubSpot"], ["lost", "Closed-lost"]],
+    (a, v) => ({ new: a.is_new, auto: a.source === "discovered", inbound: a.source === "inbound", looked: a.source === "research", hubspot: a.source === "hubspot", lost: !!a.lost_at })[v]],
+];
+const SORTS = [
+  ["best", "Best first", (x, y) => (HEAT_RANK[x.heat] - HEAT_RANK[y.heat]) || (y.is_new - x.is_new) || ((y.priority ?? -1) - (x.priority ?? -1))],
+  ["newest", "Newest first", (x, y) => Date.parse(y.created_at) - Date.parse(x.created_at)],
+  ["name", "Name A to Z", (x, y) => x.name.localeCompare(y.name)],
+  ["size", "Biggest first", (x, y) => (y.facts.employees ?? -1) - (x.facts.employees ?? -1)],
+  ["round", "Latest funding", (x, y) => (Date.parse(y.facts.last_round) || 0) - (Date.parse(x.facts.last_round) || 0)],
+];
+const AF_DEFAULT = { view: "open", heat: "", fit: "", contact: "", hub: "", origin: "", sort: "best", q: "" };
+let AF = { ...AF_DEFAULT };
+try { const saved = JSON.parse(localStorage.getItem("cp_acc_filters") || "null"); if (saved && typeof saved === "object") for (const k of Object.keys(AF_DEFAULT)) if (typeof saved[k] === "string") AF[k] = saved[k]; } catch {}
+const saveAF = () => { try { localStorage.setItem("cp_acc_filters", JSON.stringify(AF)); } catch {} };
+let fOpen = innerWidth > 560; // the filter drawer starts open on a big screen, closed on a phone
+const activeCount = () => SELECTS.filter(([k]) => AF[k]).length + (AF.sort !== "best" ? 1 : 0) + (AF.q.trim() ? 1 : 0);
+const filtersOn = () => SELECTS.some(([k]) => AF[k]) || AF.q.trim() || AF.sort !== "best";
 
 function stageText(a) {
   const s = a.outreach_status;
@@ -479,36 +532,72 @@ function fitWhy(a) {
   return `<div class="fitwhy" aria-label="Why this fit">${r.map((x) => `<span class="fw ${MARK[x.state][1]}" title="${esc(x.label)}: ${esc(x.text)}"><b>${MARK[x.state][0]}</b> ${esc(x.label)}${x.state === "no" && x.key === "excluded" ? `: ${esc(x.text)}` : ""}</span>`).join("")}</div>`;
 }
 
+/** One labelled fact. A missing value is shown as "Unknown" (or "Not checked yet" before the company lookup), never left out. */
+const fact = (label, html, unknown) => `<div class="fact"><dt>${label}</dt><dd>${html || `<span class="unk">${unknown}</span>`}</dd></div>`;
+
+function aFacts(a) {
+  const f = a.facts, none = f.checked ? "Unknown" : "Not checked yet";
+  const stage = f.stage ? `${esc(f.stage)}${f.raised ? ` <small>· ${esc(f.raised)} raised</small>` : ""}` : f.raised ? `${esc(f.raised)} raised <small>· round type unknown</small>` : "";
+  const good = new Set(ACC.good_tools || []);
+  const tools = f.tools.length ? `<div class="toolchips">${f.tools.map((t) => `<span${good.has(t.replace(/[^a-z0-9]/g, "")) ? ' class="good"' : ""}>${esc(t)}</span>`).join("")}${f.more_tools ? `<span>+${f.more_tools}</span>` : ""}</div>`
+    : f.tech_count ? `<span class="unk">No sales or marketing tools found (${f.tech_count} technical tools only)</span>` : "";
+  const motion = f.motion ? { sales_led: "Sales-led (demos)", self_serve: "Self-serve (free start)", both: "Both" }[f.motion] : "";
+  return `<dl class="facts">
+    ${fact("Size", f.size && esc(f.size), none)}
+    ${fact("Stage", stage, none)}
+    ${fact("Location", f.location && esc(f.location), none)}
+    ${fact("Founded", f.founded && esc(f.founded), none)}
+    ${fact("Industry", f.industry && esc(f.industry), "Unknown")}
+    ${fact("Tools they use", tools, "Unknown")}
+    ${fact("Sales style", motion && esc(motion), "Unknown")}
+  </dl>`;
+}
+
 function aCard(a) {
-  const ll = ["contacted", "replied", "meeting"].includes(a.outreach_status) ? lifeLine(a) : "";
+  const ll = progressS(a) ? lifeLine(a) : "";
   const reason = a.is_new && a.found_reason ? `<b>Found automatically</b> from a Hacker News hiring post.` : esc(a.why_now || "");
-  return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
-    <div class="card-head"><div>
-      <div class="eyebrow"><span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}${a.outside_icp ? `<span class="badge warn">Outside target size</span>` : ""}<span>${esc(stageText(a))}</span></div>
-      <h3 class="title">${esc(a.name)}</h3>
-      <div class="meta">${esc(a.segment || a.domain)}</div>${fitLine(a.fit, a.firmo)}${fitWhy(a)}
-    </div></div>
+  const fit = FIT[a.fit] || FIT.unknown, f = a.facts;
+  const contact = contactLine(a);
+  return `<article class="card acard" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
+    <div class="ahead"><div>
+      <h3 class="title">${esc(a.name)}<a class="domain" href="https://${esc(a.domain)}" target="_blank" rel="noopener noreferrer">${esc(a.domain)}</a></h3>
+      <p class="what">${a.segment ? esc(a.segment) : `<span class="unk">No description yet</span>`}</p>
+    </div>
+    <div class="tags"><span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
+    ${aFacts(a)}
+    <div class="fitrow"><span class="badge ${fit[1] || ""}">${fit[0]}</span>${fitWhy(a).replace('<div class="fitwhy" aria-label="Why this fit">', '<span class="fitwhy" aria-label="Why this fit" style="margin:0">').replace(/<\/div>$/, "</span>")}</div>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
     ${a.not_fit_reason ? `<div class="status-line">Not a fit: ${esc(NOT_FIT[a.not_fit_reason] || a.not_fit_reason)}</div>` : ""}
     ${a.lost_at ? `<div class="status-line">Closed-lost in HubSpot ${esc(ago(a.lost_at))}${a.lost_reason ? `: ${esc(a.lost_reason)}` : ""}</div>` : ""}
-    ${reason ? `<div class="why">${reason}</div>` : ""}
-    ${sigList(a.signals, 1)}
-    ${contactLine(a)}
+    ${reason ? `<section class="blk"><p class="label">Why now</p><div class="why">${reason}</div></section>` : ""}
+    <section class="blk"><p class="label">Signals</p>${sigList(a.signals, 2) || `<p class="meta" style="margin:0"><span class="unk">No signals yet</span></p>`}</section>
+    <section class="blk"><p class="label">Best contact</p>${contact || `<div class="contact meta"><span class="unk">No contact yet</span></div>`}</section>
     ${actionsHtml({ outreach: a.outreach_status, hasContacts: a.contacts.length > 0, hasDraft: false, primary: nextStep(a), compact: true })}</article>`;
 }
 
 function drawAccounts() {
-  const d = ACC, q = aq.trim().toLowerCase();
-  const counts = Object.fromEntries(FILTERS.map(([k]) => [k, d.accounts.filter(FILTER_FN[k]).length]));
-  const list = d.accounts.filter(FILTER_FN[aview]).filter((a) => !q || a.name.toLowerCase().includes(q) || a.domain.includes(q))
-    .sort((x, y) => (HEAT_RANK[x.heat] - HEAT_RANK[y.heat]) || (y.is_new - x.is_new) || ((y.priority ?? -1) - (x.priority ?? -1)));
-  const c = $("c-accounts"); const open = d.accounts.filter((a) => !a.low && a.outreach_status === "open").length; c.textContent = open; c.hidden = !open;
+  const d = ACC;
+  const view = VIEWS.find(([k]) => k === AF.view) || VIEWS[0];
+  const counts = Object.fromEntries(VIEWS.map(([k, , , fn]) => [k, d.accounts.filter(fn).length]));
+  const q = AF.q.trim().toLowerCase();
+  const sort = (SORTS.find(([k]) => k === AF.sort) || SORTS[0])[2];
+  const base = d.accounts.filter(view[3]);
+  const list = base.filter((a) => SELECTS.every(([k, , , fn]) => !AF[k] || fn(a, AF[k])))
+    .filter((a) => !q || a.name.toLowerCase().includes(q) || a.domain.includes(q) || (a.segment || "").toLowerCase().includes(q)).sort(sort);
+  const c = $("c-accounts"); const open = counts.open; c.textContent = open; c.hidden = !open;
+  const sel = ([k, label, opts]) => `<label>${label}<select data-f="${k}" class="${AF[k] && AF[k] !== "best" ? "set" : ""}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${AF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
   $("ahead").innerHTML = `<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""}</span>
       <span>Signals refresh ${d.scan.active ? esc(d.scan.label) : "(paused)"} · next ${esc(day(d.scan.next_scan))}</span></div>
-    <div class="toolbar"><div class="chips">${FILTERS.filter(([k]) => counts[k] || k === aview || k === "all").map(([k, l]) => `<button class="chip${k === aview ? " on" : ""}" data-view="${k}">${l}<i>${counts[k]}</i></button>`).join("")}</div>
-      <input id="asearch" type="search" placeholder="Search" aria-label="Search companies" value="${esc(aq)}">${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</div>`;
-  $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${aview === "all" ? "Nothing here yet." : "No companies in this view."}</div>`;
-  const s = $("asearch"); if (aq) { s.focus(); s.setSelectionRange(aq.length, aq.length); }
+    <div class="fpanel">
+      <div class="seg" role="tablist" aria-label="Companies">${VIEWS.map(([k, l, tip]) => `<button role="tab" aria-selected="${k === AF.view}" class="${k === AF.view ? "on" : ""}" data-view="${k}" title="${esc(tip)}">${l}<i>${counts[k]}</i></button>`).join("")}</div>
+      <details class="fdet" ${fOpen || filtersOn() ? "open" : ""}><summary>Filters and sorting${activeCount() ? ` <span class="badge accent">${activeCount()} on</span>` : ""}</summary>
+        <div class="fgrid">${SELECTS.map(sel).join("")}${sel(["sort", "Sort by", SORTS.map(([k, l]) => [k, l])])}</div></details>
+      <input id="asearch" class="fsearch" type="search" placeholder="Search by name, website or what they do" aria-label="Search companies" value="${esc(AF.q)}">
+      <div class="fbar"><span>Showing <b>${list.length}</b> of ${base.length} in ${esc(view[1])}</span>
+        <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
+    </div>`;
+  $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${filtersOn() ? "No companies match these filters." : AF.view === "open" ? "Nothing to work right now." : "No companies in this view."}${filtersOn() ? `<br><button class="btn link" data-clear>Clear filters</button>` : ""}</div>`;
+  const s = $("asearch"); if (AF.q && document.activeElement?.id === "asearch") { s.focus(); s.setSelectionRange(AF.q.length, AF.q.length); }
 }
 
 async function loadAccounts(quiet) {
@@ -517,7 +606,8 @@ async function loadAccounts(quiet) {
   catch (e) { $("alist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 $("ahead").addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-view]"); if (b) { aview = b.dataset.view; drawAccounts(); return; }
+  const b = e.target.closest("[data-view]"); if (b) { AF.view = b.dataset.view; saveAF(); drawAccounts(); return; }
+  if (e.target.closest("[data-clear]")) { AF = { ...AF_DEFAULT, view: AF.view }; saveAF(); drawAccounts(); return; }
   const bf = e.target.closest("[data-bulkfind]"); if (!bf) return;
   bf.disabled = true; say("Checking who to search…");
   try {
@@ -533,7 +623,10 @@ $("ahead").addEventListener("click", async (e) => {
     ACC = null; loadAccounts(true);
   } catch (err) { say(err.message); } finally { bf.disabled = false; }
 });
-$("ahead").addEventListener("input", (e) => { if (e.target.id === "asearch") { aq = e.target.value; drawAccounts(); } });
+$("ahead").addEventListener("input", (e) => { if (e.target.id === "asearch") { AF.q = e.target.value; saveAF(); drawAccounts(); const s = $("asearch"); s.focus(); s.setSelectionRange(AF.q.length, AF.q.length); } });
+$("alist").addEventListener("click", (e) => { if (e.target.closest("[data-clear]")) { AF = { ...AF_DEFAULT, view: AF.view }; saveAF(); drawAccounts(); } });
+$("ahead").addEventListener("toggle", (e) => { if (e.target.matches?.("details.fdet")) fOpen = e.target.open; }, true);
+$("ahead").addEventListener("change", (e) => { const k = e.target.dataset?.f; if (k) { AF[k] = e.target.value; saveAF(); drawAccounts(); } });
 
 /* ============ card actions (shared by Today and Accounts) ============ */
 function wireCards(root, reload) {
@@ -639,7 +732,7 @@ $("tlist").addEventListener("click", async (e) => {
     try { const r = await api("queue", { action: "flag_action", key, do: fb.dataset.flagdo, days: 3 }); say(r.mode === "dry_run" ? r.message : fb.dataset.flagdo === "dismiss" ? "Dismissed." : "Snoozed for 3 days."); if (r.mode !== "dry_run") loadToday(); else fb.disabled = false; }
     catch (err) { say(err.message); fb.disabled = false; }
     return;
-  } if (e.target.closest("[data-goto-meetings]")) document.querySelector('nav.tabs [data-tab="meetings"]').click(); if (e.target.closest("[data-goto-inbound]")) document.querySelector('nav.tabs [data-tab="inbound"]').click(); if (e.target.closest("[data-goto-needs]")) { aview = "nocontact"; document.querySelector('nav.tabs [data-tab="accounts"]').click(); } });
+  } if (e.target.closest("[data-goto-meetings]")) document.querySelector('nav.tabs [data-tab="meetings"]').click(); if (e.target.closest("[data-goto-inbound]")) document.querySelector('nav.tabs [data-tab="inbound"]').click(); if (e.target.closest("[data-goto-needs]")) { AF = { ...AF_DEFAULT, view: "open", contact: "none" }; saveAF(); document.querySelector('nav.tabs [data-tab="accounts"]').click(); } });
 wireCards($("alist"), () => loadAccounts(true));
 
 // "Show more signals" works everywhere
