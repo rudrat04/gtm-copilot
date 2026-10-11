@@ -14,7 +14,8 @@ export const meetsFit = (fit: FitState, min: MinFit = icp.fit.minFit as MinFit) 
 type FitRow = Parameters<typeof fitState>[0];
 
 /** The one question every screen asks: is this company worth showing, by fit and by score? */
-export function worthShowing(a: FitRow & { priority_score?: number | null }, cfg = icp.fit as { minFit: MinFit; minScore: number }): boolean {
+export function worthShowing(a: FitRow & { priority_score?: number | null; watched_at?: string | null }, cfg = icp.fit as { minFit: MinFit; minScore: number }): boolean {
+  if (a.watched_at) return true; // a company the owner chose to follow is never hidden by the bar
   return meetsFit(fitState(a), cfg.minFit) && (a.priority_score ?? 0) >= cfg.minScore;
 }
 

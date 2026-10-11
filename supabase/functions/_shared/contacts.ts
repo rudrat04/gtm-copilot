@@ -65,11 +65,11 @@ export async function contactsFor(accountIds: string[], admin: boolean, limit = 
  * Finds people for a strong account that has never been searched. Skips weak accounts, accounts already
  * searched, and anything past the daily limit. Returns true when new people were stored.
  */
-export async function autoFindContacts(a: { id: string; domain: string; priority_score: number | null }): Promise<boolean> {
-  if (tierOf(a.priority_score) === "tier_3") return false;
+export async function autoFindContacts(a: { id: string; domain: string; priority_score: number | null; watched?: boolean }): Promise<boolean> {
+  if (!a.watched && tierOf(a.priority_score) === "tier_3") return false;
   // Do not spend a search credit on a company that clearly misses the target size or stage.
   const { data: firm } = await sb.from("cp_accounts").select("employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,domain,name").eq("id", a.id).maybeSingle();
-  if (firm) {
+  if (firm && !a.watched) { // a followed company is searched whatever its fit
     if (!meetsFit(fitState(firm))) {
       await log("info", "auto_contact_skipped", { account: a.domain, message: "Below the fit bar set in Setup" });
       return false;

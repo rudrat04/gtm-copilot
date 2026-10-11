@@ -11,6 +11,7 @@ import { autoRefreshPredictLeads, storedPlSignals } from "./predictleads.ts";
 import icp from "./icp.json" with { type: "json" };
 
 const BATCH = 5;
+const WATCHLIST_ALERTS_PER_DAY = 5; // instant alerts a day for followed companies, on top of icp.alerts.maxPerDay for the rest
 const MAX_ACCOUNTS = 20;
 
 async function state(key: string) {
@@ -19,7 +20,7 @@ async function state(key: string) {
 }
 const setState = (key: string, value: string) => sb.from("cp_state").upsert({ key, value, updated_at: new Date().toISOString() });
 
-type Acct = { id: string; name: string; domain: string; segment: string | null; priority_score: number | null; outreach_status: string; hubspot_company_id: string | null; employees: number | null; stage: string | null; country: string | null; firmo_at: string | null };
+type Acct = { watched_at: string | null; id: string; name: string; domain: string; segment: string | null; priority_score: number | null; outreach_status: string; hubspot_company_id: string | null; employees: number | null; stage: string | null; country: string | null; firmo_at: string | null };
 
 /**
  * Daily light check. Re-reads public sources for accounts already in the Queue, stores only what is new
@@ -36,9 +37,9 @@ export async function lightCheck(admin: boolean) {
   await setState("watch_last", new Date().toISOString());
 
   const { data } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date")
+    .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,watched_at")
     .is("removed_at", null).in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted", "snoozed"])
-    .order("priority_score", { ascending: false }).limit(MAX_ACCOUNTS);
+    .order("watched_at", { ascending: false, nullsFirst: false }).order("priority_score", { ascending: false }).limit(MAX_ACCOUNTS); // followed companies are always checked first
   const accounts = (data ?? []) as Acct[];
   const pl = await autoRefreshPredictLeads(2).catch(() => ({ checked: 0, added: 0 })); // a couple of the best accounts a day, within the monthly allowance
 
@@ -64,7 +65,7 @@ export async function lightCheck(admin: boolean) {
 
     // Alert-worthy: new news, or a newly posted individual role. Hacker News alone and role-count changes are not.
     const worthy = fresh.filter((s) => s.kind === "news" || (s.kind === "hiring" && !(s.detail && "salesOpenings" in s.detail)));
-    if (worthy.length && a.outreach_status === "open" && tierOf(score) !== "tier_3") {
+    if (worthy.length && a.outreach_status === "open" && (a.watched_at || tierOf(score) !== "tier_3")) { // a followed company is alert-worthy at any score
       candidates.push({ a, top: worthy[0], score, hash: hash(worthy.map((w) => w.title).sort().join("|")), fresh: worthy.length });
     }
     await log("info", "account_watched", { account: a.domain, detail: { new: fresh.length, score, alert_candidate: worthy.length > 0 } });
@@ -84,10 +85,14 @@ export async function lightCheck(admin: boolean) {
   let alerted = 0;
   if (candidates.length && googleConfigured()) {
     const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
-    const { count } = await sb.from("cp_alerts").select("account_id", { count: "exact", head: true }).gte("sent_at", dayStart.toISOString());
-    let budget = Math.max(0, icp.alerts.maxPerDay - (count ?? 0));
-    for (const c of candidates.sort((x, y) => y.score - x.score)) {
-      if (budget <= 0) break;
+    // Followed companies have an allowance of their own, so a busy day on the watchlist cannot crowd out the rest (or the other way round).
+    const { data: sentToday } = await sb.from("cp_alerts").select("account_id").gte("sent_at", dayStart.toISOString());
+    const { data: followed } = sentToday?.length ? await sb.from("cp_accounts").select("id").in("id", sentToday.map((r) => r.account_id)).not("watched_at", "is", null) : { data: [] };
+    const followedIds = new Set((followed ?? []).map((r) => r.id));
+    const left = { followed: Math.max(0, WATCHLIST_ALERTS_PER_DAY - followedIds.size), other: Math.max(0, icp.alerts.maxPerDay - ((sentToday?.length ?? 0) - followedIds.size)) };
+    for (const c of candidates.sort((x, y) => (Number(!!y.a.watched_at) - Number(!!x.a.watched_at)) || (y.score - x.score))) {
+      const lane = c.a.watched_at ? "followed" : "other";
+      if (left[lane] <= 0) continue;
       const { error } = await sb.from("cp_alerts").insert({ account_id: c.a.id, signal_hash: c.hash });
       if (error) continue; // already alerted for these signals
       const { data: sigs } = await sb.from("cp_signals").select("kind,title,detail,detected_at").eq("account_id", c.a.id).order("detected_at", { ascending: false }).limit(5);
@@ -95,17 +100,17 @@ export async function lightCheck(admin: boolean) {
         name: c.a.name, tier: tierOf(c.score), type: "hot", touches: 0, lastAction: null,
         sigs: (sigs ?? []).map((s) => ({ ...s, account_id: c.a.id, url: null })) as never,
       })) ?? `New signal: ${c.top.title.slice(0, 100)}`;
-      await autoFindContacts({ id: c.a.id, domain: c.a.domain, priority_score: c.score });
+      await autoFindContacts({ id: c.a.id, domain: c.a.domain, priority_score: c.score, watched: !!c.a.watched_at });
       const contacts = (await contactsFor([c.a.id], true)).get(c.a.id) ?? [];
       const { data: firm } = await sb.from("cp_accounts").select("employees,employee_band,stage,raised_usd,hq_city,country,firmo_at").eq("id", c.a.id).single();
       const mail = alertEmail(
-        { name: c.a.name, tier: tierOf(c.score), domain: c.a.domain, firmo: firm ? firmoLine(firm) : "" },
+        { name: c.a.name, tier: tierOf(c.score), domain: c.a.domain, firmo: firm ? firmoLine(firm) : "", watched: !!c.a.watched_at },
         { title: c.top.title, published: (c.top.detail as { published?: string } | undefined)?.published },
         why, contacts, c.a.hubspot_company_id ?? undefined,
       );
       try {
         await sendMail(ownerEmail(), mail.subject, mail.body, mail.html);
-        alerted++; budget--;
+        alerted++; left[lane]--;
         await log("info", "hot_alert_sent", { account: c.a.domain, detail: { fresh: c.fresh, score: c.score } });
       } catch (e) {
         await sb.from("cp_alerts").delete().eq("account_id", c.a.id).eq("signal_hash", c.hash); // retry next run

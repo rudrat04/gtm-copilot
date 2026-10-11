@@ -217,6 +217,8 @@
   @keyframes sh { to { background-position: -200% 0; } }
   @media (prefers-reduced-motion: reduce) { .skel i { animation: none; } }
 
+  .star { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 99px; padding: 3px 11px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; } .star.on { color: #8a5a00; border-color: #d9b24a; background: #fbf1d3; }
+  .wadd { display: flex; gap: 8px; margin: 0 0 12px; } .wadd input { flex: 1; min-width: 0; padding: 9px 11px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; }
   .modal-bg { position: fixed; inset: 0; z-index: 80; background: rgba(40, 35, 27, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
   .modal { background: var(--surface); border: 1px solid var(--line, #e3dcc8); border-radius: 14px; box-shadow: var(--shadow); max-width: 440px; width: 100%; padding: 20px 22px; }
   .modal h3 { margin: 0 0 8px; font-size: 17px; }
@@ -503,6 +505,7 @@ const VIEWS = [
   ["progress", "In progress", "Contacted, replied or meeting booked", (a) => !a.removed && progressS(a)],
   ["parked", "Parked", "Snoozed, not now, or closed-lost", (a) => !a.removed && parkedS(a)],
   ["low", "Low fit", "Hidden by default: outside your fit bar or too low a score", (a) => a.low],
+  ["watching", "Watching", "Companies you follow. They are never hidden by the fit bar and get their own alerts", (a) => a.watched && !a.removed],
   ["all", "All", "Every company except removed ones", (a) => !a.removed],
   ["removed", "Removed", "Hidden and blocked. Restore any of them here", (a) => a.removed],
 ];
@@ -595,12 +598,12 @@ function aCard(a) {
   const reason = a.is_new && a.found_reason ? `<b>Found automatically</b> from a Hacker News hiring post.` : esc(a.why_now || "");
   const fit = FIT[a.fit] || FIT.unknown, f = a.facts;
   const contact = contactLine(a);
-  return `<article class="card acard" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
+  return `<article class="card acard" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}" data-watched="${a.watched ? 1 : 0}">
     <div class="ahead"><div>
       <h3 class="title">${esc(a.name)}<a class="domain" href="https://${esc(a.domain)}" target="_blank" rel="noopener noreferrer">${esc(a.domain)}</a></h3>
       <p class="what">${a.segment ? esc(a.segment) : `<span class="unk">No description yet</span>`}</p>
     </div>
-    <div class="tags"><span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
+    <div class="tags">${a.removed ? "" : `<button type="button" class="star${a.watched ? " on" : ""}" data-act="watch" aria-pressed="${a.watched ? "true" : "false"}" title="${a.watched ? "Following. Click to stop" : "Follow this company: never hidden, with alerts of its own"}">${a.watched ? "★ Following" : "☆ Follow"}</button>`}<span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
     ${aFacts(a)}
     <div class="fitrow"><span class="badge ${fit[1] || ""}">${fit[0]}</span>${fitWhy(a).replace('<div class="fitwhy" aria-label="Why this fit">', '<span class="fitwhy" aria-label="Why this fit" style="margin:0">').replace(/<\/div>$/, "</span>")}</div>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
@@ -629,6 +632,7 @@ function drawAccounts() {
       <div class="seg" role="tablist" aria-label="Companies">${VIEWS.map(([k, l, tip]) => `<button role="tab" aria-selected="${k === AF.view}" class="${k === AF.view ? "on" : ""}" data-view="${k}" title="${esc(tip)}">${l}<i>${counts[k]}</i></button>`).join("")}</div>
       <details class="fdet" ${fOpen || filtersOn() ? "open" : ""}><summary>Filters and sorting${activeCount() ? ` <span class="badge accent">${activeCount()} on</span>` : ""}</summary>
         <div class="fgrid">${SELECTS.map(sel).join("")}${sel(["sort", "Sort by", SORTS.map(([k, l]) => [k, l])])}</div></details>
+      ${d.admin ? `<form class="wadd" data-wadd><input type="text" id="wdomain" placeholder="Follow a company: type its website, for example example.com" aria-label="Website of a company to follow" maxlength="80"><button type="submit" class="btn ghost">Follow</button></form>` : ""}
       <input id="asearch" class="fsearch" type="search" placeholder="Search by name, website or what they do" aria-label="Search companies" value="${esc(AF.q)}">
       <div class="fbar"><span>Showing <b>${list.length}</b> of ${base.length} in ${esc(view[1])}</span>
         <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin && AF.view === "low" && list.length ? `<button class="btn ghost sm" data-bulkremove title="Removes low-fit companies nobody has touched">Remove all low fit</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
@@ -673,6 +677,17 @@ $("ahead").addEventListener("click", async (e) => {
     ACC = null; loadAccounts(true);
   } catch (err) { say(err.message); } finally { bf.disabled = false; }
 });
+$("ahead").addEventListener("submit", async (e) => {
+  const f = e.target.closest("[data-wadd]"); if (!f) return; e.preventDefault();
+  const v = $("wdomain").value.trim(); if (!v) return;
+  const b = f.querySelector("button"); b.disabled = true; say("Adding and reading its public signals…");
+  try {
+    const r = await api("queue", { action: "watch_add", domain: v });
+    if (r.mode === "dry_run") { say(r.message); return; }
+    say(r.created ? `Following ${r.name}. Found ${r.signals} signal${r.signals === 1 ? "" : "s"}.` : `Following ${r.name}.`);
+    AF.view = "watching"; saveAF(); ACC = null; loadAccounts(true);
+  } catch (err) { say(err.message); } finally { b.disabled = false; }
+});
 $("ahead").addEventListener("input", (e) => { if (e.target.id === "asearch") { AF.q = e.target.value; saveAF(); drawAccounts(); const s = $("asearch"); s.focus(); s.setSelectionRange(AF.q.length, AF.q.length); } });
 $("alist").addEventListener("click", (e) => { if (e.target.closest("[data-clear]")) { AF = { ...AF_DEFAULT, view: AF.view }; saveAF(); drawAccounts(); } });
 $("ahead").addEventListener("toggle", (e) => { if (e.target.matches?.("details.fdet")) fOpen = e.target.open; }, true);
@@ -706,6 +721,15 @@ function wireCards(root, reload) {
     }
     const btn = e.target.closest("button[data-act]"); if (!btn) return;
     const card = btn.closest(".card"), act = btn.dataset.act;
+    if (act === "watch") {
+      const on = card.dataset.watched !== "1"; btn.disabled = true;
+      try {
+        const r = await api("queue", { action: "watch_toggle", account_id: card.dataset.id, on });
+        if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
+        say(on ? `Following ${card.dataset.name}. It is never hidden and you get alerts for it.` : `Stopped following ${card.dataset.name}.`); reload();
+      } catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
     if (act === "people") { mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain, true); return; }
     if (act === "morepeople") {
       if (!(await ask({ title: `Search again for people at ${card.dataset.name}?`, body: "Looks for more relevant people. Uses 1 to 2 search credits. People you already have are kept.", ok: "Search" }))) return;

@@ -24,6 +24,7 @@ const { guardStatus } = await import("../_shared/guard.ts");
 const { pickTop } = await import("../_shared/bulkfind.ts");
 const { apply, clean } = await import("../_shared/profile.ts");
 const { meetsFit, worthShowing } = await import("../_shared/fitgate.ts");
+const { alertEmail } = await import("../_shared/templates.ts");
 
 const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString();
@@ -722,4 +723,13 @@ Deno.test("signals you add: rules are cleaned, tools match loosely, and tool and
   const many = priorityScore(["a", "b", "c", "d"].map((w) => ({ kind: "tech" as const, title: `Uses a competitor: ${w}`, detail: { rule: "r2", ruleType: "competitor" } })), 15);
   assertEquals(many.parts.custom, 12); // capped
   assertEquals(heatOf([{ kind: "tech", title: "Uses a competitor: gong", detail: { ruleType: "competitor" }, detected_at: new Date().toISOString() }], "matches"), "warm"); // never hot on its own
+});
+
+Deno.test("watchlist: a followed company is never hidden by the fit bar, and its alert says so", () => {
+  const outside = { employees: 5000, stage: "IPO", country: "US", firmo_at: "2026-01-01", priority_score: 5 };
+  assertEquals(worthShowing(outside), false);
+  assertEquals(worthShowing({ ...outside, watched_at: "2026-10-12T00:00:00Z" }), true);
+  const mail = alertEmail({ name: "Acme", tier: "tier_3", domain: "acme.com", watched: true }, { title: "Acme raises $10M" }, "why", []);
+  assertEquals(mail.subject.startsWith("Watchlist: Acme"), true);
+  assertEquals(alertEmail({ name: "Acme", tier: "tier_1", domain: "acme.com" }, { title: "x" }, "why", []).subject.startsWith("Hot: "), true);
 });

@@ -167,9 +167,9 @@ export async function autoRefreshPredictLeads(max = 2): Promise<{ checked: numbe
   const out = { checked: 0, added: 0 };
   if (!plConfigured() || icp.predictleads.auto === false) return out;
   const { data } = await sb.from("cp_accounts")
-    .select("id,name,domain,priority_score,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,pl_checked_at")
+    .select("id,name,domain,priority_score,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,pl_checked_at,watched_at")
     .is("removed_at", null).in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted"])
-    .order("priority_score", { ascending: false }).limit(40);
+    .order("watched_at", { ascending: false, nullsFirst: false }).order("priority_score", { ascending: false }).limit(40); // followed companies first
   const due = (data ?? []).filter((a) => worthShowing(a) && (!a.pl_checked_at || Date.now() - Date.parse(a.pl_checked_at) > 14 * DAY)).slice(0, max);
   for (const a of due) {
     const r = await refreshFromPredictLeads(a.id, "auto");

@@ -15,6 +15,7 @@ import { activeFlags, flagAction } from "../_shared/flags.ts";
 import { meetsFit, queueThreshold, worthShowing } from "../_shared/fitgate.ts";
 import { clean, DEPARTMENTS, INDUSTRIES, loadProfile, REGIONS, saveProfile, SENIORITIES, STAGES } from "../_shared/profile.ts";
 import { REGION_GROUPS, RULE_TYPES } from "../_shared/lists.ts";
+import { addToWatchlist, setWatched } from "../_shared/watchlist.ts";
 import { suggestProfile } from "../_shared/suggest.ts";
 import { rerankPeople } from "../_shared/people.ts";
 import { runDiscovery } from "../_shared/discover.ts";
@@ -140,15 +141,15 @@ function accountFacts(a: { firmo_at: string | null; employees: number | null; em
  */
 async function accountsView(admin: boolean) {
   const { data: all } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,founded_year,linkedin_handle,removed_at")
+    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,founded_year,linkedin_handle,removed_at,watched_at")
     .order("priority_score", { ascending: false, nullsFirst: false }).limit(400);
   const rows = (all ?? []).map((a) => {
     const f = fitBreakdown(a);
     const outside = f.known && (f.size === 0 || f.stage === 0);
-    const deliberate = a.source === "research" || a.source === "discovered" || a.source === "hubspot" || !!a.lost_at; // someone chose or the system found it
+    const deliberate = !!a.watched_at || a.source === "research" || a.source === "discovered" || a.source === "hubspot" || !!a.lost_at; // someone chose or the system found it
     const low = !deliberate && !worthShowing(a) && a.outreach_status === "open";
     const isNew = a.source === "discovered" && a.outreach_status === "open" && Date.now() - Date.parse(a.created_at) < 14 * DAY;
-    return { a, removed: !!a.removed_at, low: !a.removed_at && (low || (a.source === "discovered" && !meetsFit(fitState(a)) && a.outreach_status === "open")), outside, isNew }; // found by the system and below the fit bar: hidden too
+    return { a, removed: !!a.removed_at, low: !a.removed_at && !a.watched_at && (low || (a.source === "discovered" && !meetsFit(fitState(a)) && a.outreach_status === "open")), outside, isNew }; // found by the system and below the fit bar: hidden too
   });
   const shown = rows.filter((r) => !r.low && !r.removed).map((r) => r.a.id);
   const ids = shown.length ? shown : ["00000000-0000-0000-0000-000000000000"];
@@ -175,7 +176,7 @@ async function accountsView(admin: boolean) {
         tier: tierOf(a.priority_score), priority: a.priority_score, icp_score: a.icp_score, why_now: a.why_now,
         facts: accountFacts(a), firmo: firmoLine(a), outside_icp: outside, fit: fitState(a), fit_reasons: fitReasons(a), excluded: fitBreakdown(a).excluded,
         heat: heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)),
-        firmo_known: !!a.firmo_at, low, removed, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
+        firmo_known: !!a.firmo_at, low, removed, watched: !!a.watched_at, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
         lost_at: a.lost_at, lost_reason: a.lost_reason, not_fit_reason: a.not_fit_reason,
         last_scanned_at: a.last_scanned_at, found_reason: why.get(a.domain) ?? null,
@@ -442,9 +443,19 @@ serve("queue", async (req) => {
     if (!a) return json({ error: "Account not found" }, 404);
     const restoring = body.action === "restore_account";
     if (!restoring && ["contacted", "replied", "meeting"].includes(a.outreach_status)) return json({ error: "You have already been in touch with this company. Use Not now or Not a fit instead." }, 400);
-    await sb.from("cp_accounts").update({ removed_at: restoring ? null : new Date().toISOString() }).eq("id", a.id);
+    await sb.from("cp_accounts").update(restoring ? { removed_at: null } : { removed_at: new Date().toISOString(), watched_at: null }).eq("id", a.id); // a removed company is no longer followed
     await log("info", restoring ? "account_restored" : "account_removed", { account: a.domain });
     return json({ mode: "live", ok: true });
+  }
+  if (body.action === "watch_toggle" && typeof body.account_id === "string") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to follow companies." });
+    const r = await setWatched(body.account_id, body.on !== false);
+    return "error" in r ? json({ error: r.error }, 404) : json({ mode: "live", ok: true });
+  }
+  if (body.action === "watch_add") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to add companies." });
+    const r = await addToWatchlist(String(body.domain ?? ""));
+    return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", ...r });
   }
   if (body.action === "remove_low") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed. Unlock to remove companies." });

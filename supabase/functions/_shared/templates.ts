@@ -96,7 +96,7 @@ export function digestEmail(items: TodayItem[], hidden: number, links: Links, at
 
 /** An instant alert when a new signal appears on an account you have not contacted yet. */
 export function alertEmail(
-  a: { name: string; tier: string; domain: string; firmo?: string },
+  a: { name: string; tier: string; domain: string; firmo?: string; watched?: boolean },
   top: { title: string; published?: string | null },
   why: string,
   contacts: Contact[],
@@ -106,7 +106,7 @@ export function alertEmail(
   const [c, c2] = contacts;
   const who = c ? `${c.name} at ${a.name}` : a.name;
   return {
-    subject: `Hot: ${who} (${TIER[a.tier]}), ${topShort}`,
+    subject: `${a.watched ? "Watchlist" : "Hot"}: ${who} (${TIER[a.tier]}), ${topShort}`,
     html: alertHtml(a, top, why, contacts, hubspotId),
     body: [
       c ? `Contact: ${person(c)}${c.email ? `\nEmail: ${c.email}` : ""}` : `Contact: none found yet, use "Find relevant people"`,

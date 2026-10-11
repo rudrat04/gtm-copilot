@@ -21,7 +21,7 @@ export type TodayItem = {
   type: TodayType;
   label: string;
   urgency: number;
-  account: { id: string; name: string; domain: string; tier: string; priority: number | null; fit: number | null; fit_state: FitState; status: string; outreach: string; firmo: string } | null;
+  account: { id: string; name: string; domain: string; tier: string; priority: number | null; fit: number | null; fit_state: FitState; status: string; outreach: string; firmo: string; watched?: boolean } | null;
   headline: string;      // what to do, e.g. "Follow up: touch 2 of 4"
   reason: string;        // template line built from signals
   why: string | null;    // AI line, cached per signal set (owner generates it, everyone sees it)
@@ -99,7 +99,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
   const cfg = icp.today;
 
   const { data: accts } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,lost_at,lost_reason,priority_score,icp_score,why_now,status,outreach_status,touches,contacted_at,last_touch_at,not_fit_reason,next_followup_at,snoozed_until,employee_band,employees,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date")
+    .select("id,name,domain,segment,lost_at,lost_reason,priority_score,icp_score,why_now,status,outreach_status,touches,contacted_at,last_touch_at,not_fit_reason,next_followup_at,snoozed_until,employee_band,employees,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,watched_at")
     .is("removed_at", null).or("status.in.(queued,pushed),outreach_status.neq.open").limit(300);
   const accounts = accts ?? [];
   const ids = accounts.map((a) => a.id);
@@ -140,11 +140,12 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
       return Number.isNaN(pub) ? Date.parse(s.detected_at) : pub; // a news item is as fresh as its publish date
     };
     const newest = meaningful.length ? Math.max(...meaningful.map(seenAt)) : 0;
-    const clearMiss = !meetsFit(fitState(a)); // below the owner's fit bar (Setup tab); by default, clearly outside the target size or stage
+    const watched = !!a.watched_at;
+    const clearMiss = !watched && !meetsFit(fitState(a)); // a followed company is never below the bar // below the owner's fit bar (Setup tab); by default, clearly outside the target size or stage
     const last = lastOutcome.get(a.id);
     const lastAction = last && last.kind !== "reopened" ? `${last.kind.replace("_", " ")} ${ageLabel(last.created_at)}` : null;
     const base = {
-      account: { id: a.id, name: a.name, domain: a.domain, tier, priority: a.priority_score, fit: a.icp_score, fit_state: fitState(a), status: a.status, outreach: a.outreach_status, firmo: firmoLine(a) },
+      account: { id: a.id, name: a.name, domain: a.domain, tier, priority: a.priority_score, fit: a.icp_score, fit_state: fitState(a), status: a.status, outreach: a.outreach_status, firmo: firmoLine(a), watched },
       signals: sigView(sigs), contacts: [] as Contact[], last_action: lastAction, meeting: null as TodayItem["meeting"],
       reason: reasonLine(sigs), why: null as string | null,
     };
@@ -171,10 +172,10 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     } else if (!clearMiss && goneDark(a, newest, now, icp.followUp.days.length)) {
       it = { ...base, key: `dark-${a.id}`, type: "revive", label: "Gone quiet, new signal", urgency: 270 + (a.priority_score ?? 0) / 10,
         headline: `No reply after ${a.touches} touches (first contact ${ageLabel(a.contacted_at)}), but something new happened`, due: null };
-    } else if (a.outreach_status === "open" && a.status === "queued" && tier !== "tier_3" && !clearMiss && (a.priority_score ?? 0) >= icp.fit.minScore && newest && now - newest < cfg.newDays * DAY) {
+    } else if (a.outreach_status === "open" && a.status === "queued" && (watched || (tier !== "tier_3" && !clearMiss && (a.priority_score ?? 0) >= icp.fit.minScore)) && newest && now - newest < cfg.newDays * DAY) {
       const hot = now - newest < cfg.hotHours * HOUR;
-      it = { ...base, key: `hot-${a.id}`, type: hot ? "hot" : "new", label: hot ? "Hot now" : "New this week",
-        urgency: (hot ? 500 : 350) + (a.priority_score ?? 0) / 10, headline: hot ? "New signal in the last 48 hours" : "New signal this week", due: null };
+      it = { ...base, key: `hot-${a.id}`, type: hot ? "hot" : "new", label: watched ? (hot ? "Watchlist: hot now" : "Watchlist: new this week") : hot ? "Hot now" : "New this week",
+        urgency: (hot ? 500 : 350) + (a.priority_score ?? 0) / 10 + (watched ? 100 : 0), headline: hot ? "New signal in the last 48 hours" : "New signal this week", due: null };
     }
     if (!it && newest && now - newest < cfg.newDays * DAY && a.status === "queued") {
       if (a.outreach_status === "open" && clearMiss) blocked.below_fit++;
@@ -211,7 +212,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     for (const it of gated) {
       if (it.contacts.length || it.type === "follow_up" || !it.account) continue;
       const a = accounts.find((x) => x.id === it.account!.id);
-      if (a && (await autoFindContacts({ id: a.id, domain: a.domain, priority_score: a.priority_score }))) found = true;
+      if (a && (await autoFindContacts({ id: a.id, domain: a.domain, priority_score: a.priority_score, watched: !!a.watched_at }))) found = true;
     }
     if (found) await attachContacts(gated, admin);
   }
