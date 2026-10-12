@@ -11,14 +11,16 @@ export type WebCandidate = { name: string; domain: string; source: "web"; source
 
 /** Pure: the search angles, built from the profile. Rotated by week so each run looks somewhere different. */
 export function angles(): { id: string; ask: string }[] {
-  const c = icp.company;
-  const who = `${c.industries.slice(0, 5).join(", ")} companies with ${c.employeesMin} to ${c.employeesMax} employees`;
+  const c = icp.company as { industries: string[]; keywords?: string[]; employeesMin: number; employeesMax: number; regions: string[] };
+  const topic = c.keywords?.length ? `B2B software companies in the areas of ${c.keywords.slice(0, 5).join(", ")}` : "B2B software companies";
+  const where = c.regions.length ? ` based in ${c.regions.slice(0, 3).join(" or ")}` : "";
+  const who = `${topic}${where}, with about ${c.employeesMin} to ${c.employeesMax} employees`;
   const roles = icp.signals.hiringRoles.slice(0, 4).join(", ");
   return [
-    { id: "funding", ask: `${who} that announced a seed, Series A or Series B round in the last 90 days` },
-    { id: "leaders", ask: `${who} that just hired or appointed a head of sales, VP of sales, CRO or head of revenue operations in the last 90 days` },
-    { id: "hiring", ask: `${who} that are hiring for ${roles || "sales roles"} right now, found on company career pages or job boards` },
-    { id: "launch", ask: `${who} that launched a product, opened a new market or announced a partnership in the last 60 days` },
+    { id: "funding", ask: `${who}, that announced a seed, Series A or Series B round in the last 90 days` },
+    { id: "leaders", ask: `${who}, that just hired or appointed a head of sales, VP of sales, CRO or head of revenue operations in the last 90 days` },
+    { id: "hiring", ask: `${who}, that are hiring for ${roles || "sales roles"} right now, found on company career pages or job boards` },
+    { id: "launch", ask: `${who}, that launched a product, opened a new market or announced a partnership in the last 60 days` },
   ];
 }
 
@@ -58,7 +60,8 @@ export async function collectWeb(opts: { calls?: number; searchesPerCall?: numbe
       let parsed: unknown = null;
       try { parsed = parseJson(raw); } catch { /* an empty answer is fine */ }
       for (const c of cleanWeb(parsed)) if (!out.has(c.domain)) out.set(c.domain, { ...c, snippet: c.snippet || a.ask.slice(0, 120) });
-      await log("info", "discover_web", { detail: { angle: a.id, found: cleanWeb(parsed).length } });
+      const n = cleanWeb(parsed).length;
+      await log("info", "discover_web", { detail: { angle: a.id, found: n, ...(n ? {} : { answer: raw.slice(0, 200) }) } }); // an empty answer is logged so it can be understood
     } catch (e) {
       if (e instanceof BudgetError) break;
       await log("warn", "discover_web_failed", { message: (e as Error).message, detail: { angle: a.id } });
