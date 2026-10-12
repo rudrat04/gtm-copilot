@@ -911,3 +911,13 @@ Deno.test("web search candidates are cleaned", async () => {
   assertEquals(out.map((c) => c.domain), ["acme.io"]);
   assertEquals(pickAngles(2, 0).length, 2);
 });
+
+Deno.test("discovery keeps places for web results", async () => {
+  const { pickBatch } = await import("../_shared/discover.ts");
+  const hn = Array.from({ length: 30 }, (_, i) => ({ source: "hn_hiring", id: i }));
+  const web = Array.from({ length: 5 }, (_, i) => ({ source: "web", id: 100 + i }));
+  const out = pickBatch([...hn, ...web], 25, 8);
+  assertEquals(out.length, 25);
+  assertEquals(out.filter((c) => c.source === "web").length, 5);
+  assertEquals(pickBatch([...hn, ...web], 25, 0).filter((c) => c.source === "web").length, 0);
+});

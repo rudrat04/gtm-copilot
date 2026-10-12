@@ -31,6 +31,7 @@ export type TodayItem = {
   last_action: string | null;
   due: string | null;
   meeting: { title: string; starts_at: string; briefed: boolean } | null;
+  via?: { source: string; url: string | null } | null; // where a discovered company came from
   ai?: { label: string; score: number; reasons: string[] } | null; // the AI's judgement of timing, when there is one
 };
 
@@ -135,6 +136,8 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
   const accounts = accts ?? [];
   const ids = accounts.map((a) => a.id);
 
+  const { data: viaRows } = await sb.from("cp_discovered").select("domain,source,source_url").eq("status", "added").limit(300);
+  const viaBy = new Map((viaRows ?? []).map((r) => [r.domain, { source: r.source, url: r.source_url as string | null }]));
   const aiBy = await aiMaps("company", ids).catch(() => new Map<string, Ai>());
   const [{ data: sigRows }, { data: meetings }, { data: outcomes }, { data: whyRows }] = await Promise.all([
     ids.length ? sb.from("cp_signals").select("account_id,kind,title,url,detail,detected_at").in("account_id", ids).order("detected_at", { ascending: false }) : Promise.resolve({ data: [] }),
@@ -211,7 +214,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     }
     if (!it && a.outreach_status === "open" && a.source === "discovered" && !clearMiss && ["matches", "close"].includes(fitState(a)) && now - Date.parse(a.created_at) < 21 * DAY) {
       it = { ...base, key: `disc-${a.id}`, type: "new", label: "New from discovery", urgency: 330 + (a.priority_score ?? 0) / 10,
-        headline: `Found ${ageLabel(a.created_at)} and it fits your profile`, due: null,
+        headline: `Found ${ageLabel(a.created_at)} and it fits your profile`, due: null, via: viaBy.get(a.domain) ?? null,
         reason: base.reason.startsWith("No fresh signal") ? "Found by discovery and it fits your profile. No fresh signal yet, so this is a good first conversation" : base.reason }; // companies discovery found, ready with a contact
     }
     if (!it && newest && now - newest < cfg.newDays * DAY && a.status === "queued") {

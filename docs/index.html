@@ -503,7 +503,9 @@ function tCard(i) {
   const whoWhy = c ? `<div class="meta" style="margin-top:4px">${c.persona ? `Matches your "${esc(c.persona)}" buyer type.` : "A relevant senior contact."}${c.known ? ` <b class="warnx">${esc(c.note || "Already in your HubSpot.")}</b>` : ""}</div>` : "";
   const aiLine = i.ai ? `<div class="meta" style="margin-top:6px"><span class="badge ${i.ai.label === "hot" ? "hot" : i.ai.label === "warm" ? "warm" : ""}" title="The AI's judgement of timing">AI: ${esc(i.ai.label)} · ${esc(i.ai.score)}</span> ${esc((i.ai.reasons || []).slice(0, 2).join(" · "))}</div>` : "";
   const why = `<div class="why"><b>Why today.</b> ${esc(i.why || i.reason)}${aiLine}</div>`;
-  const note = fu ? `<div class="status-line due">${esc(i.headline)}</div>` : i.type === "revive" ? `<div class="status-line">${esc(i.headline)}</div>${why}` : why;
+  const VIA = { hn_hiring: "a Hacker News hiring post", launch_hn: "a Launch HN post", web: "a web search" };
+  const viaLine = i.via ? `<div class="meta" style="margin-top:6px">Found from ${i.via.url ? `<a href="${esc(i.via.url)}" target="_blank" rel="noopener noreferrer">${VIA[i.via.source] || "a public source"}</a>` : esc(VIA[i.via.source] || "a public source")}.</div>` : "";
+  const note = fu ? `<div class="status-line due">${esc(i.headline)}</div>` : i.type === "revive" ? `<div class="status-line">${esc(i.headline)}</div>${why}` : why + viaLine;
   return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
     <div class="card-head"><div>
       <div class="eyebrow"><span class="badge ${TODAY_BADGE[i.type] || ""}">${esc(i.label)}</span>${watchBtn("company", a.id, !!a.watched)}${c?.id ? watchBtn("person", c.id, !!c.watched) : ""}</div>

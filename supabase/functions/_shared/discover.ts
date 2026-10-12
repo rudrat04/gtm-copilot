@@ -158,6 +158,13 @@ async function readyTheNew(ids: string[]) {
   return { searched, judged: ai.companies };
 }
 
+/** Pure: which candidates get checked this run. A few places are kept for web results, so a busy Hacker News week cannot crowd them out. */
+export function pickBatch<T extends { source: string }>(fresh: T[], max: number, webSlots: number): T[] {
+  const web = fresh.filter((c) => c.source === "web").slice(0, Math.min(webSlots, max));
+  const rest = fresh.filter((c) => !web.includes(c)).slice(0, max - web.length);
+  return [...web, ...rest].sort((a, b) => fresh.indexOf(a) - fresh.indexOf(b)); // keeps the original order (strongest signal first)
+}
+
 export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?: boolean } = {}) {
   const hiring = await collectHiring();
   const seenDomains = new Set(hiring.map((c) => c.domain));
@@ -173,14 +180,15 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
   // A company turned down only for its size or stage gets another look after two weeks, in case you have widened the profile since.
   const retry = (r: { status: string; reason: string | null; found_at: string }) => r.status === "rejected" && /^Below the fit bar/.test(r.reason ?? "") && Date.now() - Date.parse(r.found_at) > 14 * 86_400_000;
   const known = new Set([...(have ?? []), ...(seen ?? []).filter((r) => !retry(r))].map((r) => r.domain));
-  const fresh = found.filter((c) => !known.has(c.domain)).slice(0, cfg.maxCandidates);
+  const fresh = found.filter((c) => !known.has(c.domain)); // all of them; pickBatch decides which get checked
   const addedIds: string[] = [];
   const skipped: { name: string; reason: string }[] = [];
+  const webSlots = (cfg as { webSlots?: number }).webSlots ?? 8;
   const summary = { collected: found.length, from_web: web.length, already_known: found.length - fresh.length, checked: 0, added: [] as string[], rejected: 0, dry: !!opts.dry };
-  if (opts.dry) return { ...summary, would_check: fresh.slice(0, cfg.maxAiPerRun).map((c) => `${c.name} (${c.domain})`) };
+  if (opts.dry) return { ...summary, would_check: pickBatch(fresh, cfg.maxAiPerRun, webSlots).map((c) => `${c.name} (${c.domain})`) };
 
   let firmoLeft = opts.firmo === false ? 0 : cfg.firmoPerRun;
-  const batch = fresh.slice(0, cfg.maxAiPerRun);
+  const batch = pickBatch(fresh, cfg.maxAiPerRun, webSlots);
   const verdicts = new Map<string, Verdict | null>();
   for (let i = 0; i < batch.length; i += 4) await Promise.all(batch.slice(i, i + 4).map(async (c) => { verdicts.set(c.domain, await qualify(c)); })); // four at a time keeps a bigger run inside the time limit
   for (const c of batch) {
