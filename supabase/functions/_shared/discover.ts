@@ -8,6 +8,7 @@ import { fitState } from "./score.ts";
 import { collectWeb } from "./websearch.ts";
 import { autoSearch } from "./autosearch.ts";
 import { aiRefresh } from "./aiscore.ts";
+import { scanOne } from "./scan.ts";
 import { FIT_COLS } from "./firmo.ts";
 import icp from "./icp.json" with { type: "json" };
 
@@ -144,6 +145,9 @@ JSON: {"fit": true|false, "name": "proper company name", "segment": "2-4 word de
 async function readyTheNew(ids: string[]) {
   const per = (cfg as { peoplePerRun?: number }).peoplePerRun ?? 3;
   let searched = 0;
+  // Read their public signals now, so a new company arrives with signals and a score instead of waiting for the Monday scan.
+  const { data: fresh } = ids.length ? await sb.from("cp_accounts").select("id,name,domain,status,segment,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai").in("id", ids) : { data: [] };
+  for (let i = 0; i < (fresh ?? []).length; i += 4) await Promise.allSettled((fresh ?? []).slice(i, i + 4).map((a) => scanOne(a as never)));
   const { data } = ids.length ? await sb.from("cp_accounts").select(`id,domain,${FIT_COLS}`).in("id", ids) : { data: [] };
   for (const a of data ?? []) {
     if (searched >= per) break;
@@ -217,9 +221,11 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
     summary.added.push(row.name);
     addedIds.push(acct.id);
   }
-  const ready = await readyTheNew(addedIds).catch(() => ({ searched: 0, judged: 0 }));
+  const save = (ready: { searched: number; judged: number }) => summary.checked > 0 ? sb.from("cp_state").upsert({ key: "discovery_last", value: JSON.stringify({ at: new Date().toISOString(), collected: summary.collected, from_web: summary.from_web, already_known: summary.already_known, checked: summary.checked, added: summary.added.slice(0, 20), skipped: skipped.slice(0, 20), skipped_n: summary.rejected, people_searched: ready.searched, judged: ready.judged, facts_checked: (opts.firmo === false ? 0 : cfg.firmoPerRun) - firmoLeft }), updated_at: new Date().toISOString() }) : Promise.resolve(); // an empty run keeps the last real report
+  await save({ searched: 0, judged: 0 }); // saved first, in case the slower steps below run out of time
+  const ready = await readyTheNew(addedIds.slice(0, 10)).catch(() => ({ searched: 0, judged: 0 }));
   Object.assign(summary, { people_searched: ready.searched, judged: ready.judged, skipped: skipped.slice(0, 20) });
-  if (summary.checked > 0) await sb.from("cp_state").upsert({ key: "discovery_last", value: JSON.stringify({ at: new Date().toISOString(), collected: summary.collected, from_web: summary.from_web, already_known: summary.already_known, checked: summary.checked, added: summary.added.slice(0, 20), skipped: skipped.slice(0, 20), skipped_n: summary.rejected, people_searched: ready.searched, judged: ready.judged, facts_checked: (opts.firmo === false ? 0 : cfg.firmoPerRun) - firmoLeft }), updated_at: new Date().toISOString() });
+  await save(ready);
   await log("info", "discover_done", { detail: summary });
   return summary;
 }

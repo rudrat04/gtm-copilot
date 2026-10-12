@@ -1,9 +1,5 @@
 import { json, sb } from "../_shared/db.ts";
-import { collectSignals, saveSiteFacts, storedHiringSignals } from "../_shared/signals.ts";
-import { scoreAccount } from "../_shared/score.ts";
-import { queueThreshold } from "../_shared/fitgate.ts";
-import { storedPlSignals } from "../_shared/predictleads.ts";
-import { reasonLine } from "../_shared/today.ts";
+import { scanOne } from "../_shared/scan.ts";
 import { log, serve } from "../_shared/log.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 import { isAdmin, jobAllowed } from "../_shared/auth.ts";
@@ -13,48 +9,6 @@ import { lightCheck } from "../_shared/watch.ts";
 // so extra or public calls are harmless: once everything is fresh it does nothing.
 const STALE_HOURS = icp.schedule.staleDays * 24;
 const BATCH = 6;
-
-type Account = { id: string; name: string; domain: string; status: string; segment: string | null; employees: number | null; stage: string | null; country: string | null; firmo_at: string | null };
-
-async function scanOne(a: Account) {
-  const { signals, hiringUnknown, motion, jobTools } = await collectSignals(a.name, a.domain, a.segment ?? "");
-  await saveSiteFacts(a.id, { motion, jobTools }); // sales style and tools seen on the site and in job posts
-
-  if (signals.length) {
-    await sb.from("cp_signals").upsert(
-      signals.map((s) => ({
-        account_id: a.id,
-        kind: s.kind,
-        title: s.title.slice(0, 300),
-        url: s.url,
-        detail: s.detail ?? {},
-      })),
-      { onConflict: "account_id,kind,title", ignoreDuplicates: true },
-    );
-  }
-
-  const { score } = scoreAccount([...signals, ...(await storedPlSignals(a.id)), ...(hiringUnknown ? await storedHiringSignals(a.id) : [])], a); // PredictLeads events stored earlier still count
-  const update: Record<string, unknown> = {
-    priority_score: score,
-    last_scanned_at: new Date().toISOString(),
-  };
-
-  // Accounts that clear the threshold enter the Queue with a plain-English reason. Drafts are written
-  // on demand (the "Draft email" button), so no AI is spent on emails nobody asked for.
-  const open = a.status === "new" || a.status === "queued";
-  if (open && score >= queueThreshold()) {
-    update.why_now = reasonLine(signals as never);
-    update.status = "queued";
-  }
-
-  const { error: upErr } = await sb.from("cp_accounts").update(update).eq("id", a.id);
-  if (upErr) await log("error", "account_update_failed", { account: a.domain, message: upErr.message });
-  await log("info", "account_scanned", {
-    account: a.domain,
-    detail: { score, signals: signals.length, queued: update.status === "queued" },
-  });
-  return { domain: a.domain, score, queued: update.status === "queued" };
-}
 
 serve("signal-scan", async (req) => {
   // Daily light check (mode: "light") shares this endpoint with the weekly full scan.
