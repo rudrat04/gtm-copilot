@@ -3,6 +3,7 @@ import { isAdmin } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
 import { refreshAccountFields } from "../_shared/hsfields.ts";
 import { hunterBalance, rerankPeople, searchAndStore } from "../_shared/people.ts";
+import { peekPeople, revealPerson } from "../_shared/peoplepreview.ts";
 import {
   type CompanyScores,
   companyFields,
@@ -20,6 +21,7 @@ type Row = {
   email_status: string | null; email_confidence: number | null; email_revealed: boolean;
   phone_revealed: boolean; hubspot_contact_id: string | null; account_id: string;
   hs_status?: "known" | "opted_out" | "bounced" | null; hs_note?: string | null; watched_at?: string | null;
+  preview?: boolean; decision_maker?: boolean | null;
 };
 
 const maskEmail = (e: string | null) => (e ? `***@${e.split("@")[1]}` : null);
@@ -43,6 +45,8 @@ function view(r: Row, admin: boolean) {
     watched: !!r.watched_at,
     hs_status: r.hs_status ?? null,
     hs_note: r.hs_note ?? null,
+    preview: !!r.preview,
+    decision_maker: r.decision_maker ?? null,
   };
 }
 
@@ -125,6 +129,7 @@ async function enrich(personId: string, what: string, admin: boolean) {
     return json({ error: "Phone numbers need a paid data provider and aren't available yet." }, 400);
   }
   if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to reveal the email." });
+  if (p.preview) return json({ error: "Reveal this person first (1 credit)" }, 409);
   if (!p.email) return json({ error: "No email found for this person" }, 404);
   if (p.hs_status === "opted_out" || p.hs_status === "bounced") return json({ error: p.hs_note ?? "HubSpot says this person should not be emailed" }, 409);
 
@@ -229,6 +234,19 @@ serve("people", async (req) => {
       // Recompute persona/relevance from stored titles after an ICP change. Costs no credits.
       if (!admin) return json({ error: "Owner only" }, 403);
       return json({ reranked: await rerankPeople() });
+    }
+    case "peek": { // free: who works there (shortened names, no emails)
+      if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to look up people." });
+      const { data: a } = await sb.from("cp_accounts").select("id,name,domain").eq("id", String(body.account_id ?? "")).maybeSingle();
+      if (!a) return json({ error: "Company not found" }, 404);
+      return json({ mode: "live", ...(await peekPeople([a])), people: await list(a.id, true) });
+    }
+    case "reveal": { // 1 credit
+      if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to reveal. It uses 1 search credit." });
+      const r = await revealPerson(String(body.person_id ?? ""));
+      if (!r.ok) return json({ error: r.error }, r.code ?? 400);
+      const { data: p } = await sb.from("cp_people").select("*").eq("id", String(body.person_id)).maybeSingle();
+      return json({ mode: "live", credits: r.credits, person: p ? view(p as Row, true) : null });
     }
     case "status":
       return json({ admin, credits: admin ? await hunterBalance() : null });

@@ -8,7 +8,7 @@ import { fitState } from "./score.ts";
 import { collectWeb } from "./websearch.ts";
 import { collectHunter } from "./hunterdiscover.ts";
 import { collectYc } from "./yc.ts";
-import { autoSearch } from "./autosearch.ts";
+import { peekPeople } from "./peoplepreview.ts";
 import { aiRefresh } from "./aiscore.ts";
 import { scanOne } from "./scan.ts";
 import { industryFromSite } from "./industry.ts";
@@ -144,22 +144,16 @@ JSON: {"fit": true|false, "name": "proper company name", "segment": "2-4 word de
   }
 }
 
-/** The companies just added that clearly fit get their people searched (a few credits, inside the reserve) and an AI judgement, so the rep finds them ready on Today. */
+/** The companies just added get their public signals read, an industry from their website, an AI judgement, and the people who work there are listed for free (names shortened, no emails), so the rep finds people ready to look at. */
 async function readyTheNew(ids: string[]) {
-  const per = (cfg as { peoplePerRun?: number }).peoplePerRun ?? 3;
-  let searched = 0;
-  // Read their public signals now, so a new company arrives with signals and a score instead of waiting for the Monday scan.
   const { data: fresh } = ids.length ? await sb.from("cp_accounts").select("id,name,domain,status,segment,employees,stage,country,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai").in("id", ids) : { data: [] };
-  for (let i = 0; i < (fresh ?? []).length; i += 4) await Promise.allSettled((fresh ?? []).slice(i, i + 4).map((a) => scanOne(a as never)));
-  const { data } = ids.length ? await sb.from("cp_accounts").select(`id,domain,${FIT_COLS}`).in("id", ids) : { data: [] };
-  for (const a of data ?? []) {
-    if (searched >= per) break;
-    if (fitState(a as never) !== "matches") continue;
-    if ((await autoSearch({ id: a.id, domain: a.domain }, { ignoreDaily: true })) !== "skipped") searched++;
-  }
+  for (let i = 0; i < (fresh ?? []).length; i += 4) await Promise.allSettled((fresh ?? []).slice(i, i + 4).map((a) => scanOne(a as never))); // so a new company arrives with signals and a score
   for (let i = 0; i < ids.length; i += 4) await Promise.allSettled(ids.slice(i, i + 4).map((id) => industryFromSite(id))); // the industry from their website, about 0.1 cent each, no credit
+  const { data: fit } = ids.length ? await sb.from("cp_accounts").select(`id,name,domain,watched_at,priority_score,${FIT_COLS}`).in("id", ids) : { data: [] };
+  const worth = (fit ?? []).filter((a) => fitState(a as never) !== "outside").map((a) => ({ id: a.id, name: a.name as string, domain: a.domain as string }));
+  const peek = worth.length ? await peekPeople(worth).catch(() => ({ stored: 0, companies: 0, withPeople: 0 })) : { stored: 0, companies: 0, withPeople: 0 };
   const ai = ids.length ? await aiRefresh({ ids: ids.slice(0, 12), maxCompanies: 12, maxPeopleCompanies: 6 }).catch(() => ({ companies: 0, people: 0 })) : { companies: 0, people: 0 };
-  return { searched, judged: ai.companies };
+  return { searched: peek.stored, judged: ai.companies };
 }
 
 /** Pure: which candidates get checked this run. Each source keeps a few places, so a busy Hacker News week cannot crowd out the others. */

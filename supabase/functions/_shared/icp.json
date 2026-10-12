@@ -194,6 +194,7 @@
     "alertReserve": 15,
     "autoFix": false,
     "titleCheck": false,
+    "activityPerDay": 2,
     "watchlistAlerts": true,
     "todayCap": 8,
     "digestFlags": true,

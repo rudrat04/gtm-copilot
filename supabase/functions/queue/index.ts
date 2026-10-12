@@ -18,6 +18,8 @@ import { REGION_GROUPS, RULE_TYPES } from "../_shared/lists.ts";
 import { addPersonToWatchlist, addToWatchlist, markSeen, setNotify, setPersonWatched, setWatched, watchlistView } from "../_shared/watchlist.ts";
 import { cleanBrand, loadBrand, saveBrand } from "../_shared/brand.ts";
 import { scorePerson } from "../_shared/leadscore.ts";
+import { teamSignals } from "../_shared/peoplesignals.ts";
+import { peekCandidates, peekPeople } from "../_shared/peoplepreview.ts";
 import { aiHeat, aiMaps, aiRefresh, aiScoreCompany, aiScorePeople, candidates } from "../_shared/aiscore.ts";
 import { industryCheckMany, needIndustry } from "../_shared/industry.ts";
 import { customerInsights } from "../_shared/customers.ts";
@@ -205,7 +207,7 @@ async function accountsView(admin: boolean) {
 
 /** Everyone we have searched, found or added, with or without an email, so nothing has to be searched twice. One company, or all (newest first). */
 async function peopleList(admin: boolean, accountId?: string) {
-  let q = sb.from("cp_people").select("id,account_id,first_name,last_name,title,persona,relevance,seniority,department,email,email_status,email_confidence,email_revealed,hubspot_contact_id,hs_status,hs_note,watched_at,created_at,provider").order("created_at", { ascending: false }).limit(600);
+  let q = sb.from("cp_people").select("id,account_id,first_name,last_name,title,persona,relevance,seniority,department,email,email_status,email_confidence,email_revealed,hubspot_contact_id,hs_status,hs_note,watched_at,created_at,provider,preview,decision_maker").order("created_at", { ascending: false }).limit(600);
   if (accountId) q = q.eq("account_id", accountId);
   const { data: rows } = await q;
   const ids = [...new Set((rows ?? []).map((p) => p.account_id))];
@@ -213,7 +215,7 @@ async function peopleList(admin: boolean, accountId?: string) {
   const a = new Map((accts ?? []).map((x) => [x.id, x]));
   const [{ data: sigs }, { data: evs }] = await Promise.all([
     ids.length ? sb.from("cp_signals").select("account_id,kind,title,detail,detected_at").in("account_id", ids).order("detected_at", { ascending: false }).limit(2000) : Promise.resolve({ data: [] }),
-    sb.from("cp_watch_events").select("person_id,kind,detected_at").in("kind", ["job_change", "mention"]).not("person_id", "is", null),
+    sb.from("cp_watch_events").select("person_id,kind,title,url,detected_at").in("kind", ["job_change", "mention", "activity", "team"]).not("person_id", "is", null).order("detected_at", { ascending: false }),
   ]);
   const heatOfAcct = new Map<string, "hot" | "warm" | "watching">();
   const aiCo = await aiMaps("company", ids);
@@ -223,6 +225,9 @@ async function peopleList(admin: boolean, accountId?: string) {
   const people = (rows ?? []).filter((p) => a.has(p.account_id) && !a.get(p.account_id)!.removed_at).map((p) => ({
     lead: scorePerson({ relevance: p.relevance, persona: p.persona, companyFit: fitState(a.get(p.account_id) as never), companyHeat: heatOfAcct.get(p.account_id) ?? "watching", jobChangeDays: daysSince("job_change", p.id), mentionDays: daysSince("mention", p.id), emailStatus: p.email_status, hasEmail: !!p.email, hsStatus: p.hs_status }),
     id: p.id, account_id: p.account_id, company: a.get(p.account_id)!.name, domain: a.get(p.account_id)!.domain,
+    activity: (evs ?? []).filter((x) => x.person_id === p.id && (x.kind === "activity" || x.kind === "team")).slice(0, 2).map((x) => ({ kind: x.kind, title: x.title, url: x.url, at: x.detected_at })),
+    preview: !!p.preview, decision_maker: p.decision_maker ?? null, company_fit: fitState(a.get(p.account_id) as never), company_heat: heatOfAcct.get(p.account_id) ?? "watching",
+    team: teamSignals(p.department, p.title, (sigs ?? []).filter((s) => s.account_id === p.account_id) as never),
     name: admin ? `${p.first_name} ${p.last_name}`.trim() : `${p.first_name} ${(p.last_name || "").charAt(0)}.`.trim(),
     title: p.title, persona: p.persona, relevance: p.relevance, seniority: p.seniority, department: p.department,
     has_email: !!p.email, revealed: admin && !!p.email_revealed, email: admin && p.email_revealed ? p.email : null, email_status: p.email_status, email_confidence: p.email_confidence,
@@ -596,6 +601,12 @@ serve("queue", async (req) => {
     const r = await industryCheckMany(ids);
     const rescored = (await enrichCompanies(true)).rescored; // fit follows the new industries (no credits)
     return json({ mode: "live", ...r, rescored });
+  }
+  if (body.action === "peek_bulk") { // free: who works at the companies worth working that have nobody listed yet
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to look up people." });
+    const list = await peekCandidates(typeof body.limit === "number" ? Math.min(60, body.limit) : 40);
+    if (body.dry === true) return json({ mode: "plan", companies: list.length, names: list.slice(0, 8).map((a) => a.name) });
+    return json({ mode: "live", ...(await peekPeople(list)) });
   }
   if (body.action === "watchlist") return json({ ...(await watchlistView(admin)), admin });
   if (body.action === "watch_toggle" && (typeof body.account_id === "string" || typeof body.person_id === "string")) {

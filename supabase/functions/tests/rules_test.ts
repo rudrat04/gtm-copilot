@@ -785,7 +785,7 @@ Deno.test("automatic searches: only worthwhile companies, and a reserve of credi
 });
 
 Deno.test("hot alert: names up to two people with their buyer type, and is honest when nobody was found", () => {
-  const person = (n: string, persona: string | null, known = false) => ({ id: n, name: n, title: "VP Sales", persona, email: null, email_status: null, revealed: false, pushed: false, known, watched: false, note: null });
+  const person = (n: string, persona: string | null, known = false) => ({ id: n, name: n, title: "VP Sales", persona, email: null, email_status: null, revealed: false, pushed: false, known, watched: false, preview: false, note: null });
   const a = { name: "Acme", tier: "tier_2", domain: "acme.com" };
   const withTwo = alertEmail(a, { title: "Acme raises $10M" }, "why", [person("Maya Chen", "Head of Sales", false), person("Dev Patel", null, true)]);
   assertEquals(withTwo.body.includes("Maya Chen, VP Sales [Head of Sales]"), true);
@@ -987,4 +987,50 @@ Deno.test("places written as text become country codes", async () => {
   assertEquals(countryCodeOf("IN"), "IN");
   assertEquals(countryCodeOf("Remote"), null);
   assertEquals(countryCodeOf(null), null);
+});
+
+Deno.test("people first: the free search is built from buyer types, and only buyer matches are kept", async () => {
+  const { peekQuery, splitShort, pickPeople } = await import("../_shared/peoplepreview.ts");
+  const q = new URLSearchParams(peekQuery(["Zuddl", "Acme, Inc"], [{ department: "Sales" }, { department: "Marketing" }]));
+  assertEquals(q.get("company_name"), "Zuddl,Acme Inc");
+  assertEquals(q.get("department"), "executive,management,sales,marketing");
+  assertEquals(q.get("type"), "personal");
+  assertEquals(splitShort("Vineet K."), { first: "Vineet", last: "K." });
+  assertEquals(splitShort("Madonna"), null);
+  const rows = [
+    { reveal_handle: "a", name: "Asha R.", position: "VP of Sales", department: "sales", domain: "zuddl.com", decision_maker: true },
+    { reveal_handle: "b", name: "Ravi K.", position: "Software Engineer", department: "it", domain: "zuddl.com" },
+    { reveal_handle: "c", name: "Mia L.", position: "VP of Sales", department: "sales", domain: "other.com" },
+    { reveal_handle: "", name: "No H.", position: "Head of Sales", department: "sales", domain: "zuddl.com" },
+  ];
+  const out = pickPeople(rows, new Set(["zuddl.com"]), () => 50);
+  assertEquals([...out.keys()], ["zuddl.com"]);
+  assertEquals(out.get("zuddl.com")!.map((x) => x.short.first), ["Asha"]);
+});
+
+Deno.test("what is happening in a person's own team", async () => {
+  const { teamSignals } = await import("../_shared/peoplesignals.ts");
+  const sigs = [
+    { kind: "hiring", title: "Hiring: Senior Account Executive", detected_at: "" },
+    { kind: "hiring", title: "Hiring: Backend Engineer", detected_at: "" },
+    { kind: "news", title: "Acme raises $20M Series A", detected_at: "" },
+    { kind: "hiring", title: "6 open roles, 3 in sales/RevOps", detail: { salesOpenings: 3 }, detected_at: "" },
+  ];
+  const sales = teamSignals("sales", "Head of Sales", sigs);
+  assertEquals(sales.some((l) => /Account Executive/.test(l)), true);
+  assertEquals(sales.some((l) => /Backend/.test(l)), false);
+  const eng = teamSignals("it", "VP Engineering", sigs, 3);
+  assertEquals(eng.some((l) => /Backend/.test(l)), true);
+  assertEquals(teamSignals("executive", "CEO", sigs, 3).some((l) => /Series A/.test(l)), true); // leaders hear about funding
+  assertEquals(teamSignals("sales", "Rep", []), []);
+});
+
+Deno.test("activity found on the web is cleaned", async () => {
+  const { cleanActivity, activityLine } = await import("../_shared/peopleactivity.ts");
+  const out = cleanActivity({ items: [{ kind: "event", title: "Speaking at SaaSBoomi in Bengaluru", date: "2026-11", place: "Bengaluru", url: "https://x.test/a", upcoming: true }, { kind: "weird", title: "x" }, { title: "Joined a podcast on pipeline", url: "javascript:1" }] });
+  assertEquals(out.length, 2);
+  assertEquals(out[0].upcoming, true);
+  assertEquals(out[1].url, undefined);
+  assertEquals(activityLine(out[0]), "Speaking at SaaSBoomi in Bengaluru · Bengaluru · 2026-11");
+  assertEquals(cleanActivity(null), []);
 });

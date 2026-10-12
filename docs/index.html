@@ -298,7 +298,7 @@
 
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="today">Today<span class="count" id="c-today" hidden></span></button>
-    <button role="tab" aria-selected="false" data-tab="accounts">Accounts<span class="count" id="c-accounts" hidden></span></button>
+    <button role="tab" aria-selected="false" data-tab="accounts">People<span class="count" id="c-accounts" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="watchlist">Watchlist<span class="count" id="c-watchlist" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="conversations">Conversations<span class="count" id="c-conv" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="setup">Setup</button>
@@ -502,7 +502,7 @@ function tCard(i) {
   const co = `<a class="clink" href="#/company/${esc(a.id)}">${esc(a.name)}</a>`;
   const title = c ? `${fu ? "Follow up with " : ""}${esc(c.name)}` : co;
   const sub = c ? `${esc(c.title)} at <b>${co}</b>` : co;
-  const mail = c?.email ? (c.email.includes("***") ? `<span>${esc(c.email)}</span>` : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : "";
+  const mail = c?.preview ? `<span class="meta">Email not revealed yet</span>` : c?.email ? (c.email.includes("***") ? `<span>${esc(c.email)}</span>` : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : "";
   const facts = fitLine(a.fit_state, a.firmo);
   const whoWhy = c ? `<div class="meta" style="margin-top:4px">${c.persona ? `Matches your "${esc(c.persona)}" buyer type.` : "A relevant senior contact."}${c.known ? ` <b class="warnx">${esc(c.note || "Already in your HubSpot.")}</b>` : ""}</div>` : "";
   const aiLine = i.ai ? `<div class="meta" style="margin-top:6px"><span class="badge ${i.ai.label === "hot" ? "hot" : i.ai.label === "warm" ? "warm" : ""}" title="The AI's judgement of timing">AI: ${esc(i.ai.label)} · ${esc(i.ai.score)}</span> ${esc((i.ai.reasons || []).slice(0, 2).join(" · "))}</div>` : "";
@@ -520,7 +520,7 @@ function tCard(i) {
     ${sigList(i.signals, 2)}
     ${c2 ? `<div class="meta" style="margin-top:12px">Also consider <b>${esc(c2.name)}</b>, ${esc(c2.title)}</div>` : ""}
     ${i.last_action && !fu ? `<div class="meta" style="margin-top:6px">Last action: ${esc(i.last_action)}</div>` : ""}
-    ${actionsHtml({ outreach: a.outreach, hasContacts: !!c, hasDraft: false })}</article>`;
+    ${actionsHtml({ outreach: a.outreach, hasContacts: !!c, hasDraft: false, primary: c?.preview ? `<button class="btn primary" data-act="preveal" data-pid="${esc(c.id)}" title="Uses 1 search credit">Reveal ${esc(c.name.split(" ")[0])} <small>· 1 credit</small></button>` : undefined })}</article>`;
 }
 
 /** When Today is empty, say what is holding things back, each with where to fix it. */
@@ -610,6 +610,7 @@ function nextStep(a) {
   if (s === "replied") return `<button class="btn primary sm" data-life="meeting">Meeting booked</button>`;
   if (!c && a.fit === "unknown") return `<button class="btn primary sm" data-act="firmo" title="Looks up size and stage. Uses 0.2 search credit">Check size</button>`;
   if (!c) return `<button class="btn primary sm" data-act="people"${a.searched ? "" : ` title="Uses 1 to 2 search credits"`}>${a.searched ? "See people" : "Find people"}</button>`;
+  if (c.preview) return `<button class="btn primary sm" data-act="preveal" data-pid="${esc(c.id)}" title="Hunter reveals the email. Uses 1 search credit">Reveal ${esc(c.name.split(" ")[0])} <small>· 1 credit</small></button>`;
   if (!c.revealed && c.email) return `<button class="btn primary sm" data-act="enrich1" data-pid="${esc(c.id)}">Enrich ${esc(c.name.split(" ")[0])}</button>`;
   if (c.revealed && !c.pushed) return `<button class="btn primary sm" data-act="push">Add to HubSpot</button>`;
   return `<button class="btn primary sm" data-life="contacted">${s === "contacted" ? "Contacted again" : "Mark contacted"}</button>`;
@@ -619,7 +620,7 @@ function contactLine(a) {
   const c = a.contacts[0];
   if (!c) return a.people_count ? `<div class="contact meta">${a.people_count} saved ${a.people_count === 1 ? "person does" : "people do"} not match your buyer types. <a href="#/people/${esc(a.id)}">See ${a.people_count === 1 ? "them" : "all"}</a></div>`
     : a.searched_at ? `<div class="contact meta">Searched ${esc(day(a.searched_at))}: nobody found. No need to search again for a while.</div>` : "";
-  const mail = c.revealed && c.email ? (c.email.includes("***") ? esc(c.email) : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : c.email ? "email found, not revealed" : "no email";
+  const mail = c.preview ? "email not revealed (free preview)" : c.revealed && c.email ? (c.email.includes("***") ? esc(c.email) : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : c.email ? "email found, not revealed" : "no email";
   return `<div class="contact"><b>${esc(c.name)}</b> · ${esc(c.title)} · ${mail}${c.persona ? ` <span class="ptag" title="Matches your buyer type">${esc(c.persona)}</span>` : ""}${c.known ? ` <span class="ptag warnx" title="${esc(c.note || "")}">Already in your HubSpot</span>` : c.pushed ? ` <span class="ptag">In HubSpot</span>` : ""}${(a.people_count || a.contacts.length) > 1 ? ` <a class="meta" href="#/people/${esc(a.id)}" title="Everyone saved for this company">+${(a.people_count || a.contacts.length) - 1} more</a>` : ""}</div>`;
 }
 
@@ -658,7 +659,8 @@ function lookupRow(a) {
   if (!(ACC && ACC.admin) || a.removed) return "";
   const b = [];
   if (!a.firmo_known) b.push(`<button type="button" data-act="firmo" title="Hunter company lookup">${a.facts.size ? "Check stage and place" : "Check size and stage"} <small>· 0.2 credit</small></button>`);
-  if (!a.searched && !a.searched_at && !a.people_count) b.push(`<button type="button" data-act="people" title="A Hunter search by your buyer titles">Find people <small>· 1 credit, sometimes 2</small></button>`);
+  if (!a.people_count && !a.searched_at) b.push(`<button type="button" data-act="peek" title="Lists who works there: names shortened, no emails">List people <small>· free</small></button>`);
+  if (!a.searched && !a.searched_at && !a.people_count) b.push(`<button type="button" data-act="people" title="A Hunter search by your buyer titles: up to 10 people with their emails">Find people with emails <small>· 1 credit, sometimes 2</small></button>`);
   if (!a.industry_read) b.push(`<button type="button" data-act="industry" title="The AI reads their website">Read industry <small>· about 0.1 cent of AI, no credit</small></button>`);
   if (!a.ai) b.push(`<button type="button" data-act="aiscore" title="The AI judges timing from everything we know">Score with AI <small>· about 0.2 cent of AI, no credit</small></button>`);
   if (!a.news_checked) b.push(`<button type="button" data-act="plnews" title="PredictLeads funding and leadership news">Check company news <small>· 1 of your 100 monthly calls</small></button>`);
@@ -700,7 +702,7 @@ function drawAccounts() {
   const list = base.filter((a) => SELECTS.every(([k, , , fn]) => !AF[k] || fn(a, AF[k])))
     .filter((a) => !q || a.name.toLowerCase().includes(q) || a.domain.includes(q) || (a.segment || "").toLowerCase().includes(q)).sort(sort);
   const unchecked = d.accounts.filter((a) => !a.removed && !a.firmo_known).length; // companies whose size and stage were never looked up
-  const c = $("c-accounts"); const open = counts.open; c.textContent = open; c.hidden = !open;
+  
   const sel = ([k, label, opts]) => `<label>${label}<select data-f="${k}" class="${AF[k] && AF[k] !== "best" ? "set" : ""}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${AF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
   const rep = d.discovery.report, plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const reportHtml = rep ? `<details class="fdet" style="margin:0 0 12px" ${Date.now() - Date.parse(rep.at) < 36e5 * 6 ? "open" : ""}><summary>Last discovery run · ${esc(ago(rep.at))}: ${esc(plural(rep.added.length, "company", "companies"))} added, ${esc(rep.skipped_n)} skipped</summary>
@@ -745,6 +747,7 @@ $("ahead").addEventListener("click", async (e) => {
     return;
   }
   if (e.target.closest("[data-bulkai]")) { runBulkAi(e.target.closest("button")); return; }
+  if (e.target.closest("[data-peekbulk]")) { listPeople(e.target.closest("button")); return; }
   const bi = e.target.closest("[data-bulkind]");
   if (bi) {
     bi.disabled = true;
@@ -883,6 +886,20 @@ function wireCards(root, reload) {
         if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
         say(r.looked_up ? "Size and stage added." : "No company data found for this domain."); reload();
       } catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
+    if (act === "peek") {
+      btn.disabled = true; say("Listing people…");
+      try { const r = await api("people", { action: "peek", account_id: card.dataset.id }); if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; } say(r.stored ? `${r.stored} people listed. Names are shortened until you reveal them.` : "No one matching your buyer types is listed for this company."); ACC = null; PPL = null; reload(); }
+      catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
+    if (act === "preveal") {
+      const who = btn.textContent.replace(/·.*$/, "").replace(/^Reveal /, "").trim();
+      if (!(await ask({ title: `Reveal ${who}?`, body: "Hunter shows the full name and email. Uses 1 search credit.", ok: "Reveal" }))) return;
+      btn.disabled = true; say("Revealing…");
+      try { const r = await api("people", { action: "reveal", person_id: btn.dataset.pid }); if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; } say(`Revealed (${r.credits} credit).`); ACC = null; PPL = null; reload(); }
+      catch (err) { say(err.message); btn.disabled = false; }
       return;
     }
     if (act === "enrich1") {
@@ -1451,6 +1468,7 @@ function drawSetup() {
       <div class="toggles">
         <label class="toggle"><input type="checkbox" data-chk="watch.autoFix" ${P.watch.autoFix ? "checked" : ""}><span>Fix a running-dry list automatically<small>When Today is about to run out, search the best 3 companies without a contact and list who was found in the email. Uses 3 to 6 credits when it happens. Off by default.</small></span></label>
         <label class="toggle"><input type="checkbox" data-chk="watch.titleCheck" ${P.watch.titleCheck ? "checked" : ""}><span>Check job titles of the people I follow, monthly<small>Catches a job change. Uses 1 search credit per company a month, inside your reserve. Off by default.</small></span></label>
+        <div class="field" style="margin:4px 0 10px"><div class="numrow">Look up what the people I follow are doing, for up to <input type="number" min="0" max="6" data-num="watch.activityPerDay" value="${esc(P.watch.activityPerDay)}" aria-label="People a day" style="width:64px"> people a day<span class="help" style="margin:0">Events they speak at or join, podcasts, posts, awards, job moves. A web search by full name: about 5 cents of AI each, each person at most every two weeks. 0 turns it off. Anything that concerns their own team (sales hiring for a sales head) is free and always on.</span></div></div>
         <label class="toggle"><input type="checkbox" data-chk="watch.watchlistAlerts" ${P.watch.watchlistAlerts ? "checked" : ""}><span>Alert me about companies I follow<small>Up to 5 a day, separate from the number above. Any new signal counts, whatever the score.</small></span></label>
         <label class="toggle"><input type="checkbox" data-chk="watch.urgent" ${P.watch.urgent ? "checked" : ""}><span>Check for urgent problems every 3 hours<small>A hot company left untouched, or a lead past its reply target. Everything else is checked once a day.</small></span></label>
         <label class="toggle"><input type="checkbox" data-chk="watch.todoForUrgent" ${P.watch.todoForUrgent ? "checked" : ""}><span>Add a HubSpot to-do for urgent problems<small>Only for companies already in HubSpot, at most 3 a run.</small></span></label>
@@ -1895,8 +1913,9 @@ async function runBulkAi(btn) {
 }
 let PPL = null, PF = { q: "", lead: "", persona: "", email: "", hub: "", company: null };
 const LEAD = { hot: ["hot", "Hot lead"], warm: ["warm", "Warm lead"], cold: ["watching", "Cold"], blocked: ["bad", "Do not contact"] };
+const FIT_RANK = { matches: 3, close: 2, unknown: 1, outside: 0 };
 const BUYER = { strong: "Strong buyer match", good: "Good buyer match", partial: "Partial match", none: "Not a buyer" };
-const viewSwitch = (cur) => `<div class="seg viewsw" role="tablist" aria-label="Companies or people"><button role="tab" class="${cur === "companies" ? "on" : ""}" aria-selected="${cur === "companies"}" data-vsw="accounts">Companies</button><button role="tab" class="${cur === "people" ? "on" : ""}" aria-selected="${cur === "people"}" data-vsw="people">People${PPL ? `<i>${PPL.people.length}</i>` : ""}</button></div>`;
+const viewSwitch = (cur) => `<div class="seg viewsw" role="tablist" aria-label="People or companies"><button role="tab" class="${cur === "people" ? "on" : ""}" aria-selected="${cur === "people"}" data-vsw="people">People${PPL ? `<i>${PPL.people.length}</i>` : ""}</button><button role="tab" class="${cur === "companies" ? "on" : ""}" aria-selected="${cur === "companies"}" data-vsw="accounts">Companies</button></div>`;
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-vsw]"); if (b) showView({ view: b.dataset.vsw }); });
 async function loadPeople(quiet) {
   if (!quiet) { $("phead").innerHTML = ""; $("plist").innerHTML = skeleton(4); }
@@ -1908,22 +1927,31 @@ function drawPeople() {
   const matchesPersona = (p) => !PF.persona || (PF.persona === "__none" ? !p.persona : p.persona === PF.persona);
   const list = d.people.filter((p) => (!PF.lead || p.lead.label === PF.lead) && matchesPersona(p)
     && (!PF.company || p.account_id === PF.company)
-    && (!PF.email || (PF.email === "none" ? !p.has_email : PF.email === "found" ? p.has_email && !p.revealed : p.revealed))
+    && (!PF.email || (PF.email === "none" ? !p.has_email && !p.preview : PF.email === "preview" ? p.preview : PF.email === "found" ? p.has_email && !p.revealed : p.revealed))
     && (!PF.hub || (PF.hub === "yes" ? p.in_hubspot : !p.in_hubspot))
-    && (!q || `${p.name} ${p.title} ${p.company}`.toLowerCase().includes(q))).sort((x, y) => (y.lead.score - x.lead.score) || (Date.parse(y.added) - Date.parse(x.added)));
+    && (!q || `${p.name} ${p.title} ${p.company}`.toLowerCase().includes(q))).sort((x, y) => (y.lead.score - x.lead.score) || (FIT_RANK[y.company_fit] - FIT_RANK[x.company_fit]) || (Date.parse(y.added) - Date.parse(x.added)));
+  const ready = d.people.filter((p) => !["cold", "blocked"].includes(p.lead.label)).length; { const c = $("c-accounts"); c.textContent = ready; c.hidden = !ready; } // hot and warm people on the tab
   const sel = (k, label, opts) => `<label>${label}<select data-pf="${k}" class="${PF[k] ? "set" : ""}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${PF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
   const co = PF.company ? d.people.find((p) => p.account_id === PF.company)?.company : null;
   $("phead").innerHTML = `${viewSwitch("people")}<div class="fpanel">
-    <div class="fgrid">${sel("lead", "Lead", [["", "Any"], ["hot", "Hot"], ["warm", "Warm"], ["cold", "Cold"], ["blocked", "Do not contact"]])}${sel("persona", "Buyer type", [["", "Any"], ...d.personas.map((t) => [t, t]), ["__none", "Does not match any"]])}${sel("email", "Email", [["", "Any"], ["found", "Found, not revealed"], ["revealed", "Revealed"], ["none", "No email"]])}${sel("hub", "HubSpot", [["", "Any"], ["yes", "In HubSpot"], ["no", "Not in HubSpot"]])}</div>
+    <div class="fgrid">${sel("lead", "Lead", [["", "Any"], ["hot", "Hot"], ["warm", "Warm"], ["cold", "Cold"], ["blocked", "Do not contact"]])}${sel("persona", "Buyer type", [["", "Any"], ...d.personas.map((t) => [t, t]), ["__none", "Does not match any"]])}${sel("email", "Email", [["", "Any"], ["preview", "Not revealed yet (free list)"], ["found", "Found, not revealed"], ["revealed", "Revealed"], ["none", "No email"]])}${sel("hub", "HubSpot", [["", "Any"], ["yes", "In HubSpot"], ["no", "Not in HubSpot"]])}</div>
     <input id="psearch" class="fsearch" type="search" placeholder="Search by name, title or company" aria-label="Search people" value="${esc(PF.q)}" style="margin-top:10px">
-    <div class="fbar"><span>Showing <b>${list.length}</b> of ${d.people.length} saved people${co ? ` at <b>${esc(co)}</b> <a href="#/people">(all companies)</a>` : ""}</span>
-      <span class="acts">${(PF.lead || PF.persona || PF.email || PF.hub || PF.q) ? `<button class="btn link sm" data-pclear>Clear filters</button>` : ""}${own && d.people.length ? `<button class="btn ghost sm" data-bulkai title="The AI judges each lead from everything we know">Score with AI</button><button class="btn ghost sm" data-pexport title="Downloads this list as a spreadsheet file. Only emails you have revealed are included">Export (.csv)</button>` : ""}</span></div></div>`;
-  const row = (p) => `<div class="wrow" data-pid="${esc(p.id)}"><div class="wmain"><b>${esc(p.name)}</b> <span class="badge ${LEAD[p.lead.label][0]}" title="${p.lead.ai ? "Judged by the AI. " : ""}Lead score ${p.lead.score} of 100">${LEAD[p.lead.label][1]}${p.lead.ai ? " · AI" : ""}</span> <span class="badge">${esc(BUYER[p.lead.buyer])}</span> <span class="meta">${esc(p.title)} at <a class="clink" href="#/company/${esc(p.account_id)}">${esc(p.company)}</a></span>
-      <div class="meta">${p.persona ? `<span class="ptag">${esc(p.persona)}</span> ` : `<span class="meta">Not one of your buyer types</span> `}${p.revealed ? `<b>${esc(p.email)}</b>${p.email_status ? ` <span class="pill ${(STATUS[p.email_status] || [0, ""])[1]}">${esc((STATUS[p.email_status] || ["Unverified"])[0])}</span>` : ""}` : p.has_email ? "email found, not revealed" : "no email"}${p.in_hubspot ? ` · <span class="pill ok">In HubSpot</span>` : ""}${p.hs_status === "opted_out" ? ` · <span class="pill bad">Opted out</span>` : p.hs_status === "bounced" ? ` · <span class="pill bad">Bounced</span>` : p.hs_status === "known" ? ` · <span class="pill warn" title="${esc(p.hs_note || "")}">Already in your HubSpot</span>` : ""}${p.manual ? " · added by you" : ""} · saved ${esc(day(p.added))}</div><div class="meta" style="margin-top:3px">Why: ${esc(p.lead.reasons.slice(0, 4).join(" · "))}</div></div>
-      <div class="wside">${own && p.has_email && !p.revealed && !["opted_out", "bounced"].includes(p.hs_status) ? `<button class="btn ghost sm" data-penrich>Enrich</button>` : ""}${watchBtn("person", p.id, p.watched)}</div></div>`;
+    <div class="fbar"><span>Showing <b>${list.length}</b> of ${d.people.length} people${co ? ` at <b>${esc(co)}</b> <a href="#/people">(all companies)</a>` : ""}</span>
+      <span class="acts">${(PF.lead || PF.persona || PF.email || PF.hub || PF.q) ? `<button class="btn link sm" data-pclear>Clear filters</button>` : ""}${own ? `<button class="btn ghost sm" data-peekbulk title="Lists who works at your best companies that have nobody listed yet. Free: names are shortened and there are no emails until you reveal someone">List people at my best companies · free</button>` : ""}${own && d.people.length ? `<button class="btn ghost sm" data-bulkai title="The AI judges each lead from everything we know">Score with AI</button><button class="btn ghost sm" data-pexport title="Downloads this list as a spreadsheet file. Only emails you have revealed are included">Export (.csv)</button>` : ""}</span></div></div>`;
+  const row = (p) => {
+    const fit = FIT[p.company_fit] || FIT.unknown;
+    const team = (p.team || []).map((t) => `<div class="meta sig-line"><b>Their team:</b> ${esc(t)}</div>`).join("");
+    const act = (p.activity || []).map((x) => `<div class="meta sig-line"><b>${x.kind === "team" ? "Their team" : "Their activity"}:</b> ${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a>` : esc(x.title)} <span class="meta">${esc(ago(x.at))}</span></div>`).join("");
+    const mail = p.preview ? `<span class="meta">email not revealed${p.email_status === "valid" ? " · verified address on file" : ""}</span>` : p.revealed ? `<b>${esc(p.email)}</b>${p.email_status ? ` <span class="pill ${(STATUS[p.email_status] || [0, ""])[1]}">${esc((STATUS[p.email_status] || ["Unverified"])[0])}</span>` : ""}` : p.has_email ? "email found, not revealed" : "no email";
+    return `<div class="wrow" data-pid="${esc(p.id)}"><div class="wmain"><b>${esc(p.name)}</b> <span class="badge ${LEAD[p.lead.label][0]}" title="${p.lead.ai ? "Judged by the AI. " : ""}Lead score ${p.lead.score} of 100">${LEAD[p.lead.label][1]}${p.lead.ai ? " · AI" : ""}</span> <span class="badge">${esc(BUYER[p.lead.buyer])}</span>${p.decision_maker ? ` <span class="badge accent" title="Hunter marks this person as a decision maker">Decision maker</span>` : ""}
+      <div class="meta">${esc(p.title)} at <a class="clink" href="#/company/${esc(p.account_id)}">${esc(p.company)}</a> <span class="badge ${fit[1] || ""}" title="How well the company fits your profile">${esc(fit[0])}</span> <span class="badge ${p.company_heat}" title="Is something happening at the company">${esc(HEAT[p.company_heat] || "")}</span></div>
+      <div class="meta">${p.persona ? `<span class="ptag">${esc(p.persona)}</span> ` : `<span class="meta">Not one of your buyer types</span> `}${mail}${p.in_hubspot ? ` · <span class="pill ok">In HubSpot</span>` : ""}${p.hs_status === "opted_out" ? ` · <span class="pill bad">Opted out</span>` : p.hs_status === "bounced" ? ` · <span class="pill bad">Email bounced</span>` : p.hs_status === "known" ? ` · <span class="pill warnx" title="${esc(p.hs_note || "")}">Already in your HubSpot</span>` : ""}</div>
+      ${(p.lead.reasons || []).length ? `<div class="meta">${esc(p.lead.reasons.slice(0, 2).join(" · "))}</div>` : ""}${act}${team}</div>
+      <div class="wside">${own && p.preview ? `<button class="btn primary sm" data-preveal title="Hunter reveals the full name and email. Uses 1 search credit">Reveal <small>· 1 credit</small></button>` : ""}${own && !p.preview && p.has_email && !p.revealed && !["opted_out", "bounced"].includes(p.hs_status) ? `<button class="btn ghost sm" data-penrich>Enrich</button>` : ""}${watchBtn("person", p.id, p.watched)}</div></div>`;
+  };
   const nobody = !PF.company && !PF.persona && !PF.email && !PF.hub && !q && d.nobody.length
     ? `<article class="card"><p class="label">Searched, nobody found (${d.nobody.length})</p><p class="help" style="margin:0 0 6px">These companies were searched. No need to search them again for a while.</p>${d.nobody.slice(0, 30).map((n) => `<div class="wrow"><div class="wmain"><b><a class="clink" href="#/company/${esc(n.id)}">${esc(n.name)}</a></b> <span class="meta">${esc(n.domain)} · searched ${esc(day(n.at))}${n.by === "auto" ? " (automatic)" : ""}</span></div></div>`).join("")}</article>` : "";
-  $("plist").innerHTML = (list.length ? `<article class="card">${list.map(row).join("")}</article>` : `<div class="card empty">${d.people.length ? "No people match these filters." : "No people saved yet. Use <b>Find people</b> on a company in Accounts and everyone found is kept here, enriched or not."}${d.people.length ? "" : `<div class="actions" style="justify-content:center;margin-top:12px"><a class="btn ghost sm" href="#/accounts">Open Accounts</a></div>`}</div>`) + nobody;
+  $("plist").innerHTML = (list.length ? `<article class="card">${list.map(row).join("")}</article>` : `<div class="card empty">${d.people.length ? "No people match these filters." : "No people yet. Press <b>List people at my best companies</b> above (free), or run discovery, and the people who work at the companies that fit appear here."}${d.people.length ? "" : `<div class="actions" style="justify-content:center;margin-top:12px"><a class="btn ghost sm" href="#/accounts">Open Accounts</a></div>`}</div>`) + nobody;
   const s = $("psearch"); if (PF.q && document.activeElement?.id === "psearch") { s.focus(); s.setSelectionRange(PF.q.length, PF.q.length); }
 }
 $("phead").addEventListener("input", (e) => { if (e.target.id === "psearch") { PF.q = e.target.value; drawPeople(); const s = $("psearch"); s.focus(); s.setSelectionRange(PF.q.length, PF.q.length); } });
@@ -1938,7 +1966,28 @@ $("phead").addEventListener("click", (e) => {
     say("Exported. Only emails you have revealed are included.");
   }
 });
+async function listPeople(btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const plan = await api("queue", { action: "peek_bulk", dry: true });
+    if (plan.mode === "dry_run") { say(plan.message); return; }
+    if (!plan.companies) { say("Everyone worth working already has people listed."); return; }
+    if (!(await ask({ title: `List people at ${plan.companies} compan${plan.companies === 1 ? "y" : "ies"}?`, body: `${plan.names.join(", ")}${plan.companies > plan.names.length ? "…" : ""}\n\nFree: no credits. You see who works there (names shortened, no emails) and reveal the ones worth it, 1 credit each.`, ok: "List people" }))) return;
+    say("Listing people…");
+    const r = await api("queue", { action: "peek_bulk" });
+    say(`${r.stored} people listed at ${r.withPeople} of ${r.companies} companies.`); ACC = null; loadPeople(true);
+  } catch (err) { say(err.message); } finally { if (btn) btn.disabled = false; }
+}
 $("plist").addEventListener("click", async (e) => {
+  const pv = e.target.closest("[data-preveal]");
+  if (pv) {
+    const row = pv.closest("[data-pid]"), who = row.querySelector(".wmain > b")?.textContent || "this person";
+    if (!(await ask({ title: `Reveal ${who}?`, body: "Hunter shows the full name and email. Uses 1 search credit.", ok: "Reveal" }))) return;
+    pv.disabled = true;
+    try { const r = await api("people", { action: "reveal", person_id: row.dataset.pid }); if (r.mode === "dry_run") { say(r.message); pv.disabled = false; return; } say(`Revealed (${r.credits} credit).`); ACC = null; loadPeople(true); }
+    catch (err) { say(err.message); pv.disabled = false; }
+    return;
+  }
   const b = e.target.closest("[data-penrich]"); if (!b) return;
   const id = b.closest("[data-pid]").dataset.pid; b.disabled = true;
   try { const r = await api("people", { action: "enrich", person_id: id, what: "email" }); if (r.mode === "dry_run") { say(r.message); b.disabled = false; return; } say("Email revealed."); loadPeople(true); }
@@ -1984,7 +2033,7 @@ function showView(r, { push = true, force = false } = {}) {
   else if (view === "research") { if (next.domain) { $("domain").value = next.domain; run(next.domain); } }
   else ({ today: loadToday, accounts: loadAccounts, watchlist: loadWatchlist }[view] || (() => {}))();
 }
-document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListener("click", () => showView({ view: b.dataset.tab, sub: b.dataset.tab === "conversations" ? CUR.sub : null })));
+document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListener("click", () => showView({ view: b.dataset.tab === "accounts" ? "people" : b.dataset.tab, sub: b.dataset.tab === "conversations" ? CUR.sub : null })));
 document.querySelectorAll("#convseg [data-csub]").forEach((b) => b.addEventListener("click", () => showView({ view: "conversations", sub: b.dataset.csub })));
 window.addEventListener("hashchange", () => { if (/^#(debrief|loss)=/.test(location.hash)) return; const r = parseRoute(); if (routeHash(r) !== routeHash(CUR) || r.view !== CUR.view) showView(r, { push: false }); });
 // "Check size", "Find people" and similar actions can be started from other views: go there, then press the button once it exists.

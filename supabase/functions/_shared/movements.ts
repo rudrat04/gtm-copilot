@@ -13,13 +13,13 @@ import icp from "./icp.json" with { type: "json" };
 // and emailed: big ones at once (grouped, at most 3 emails a day), the rest in the daily email. All free except the optional
 // title re-check, which spends search credits inside the owner's reserve.
 
-export type EventKind = "tool_change" | "pain" | "visit" | "market" | "funding" | "leadership" | "event" | "competitor_event" | "news" | "hiring" | "tool" | "competitor_tool" | "deal" | "lead" | "people" | "mention" | "contact" | "job_change";
+export type EventKind = "tool_change" | "pain" | "visit" | "market" | "funding" | "leadership" | "event" | "competitor_event" | "news" | "hiring" | "tool" | "competitor_tool" | "deal" | "lead" | "people" | "mention" | "contact" | "job_change" | "activity" | "team";
 export type WatchEvent = { key: string; kind: EventKind; importance: "big" | "small"; accountId?: string | null; personId?: string | null; subject?: string | null; title: string; url?: string | null };
 
 export const KIND_LABEL: Record<EventKind, string> = {
   funding: "Funding", leadership: "Leadership change", event: "Hosting an event", competitor_event: "Competitor event", news: "In the news", hiring: "Hiring",
   tool: "Uses a tool you track", competitor_tool: "Uses a competitor", deal: "HubSpot deal", lead: "Inbound lead", people: "People found", mention: "Mentioned in the news",
-  contact: "HubSpot contact changed", job_change: "Job change", tool_change: "Tool change on their website", pain: "Job posts mention your problem", visit: "Visited your website", market: "Market signal",
+  contact: "HubSpot contact changed", job_change: "Job change", activity: "Their activity", team: "Their team", tool_change: "Tool change on their website", pain: "Job posts mention your problem", visit: "Visited your website", market: "Market signal",
 };
 export const MAX_WATCHED = { companies: 40, people: 40 };
 
@@ -129,7 +129,7 @@ export async function hubspotVisits(): Promise<number> {
 
 /** Followed people mentioned in the news (free; up to `limit` people a run, the longest-unchecked first). */
 export async function personMentions(limit = 8): Promise<number> {
-  const { data: people } = await sb.from("cp_people").select("id,first_name,last_name,account_id,watch_checked_at,watch_notify").not("watched_at", "is", null).neq("watch_notify", "off")
+  const { data: people } = await sb.from("cp_people").select("id,first_name,last_name,account_id,watch_checked_at,watch_notify").not("watched_at", "is", null).eq("preview", false).neq("watch_notify", "off")
     .order("watch_checked_at", { ascending: true, nullsFirst: true }).limit(limit);
   if (!people?.length) return 0;
   const { data: accts } = await sb.from("cp_accounts").select("id,name").in("id", people.map((p) => p.account_id));

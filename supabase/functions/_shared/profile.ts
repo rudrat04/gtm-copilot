@@ -16,7 +16,7 @@ export const WATCH_LIMITS: Record<string, [number, number]> = {
   dealStuck: [3, 180], thinPipeline: [1, 50], mismatch: [0, 0], drift: [1, 90], system: [0, 0],
 };
 export type WatchCheck = { on: boolean; n: number };
-export type Watch = { urgent: boolean; todoForUrgent: boolean; alertsPerDay: number; alertSearches: number; alertReserve: number; autoFix: boolean; titleCheck: boolean; watchlistAlerts: boolean; todayCap: number; digestFlags: boolean; checks: Record<string, WatchCheck> };
+export type Watch = { urgent: boolean; todoForUrgent: boolean; alertsPerDay: number; alertSearches: number; alertReserve: number; autoFix: boolean; titleCheck: boolean; activityPerDay: number; watchlistAlerts: boolean; todayCap: number; digestFlags: boolean; checks: Record<string, WatchCheck> };
 
 /**
  * One kind of buyer. The list order is the priority (first = the person we most want), which sets `weight` (100 down to 60).
@@ -167,7 +167,7 @@ function cleanWatch(raw: unknown): Watch {
   }
   return {
     urgent: w.urgent !== false, todoForUrgent: w.todoForUrgent !== false, checks,
-    alertsPerDay: num(w.alertsPerDay, DEFAULT.watch.alertsPerDay, 0, 10), alertSearches: num(w.alertSearches, DEFAULT.watch.alertSearches, 0, 10), alertReserve: num(w.alertReserve, DEFAULT.watch.alertReserve, 0, 45), autoFix: w.autoFix === true, titleCheck: w.titleCheck === true, watchlistAlerts: w.watchlistAlerts !== false,
+    alertsPerDay: num(w.alertsPerDay, DEFAULT.watch.alertsPerDay, 0, 10), alertSearches: num(w.alertSearches, DEFAULT.watch.alertSearches, 0, 10), alertReserve: num(w.alertReserve, DEFAULT.watch.alertReserve, 0, 45), autoFix: w.autoFix === true, titleCheck: w.titleCheck === true, activityPerDay: num(w.activityPerDay, DEFAULT.watch.activityPerDay, 0, 6), watchlistAlerts: w.watchlistAlerts !== false,
     todayCap: num(w.todayCap, DEFAULT.watch.todayCap, 3, 15), digestFlags: w.digestFlags !== false,
   };
 }

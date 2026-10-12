@@ -17,6 +17,7 @@ export type Contact = {
   pushed: boolean;   // already in HubSpot
   known: boolean;    // a HubSpot contact we did not add: someone may already be talking to them
   watched: boolean;  // the owner follows this person
+  preview: boolean;  // listed for free, not revealed yet: no email until the owner spends a credit
   note: string | null; // why: "Already in your HubSpot..."
 };
 
@@ -27,7 +28,7 @@ export async function contactsFor(accountIds: string[], admin: boolean, limit = 
   const out = new Map<string, Contact[]>();
   if (!accountIds.length) return out;
   const { data } = await sb.from("cp_people")
-    .select("id,account_id,first_name,last_name,title,persona,email,email_status,relevance,email_confidence,email_revealed,hubspot_contact_id,hs_status,hs_note,watched_at")
+    .select("id,account_id,first_name,last_name,title,persona,email,email_status,relevance,email_confidence,email_revealed,hubspot_contact_id,hs_status,hs_note,watched_at,preview")
     .in("account_id", accountIds).gte("relevance", 50) // individual contributors are not the buyer
     .or("hs_status.is.null,hs_status.eq.known") // never suggest someone who opted out or whose address bounced
     .order("relevance", { ascending: false }).order("email_confidence", { ascending: false, nullsFirst: false });
@@ -54,6 +55,7 @@ export async function contactsFor(accountIds: string[], admin: boolean, limit = 
       pushed: !!p.hubspot_contact_id,
       known: p.hs_status === "known",
       watched: !!p.watched_at,
+      preview: !!p.preview,
       note: p.hs_note ?? null,
     })));
   }

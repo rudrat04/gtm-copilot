@@ -10,6 +10,8 @@ import { firmoLine } from "./firmo.ts";
 import { contactsFor } from "./contacts.ts";
 import { autoSearch, searchStates } from "./autosearch.ts";
 import { aiMaps, aiRefresh, aiScoreCompany } from "./aiscore.ts";
+import { personActivity, teamEvents } from "./peopleactivity.ts";
+import { peekCandidates, peekPeople } from "./peoplepreview.ts";
 import { industryCheckMany, needIndustry } from "./industry.ts";
 import { fitState } from "./score.ts";
 import { autoRefreshPredictLeads, storedPlSignals } from "./predictleads.ts";
@@ -68,6 +70,7 @@ export async function lightCheck(admin: boolean) {
       );
       newSignals += fresh.length;
     }
+    if (fresh.length) await teamEvents(a.id, fresh).catch(() => 0); // what concerns the department of a person you follow
     if (a.watched_at) for (const ev of eventsFromSignals(a, fresh)) await recordEvent(ev); // every movement on a followed company is kept for the Watchlist tab
     const score = scoreAccount([...signals, ...(await storedPlSignals(a.id)), ...(hiringUnknown ? await storedHiringSignals(a.id) : [])], a).score; // PredictLeads events stored earlier still count
     if (score !== a.priority_score) await sb.from("cp_accounts").update({ priority_score: score }).eq("id", a.id);
@@ -149,7 +152,7 @@ export async function lightCheck(admin: boolean) {
   }
 
   // Movements on the Watchlist: events a hot alert already covered are marked as sent; then the other checks and one grouped email.
-  const moved = { competitor: 0, market: 0, visits: 0, mentions: 0, contacts: 0, jobs: 0, emailed: 0 };
+  const moved = { activity: 0, competitor: 0, market: 0, visits: 0, mentions: 0, contacts: 0, jobs: 0, emailed: 0 };
   try {
     if (alertedIds.length) await sb.from("cp_watch_events").update({ emailed_at: new Date().toISOString() }).in("account_id", alertedIds).is("emailed_at", null);
     moved.competitor = await competitorEvents();
@@ -158,6 +161,7 @@ export async function lightCheck(admin: boolean) {
     moved.mentions = await personMentions(8);
     moved.contacts = await watchedPeopleHubspot();
     moved.jobs = await titleRecheck(2);
+    moved.activity = await personActivity();
     moved.emailed = await sendMovementEmail();
   } catch (e) { await log("warn", "movements_failed", { message: (e as Error).message }); }
 
@@ -168,6 +172,8 @@ export async function lightCheck(admin: boolean) {
     judged.companies = r.companies; judged.people = r.people;
     judged.industries = (await industryCheckMany(await needIndustry(8))).set;
   } catch (e) { await log("warn", "ai_refresh_failed", { message: (e as Error).message }); }
+
+  try { await peekPeople(await peekCandidates(30)); } catch (e) { await log("warn", "people_peek_daily_failed", { message: (e as Error).message }); } // free: who works at the companies worth working that have nobody listed
 
   await log("info", "watch_done", { detail: { accounts: accounts.length, new_signals: newSignals, candidates: candidates.length, alerted, failed, predictleads: pl } });
   return json({ accounts: accounts.length, new_signals: newSignals, alert_candidates: candidates.length, alerted, failed, predictleads: pl, movements: moved, ai: judged });
