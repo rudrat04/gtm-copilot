@@ -240,6 +240,16 @@
   .wrow .wmain { flex: 1 1 320px; min-width: 0; } .wrow .wmain b { font-size: 16px; } .wrow .wside { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .wrow .dd { width: 150px; }
   .wev { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); } .wev:first-child { border-top: 0; } .wev .dot { width: 10px; height: 10px; border-radius: 99px; margin-top: 7px; background: transparent; flex: none; } .wev.unseen .dot { background: var(--accent); }
   .wev .wt { font-size: 15px; } .wev .wm { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .hdr { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; } kbd { font: inherit; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; margin-left: 4px; }
+  .cname { color: inherit; text-decoration: none; } .cname:hover { text-decoration: underline; text-decoration-color: var(--accent); }
+  a.clink { color: inherit; text-decoration: none; } a.clink:hover { text-decoration: underline; }
+  #convseg { margin-bottom: 14px; display: flex; gap: 4px; } #convseg i { font-style: normal; background: var(--accent); color: #fff; border-radius: 99px; font-size: 11px; padding: 1px 7px; margin-left: 6px; }
+  .credits { text-decoration: none; font-size: 13px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--ink); } .credits.low { color: #8a5a00; border-color: #d9b24a; background: #fbf1d3; } .credits.out { color: #a3261c; border-color: #e3a29d; background: #fbe9e7; }
+  .subnav { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 14px; } .subnav button { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 99px; padding: 6px 14px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; } .subnav button[aria-selected="true"] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+  .check { display: flex; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); } .check:first-of-type { border-top: 0; } .check .tick { width: 24px; height: 24px; border-radius: 99px; border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; flex: none; } .check.done .tick { background: var(--green, #1f7a3d); border-color: var(--green, #1f7a3d); } .check .ct { flex: 1; }
+  .pal-bg { position: fixed; inset: 0; z-index: 85; background: rgba(40, 35, 27, .45); display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; } .pal { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); width: 100%; max-width: 560px; overflow: hidden; }
+  .pal input { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid var(--line); padding: 16px 18px; font: inherit; font-size: 17px; color: var(--ink); background: transparent; outline: 0; } .pal-list { max-height: 50vh; overflow: auto; padding: 6px; }
+  .pal-opt { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; cursor: pointer; font-size: 15px; } .pal-opt.act, .pal-opt:hover { background: var(--raised); } .pal-opt small { color: var(--muted); font-size: 12.5px; } .pal-sec { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 10px 12px 4px; }
   .modal-bg { position: fixed; inset: 0; z-index: 80; background: rgba(40, 35, 27, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
   .modal { background: var(--surface); border: 1px solid var(--line, #e3dcc8); border-radius: 14px; box-shadow: var(--shadow); max-width: 440px; width: 100%; padding: 20px 22px; }
   .modal h3 { margin: 0 0 8px; font-size: 17px; }
@@ -278,16 +288,14 @@
 <main>
   <header class="top">
     <div class="brand"><h1>F1rstword</h1><p>Know who to talk to, and when.</p></div>
-    <div class="mode" id="mode"></div>
+    <div class="hdr"><button class="btn ghost sm" id="kbar" type="button" title="Search companies and jump anywhere (Ctrl or Cmd + K)">⌕ Search <kbd>⌘K</kbd></button><div class="mode" id="mode"></div></div>
   </header>
 
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="today">Today<span class="count" id="c-today" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="accounts">Accounts<span class="count" id="c-accounts" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="watchlist">Watchlist<span class="count" id="c-watchlist" hidden></span></button>
-    <button role="tab" aria-selected="false" data-tab="inbound">Inbound<span class="count" id="c-inbound" hidden></span></button>
-    <button role="tab" aria-selected="false" data-tab="meetings">Meetings<span class="count" id="c-meetings" hidden></span></button>
-    <button role="tab" aria-selected="false" data-tab="research">Research</button>
+    <button role="tab" aria-selected="false" data-tab="conversations">Conversations<span class="count" id="c-conv" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="setup">Setup</button>
   </nav>
 
@@ -306,9 +314,13 @@
 
   <section id="watchlist" hidden><div id="wlbody" aria-live="polite"></div></section>
 
-  <section id="inbound" hidden><div id="inbody" aria-live="polite"></div></section>
+  <section id="company" hidden><div id="cobody" aria-live="polite"></div></section>
 
-  <section id="meetings" hidden><div id="meetbody" aria-live="polite"></div></section>
+  <section id="conversations" hidden>
+    <div class="seg" id="convseg" role="tablist" aria-label="Conversations"><button role="tab" aria-selected="true" class="on" data-csub="leads">Inbound leads<i id="c-inbound" hidden></i></button><button role="tab" aria-selected="false" data-csub="meetings">Meetings<i id="c-meetings" hidden></i></button></div>
+    <section id="inbound" hidden><div id="inbody" aria-live="polite"></div></section>
+    <section id="meetings" hidden><div id="meetbody" aria-live="polite"></div></section>
+  </section>
 
   <section id="setup" hidden><div id="setupbody"></div></section>
 </main>
@@ -405,7 +417,7 @@ function drawMode(admin, credits) {
   const el = $("mode");
   el.className = `mode${admin ? " owner" : ""}`;
   el.innerHTML = admin
-    ? `<span class="dot"></span>Owner${credits ? ` · ${credits.remaining} of ${credits.available} credits left` : ""}<button class="btn ghost sm" id="lock">Lock</button>`
+    ? `<span class="dot"></span>Owner${credits ? ` <a class="credits${credits.remaining < 8 ? " out" : credits.remaining < 20 ? " low" : ""}" href="#/setup/conn" title="Search credits left this month. Click for the Health panel">${credits.remaining} of ${credits.available} credits left</a>` : ""}<button class="btn ghost sm" id="lock">Lock</button>`
     : `<span class="dot"></span>Demo mode<button class="btn ghost sm" id="unlock">Unlock</button>`;
   if (admin) $("lock").onclick = () => { adminKey = ""; try { localStorage.removeItem("cp_admin"); } catch {} refreshMode(); reloadVisible(); };
   else $("unlock").onclick = () => {
@@ -423,7 +435,7 @@ async function refreshMode() {
   try { const d = await api("people", { action: "status" }); drawMode(!!d.admin, d.credits); return !!d.admin; }
   catch { drawMode(false); return false; }
 }
-function reloadVisible() { for (const [id, fn] of [["today", loadToday], ["accounts", loadAccounts], ["inbound", loadInbound], ["meetings", loadMeetings]]) if (!$(id).hidden) fn(); }
+function reloadVisible() { showView(CUR, { push: false, force: true }); }
 
 /* ============ lifecycle: what happened with each account ============ */
 function lifeLine(a) {
@@ -479,8 +491,9 @@ function tCard(i) {
   }
   const [c, c2] = i.contacts || [];
   const fu = i.type === "follow_up";
-  const title = c ? `${fu ? "Follow up with " : ""}${esc(c.name)}` : esc(a.name);
-  const sub = c ? `${esc(c.title)} at <b>${esc(a.name)}</b>` : esc(a.name);
+  const co = `<a class="clink" href="#/company/${esc(a.id)}">${esc(a.name)}</a>`;
+  const title = c ? `${fu ? "Follow up with " : ""}${esc(c.name)}` : co;
+  const sub = c ? `${esc(c.title)} at <b>${co}</b>` : co;
   const mail = c?.email ? (c.email.includes("***") ? `<span>${esc(c.email)}</span>` : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : "";
   const facts = fitLine(a.fit_state, a.firmo);
   const whoWhy = c ? `<div class="meta" style="margin-top:4px">${c.persona ? `Matches your "${esc(c.persona)}" buyer type.` : "A relevant senior contact."}${c.known ? ` <b class="warnx">${esc(c.note || "Already in your HubSpot.")}</b>` : ""}</div>` : "";
@@ -502,11 +515,12 @@ function tCard(i) {
 /** When Today is empty, say what is holding things back, each with where to fix it. */
 function emptyWhy(d) {
   const b = d.blocked || {}, n = (d.needs || []).length, bits = [];
-  if (n) bits.push(`<b>${n}</b> strong compan${n > 1 ? "ies have" : "y has"} a fresh signal but no contact yet. Use <b>Find people</b> in Accounts.`);
-  if (b.below_fit) bits.push(`<b>${b.below_fit}</b> with a fresh signal ${b.below_fit > 1 ? "are" : "is"} below your fit bar. Change it in <b>Setup</b>, "Which companies to show".`);
-  if (b.low_score) bits.push(`<b>${b.low_score}</b> with a fresh signal score under your minimum. Lower it in <b>Setup</b>.`);
+  if (n) bits.push(`<b>${n}</b> strong compan${n > 1 ? "ies have" : "y has"} a fresh signal but no contact yet. <a href="#/accounts" data-do="bulkfind">Find people for the top companies</a>.`);
+  if (b.below_fit) bits.push(`<b>${b.below_fit}</b> with a fresh signal ${b.below_fit > 1 ? "are" : "is"} below your fit bar. Change it in <a href="#/setup/fit">Setup, "Which companies to show"</a>.`);
+  if (b.low_score) bits.push(`<b>${b.low_score}</b> with a fresh signal score under your minimum. Lower it in <a href="#/setup/fit">Setup</a>.`);
   if (b.parked) bits.push(`<b>${b.parked}</b> with a fresh signal ${b.parked > 1 ? "are" : "is"} parked (not now or snoozed).`);
-  return bits.length ? `<ul class="whylist">${bits.map((x) => `<li>${x}</li>`).join("")}</ul>` : "";
+  const next = `<div class="actions" style="justify-content:center;margin-top:14px"><a class="btn ghost sm" href="#/accounts">Open Accounts</a><button type="button" class="btn ghost sm" data-do="discover">Find new companies</button><button type="button" class="btn ghost sm" data-do="follow">Follow a company</button></div>`;
+  return (bits.length ? `<ul class="whylist">${bits.map((x) => `<li>${x}</li>`).join("")}</ul>` : "") + next;
 }
 
 async function loadToday() {
@@ -611,7 +625,7 @@ const fact = (label, html, unknown) => `<div class="fact"><dt>${label}</dt><dd>$
 function aFacts(a) {
   const f = a.facts, none = f.checked ? "Unknown" : "Not checked yet";
   const stage = f.stage ? `${esc(f.stage)}${f.raised ? ` <small>· ${esc(f.raised)} raised</small>` : ""}` : f.raised ? `${esc(f.raised)} raised <small>· round type unknown</small>` : "";
-  const good = new Set(ACC.good_tools || []);
+  const good = new Set((ACC && ACC.good_tools) || (CO && CO.good_tools) || []);
   const tools = f.tools.length ? `<div class="toolchips">${f.tools.map((t) => `<span${good.has(t.replace(/[^a-z0-9]/g, "")) ? ' class="good"' : ""}>${esc(t)}</span>`).join("")}${f.more_tools ? `<span>+${f.more_tools}</span>` : ""}</div>`
     : f.tech_count ? `<span class="unk">No sales or marketing tools found (${f.tech_count} technical tools only)</span>` : "";
   const motion = f.motion ? { sales_led: "Sales-led (demos)", self_serve: "Self-serve (free start)", both: "Both" }[f.motion] : "";
@@ -633,7 +647,7 @@ function aCard(a) {
   const contact = contactLine(a);
   return `<article class="card acard" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}" data-watched="${a.watched ? 1 : 0}">
     <div class="ahead"><div>
-      <h3 class="title">${esc(a.name)}<a class="domain" href="https://${esc(a.domain)}" target="_blank" rel="noopener noreferrer">${esc(a.domain)}</a></h3>
+      <h3 class="title"><a class="cname" href="#/company/${esc(a.id)}">${esc(a.name)}</a><a class="domain" href="https://${esc(a.domain)}" target="_blank" rel="noopener noreferrer">${esc(a.domain)}</a></h3>
       <p class="what">${a.segment ? esc(a.segment) : `<span class="unk">No description yet</span>`}</p>
     </div>
     <div class="tags">${a.removed ? "" : watchBtn("company", a.id, a.watched)}<span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
@@ -671,7 +685,8 @@ function drawAccounts() {
       <div class="fbar"><span>Showing <b>${list.length}</b> of ${base.length} in ${esc(view[1])}</span>
         <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin && AF.view === "low" && list.length ? `<button class="btn ghost sm" data-bulkremove title="Removes low-fit companies nobody has touched">Remove all low fit</button>` : ""}${d.admin && unchecked ? `<button class="btn ghost sm" data-bulkfacts title="Looks up company size and stage. 0.2 search credit each">Check size and stage (${unchecked})</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
     </div>`;
-  $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${filtersOn() ? "No companies match these filters." : AF.view === "open" ? "Nothing to work right now." : "No companies in this view."}${filtersOn() ? `<br><button class="btn link" data-clear>Clear filters</button>` : ""}</div>`;
+  $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${filtersOn() ? "No companies match these filters." : AF.view === "open" ? "Nothing to work right now." : "No companies in this view."}${filtersOn() ? `<br><button class="btn link" data-clear>Clear filters</button>` : `<div class="actions" style="justify-content:center;margin-top:12px"><button type="button" class="btn ghost sm" data-do="discover">Find new companies</button><button type="button" class="btn ghost sm" data-do="follow">Follow a company</button></div>`}</div>`;
+  if (PENDING_CLICK) { const el = document.querySelector(PENDING_CLICK); PENDING_CLICK = null; el?.click(); }
   const s = $("asearch"); if (AF.q && document.activeElement?.id === "asearch") { s.focus(); s.setSelectionRange(AF.q.length, AF.q.length); }
 }
 
@@ -859,7 +874,7 @@ $("tlist").addEventListener("click", async (e) => {
     try { const r = await api("queue", { action: "flag_action", key, do: fb.dataset.flagdo, days: 3 }); say(r.mode === "dry_run" ? r.message : fb.dataset.flagdo === "dismiss" ? "Dismissed." : "Snoozed for 3 days."); if (r.mode !== "dry_run") loadToday(); else fb.disabled = false; }
     catch (err) { say(err.message); fb.disabled = false; }
     return;
-  } if (e.target.closest("[data-goto-meetings]")) document.querySelector('nav.tabs [data-tab="meetings"]').click(); if (e.target.closest("[data-goto-inbound]")) document.querySelector('nav.tabs [data-tab="inbound"]').click(); if (e.target.closest("[data-goto-needs]")) { AF = { ...AF_DEFAULT, view: "open", contact: "none" }; saveAF(); document.querySelector('nav.tabs [data-tab="accounts"]').click(); } });
+  } if (e.target.closest("[data-goto-meetings]")) showView({ view: "conversations", sub: "meetings" }); if (e.target.closest("[data-goto-inbound]")) showView({ view: "conversations", sub: "leads" }); if (e.target.closest("[data-goto-needs]")) { AF = { ...AF_DEFAULT, view: "open", contact: "none" }; saveAF(); showView({ view: "accounts" }); } });
 wireCards($("alist"), () => loadAccounts(true));
 
 // "Show more signals" works everywhere
@@ -1193,7 +1208,7 @@ async function handleLossLink() {
   const m = /^#loss=([0-9a-f-]+)&r=([a-z_]+)&s=([0-9a-f]+)$/.exec(location.hash); if (!m) return false;
   history.replaceState(null, "", location.pathname);
   const [, account_id, reason, sig] = m;
-  document.querySelector('nav.tabs [data-tab="accounts"]').click();
+  showView({ view: "accounts" });
   try {
     const r = await api("queue", { action: "loss_reason", account_id, reason, sig });
     say(r.mode === "dry_run" ? r.message : `Recorded: ${r.label}.${r.hubspot ? " HubSpot deal updated." : ""}`);
@@ -1206,7 +1221,7 @@ async function handleDebriefLink() {
   const m = /^#debrief=([0-9a-f-]+)&o=([a-z_]+)&s=([0-9a-f]+)$/.exec(location.hash); if (!m) return false;
   history.replaceState(null, "", location.pathname);
   const [, id, outcome, sig] = m;
-  document.querySelector('nav.tabs [data-tab="meetings"]').click();
+  showView({ view: "conversations", sub: "meetings" });
   sigPending = { id, outcome, sig };
   try {
     const r = await api("queue", { action: "debrief", meeting_id: id, outcome, sig });
@@ -1261,9 +1276,47 @@ const WATCH_ROWS = [
   ["drift", "HubSpot columns are out of date or the owner is missing; stale after", "days", ""],
   ["system", "A scheduled job failed or is running late", "", ""],
 ];
+/* Setup is long, so it is split into sections with their own addresses (#/setup/alerts) and a short checklist for a first run. */
+const SETUP_SECS = [["start", "Getting started"], ["sell", "What you sell"], ["look", "Who we look for"], ["contact", "Who we contact"], ["signals", "Signals"], ["fit", "Fit and score"], ["alerts", "Alerts and email"], ["find", "Finding companies"], ["conn", "HubSpot, name and health"]];
+const SEC_OF = [["What you sell", "sell"], ["Who we look for", "look"], ["Who we contact", "contact"], ["What counts as a buying signal", "signals"], ["Which companies to show", "fit"], ["Alerts, daily email", "alerts"], ["Finding new companies", "find"], ["Credits and costs", "find"], ["HubSpot columns", "conn"], ["Name and logo", "conn"], ["Health", "conn"]];
+function setupSteps() {
+  const d = SETUP;
+  return [
+    ["Describe what you sell", (P.product.description || "").trim().length >= 20, "sell", "One sentence, then press Suggest my settings."],
+    ["Choose your buyers and signals", P.personas.length > 0 && (P.signalRules.length > 0 || P.competitors.length > 0), "contact", "Who to contact, and what counts as a reason to reach out."],
+    ["Find companies", !!d.discovery.last, "find", "Run discovery to pull in companies from Hacker News."],
+    ["Check size and stage", d.unknown_fit === 0, "find", d.unknown_fit ? `${d.unknown_fit} companies still need it (0.2 credit each).` : "All companies have it."],
+  ];
+}
+const setupDone = () => setupSteps().every(([, ok]) => ok);
+function setupNavHtml() { return `<nav class="subnav" data-sec="nav" aria-label="Setup sections">${SETUP_SECS.filter(([k]) => k !== "start" || !setupDone()).map(([k, l]) => `<button type="button" data-ssec="${k}" aria-selected="false">${esc(l)}</button>`).join("")}</nav>`; }
+function setupChecklistHtml() {
+  if (setupDone()) return "";
+  return `<article class="card" data-sec="start"><p class="label">Getting started</p><p class="help" style="margin:0 0 8px">Four steps and F1rstword has everything it needs. Each one takes a minute.</p>
+    ${setupSteps().map(([t, ok, sec, hint], i) => `<div class="check${ok ? " done" : ""}"><span class="tick">${ok ? "✓" : i + 1}</span><div class="ct"><b>${esc(t)}</b><div class="meta">${esc(hint)}</div></div>${ok ? "" : `<a class="btn ghost sm" href="#/setup/${sec}">Go</a>`}</div>`).join("")}
+    <p class="meta" style="margin:10px 0 0">Then open <a href="#/accounts">Accounts</a> to see who fits and find the right people.</p></article>`;
+}
+function applySetupSection() {
+  const box = $("setupbody"); if (!box || !SETUP) return;
+  const want = CUR.sub;
+  const sub = SETUP_SECS.some(([k]) => k === want) && (want !== "start" || !setupDone()) ? want : (setupDone() ? "sell" : "start");
+  for (const el of [...box.children]) {
+    let sec = el.dataset.sec;
+    if (!sec) {
+      const lab = el.querySelector?.("p.label")?.textContent || "";
+      const hit = SEC_OF.find(([t]) => lab.startsWith(t));
+      sec = hit ? hit[1] : el.matches("details.how") ? "fit" : "*";
+      el.dataset.sec = sec;
+    }
+    el.style.display = sec === "*" || sec === "nav" || sec === sub ? "" : "none";
+  }
+  box.querySelectorAll("[data-ssec]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.ssec === sub)));
+}
+$("setupbody").addEventListener("click", (e) => { const b = e.target.closest("[data-ssec]"); if (b) showView({ view: "setup", sub: b.dataset.ssec }); });
+
 function drawSetup() {
   const d = SETUP, own = !!d.admin;
-  $("setupbody").innerHTML = `
+  $("setupbody").innerHTML = `${setupNavHtml()}${setupChecklistHtml()}
     <article class="card"><p class="label">What you sell</p>
       <p class="help" style="margin:0 0 10px">Describe your product or service in a sentence or two, and add your website if you like. One click turns it into suggestions for everything below, which you can edit. You decide what is saved.</p>
       <div class="field"><label for="pdesc">What do you sell, and to whom?</label><textarea id="pdesc" class="big" maxlength="1500" data-text="product.description" placeholder="Example: A tool that cleans up CRM data for sales teams at B2B software companies with 20 to 200 people.">${esc(P.product.description)}</textarea></div>
@@ -1385,6 +1438,7 @@ function drawSetup() {
 
     <details class="how"><summary>How scoring and signals work</summary><div id="icpbody"></div></details>`;
   msDrawAll();
+  applySetupSection();
 }
 
 const LV = { ok: ["good", "OK"], warn: ["warn", "Check"], bad: ["bad", "Problem"] };
@@ -1578,7 +1632,7 @@ document.addEventListener("click", async (e) => {
     const r = await api("queue", { action: "watch_toggle", [kind === "person" ? "person_id" : "account_id"]: id, on });
     if (r.mode === "dry_run") { say(r.message); return; }
     document.querySelectorAll(`[data-watch][data-kind="${kind}"][data-id="${id}"]`).forEach((x) => { x.dataset.on = on ? "1" : "0"; x.classList.toggle("on", on); x.textContent = on ? "★ Watching" : "☆ Watch"; });
-    ACC = null; WL = null; say(on ? "Added to your Watchlist." : "Removed from your Watchlist.", on ? { label: "Open", run: () => document.querySelector('[data-tab="watchlist"]').click() } : undefined);
+    ACC = null; WL = null; say(on ? "Added to your Watchlist." : "Removed from your Watchlist.", on ? { label: "Open", run: () => showView({ view: "watchlist" }) } : undefined);
     if (!$("watchlist").hidden) loadWatchlist(true);
   } catch (err) { say(err.message); } finally { b.disabled = false; }
 });
@@ -1593,13 +1647,13 @@ function drawWatchlist() {
   const lastLine = (l) => (l ? `<div class="meta">Last: ${esc(l.label)}. ${esc(l.title.slice(0, 120))} · ${esc(ago(l.detected_at))}</div>` : `<div class="meta">Nothing has moved yet.</div>`);
   let body = "";
   if (view === "moved") {
-    body = d.events.length ? d.events.map((e) => `<div class="wev${e.unseen ? " unseen" : ""}"><span class="dot"></span><div><div class="wt"><b>${esc(e.who)}</b>${e.person ? ` · ${esc(e.person)}` : ""} <span class="badge ${e.importance === "big" ? "accent" : ""}">${esc(e.label)}</span></div>
+    body = d.events.length ? d.events.map((e) => `<div class="wev${e.unseen ? " unseen" : ""}"><span class="dot"></span><div><div class="wt"><b>${e.company_id ? `<a class="clink" href="#/company/${esc(e.company_id)}">${esc(e.who)}</a>` : esc(e.who)}</b>${e.person ? ` · ${esc(e.person)}` : ""} <span class="badge ${e.importance === "big" ? "accent" : ""}">${esc(e.label)}</span></div>
       <div class="wt">${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a>` : esc(e.title)}</div><div class="wm">${esc(ago(e.detected_at))}</div></div></div>`).join("")
       : `<p class="meta" style="margin:0">Nothing has moved yet. Follow a company or a person and their news, hiring, events, HubSpot changes and more show up here.</p>`;
   } else if (view === "companies") {
-    body = d.companies.length ? d.companies.map((c) => `<div class="wrow"><div class="wmain"><b>${esc(c.name)}</b> <span class="meta">${esc(c.domain)}</span> <span class="badge ${c.heat}">${esc(HEAT[c.heat])}</span>${c.unseen ? ` <span class="badge accent">${c.unseen} new</span>` : ""}${lastLine(c.last)}</div>
+    body = d.companies.length ? d.companies.map((c) => `<div class="wrow"><div class="wmain"><b><a class="clink" href="#/company/${esc(c.id)}">${esc(c.name)}</a></b> <span class="meta">${esc(c.domain)}</span> <span class="badge ${c.heat}">${esc(HEAT[c.heat])}</span>${c.unseen ? ` <span class="badge accent">${c.unseen} new</span>` : ""}${lastLine(c.last)}</div>
       <div class="wside">${own ? dd("company", c.id, c.notify) : ""}${watchBtn("company", c.id, true)}</div></div>`).join("")
-      : `<p class="meta" style="margin:0">No companies yet. Use "☆ Watch" on any company, or follow one by website above.</p>`;
+      : `<p class="meta" style="margin:0">No companies yet. Use "☆ Watch" on any company in <a href="#/accounts">Accounts</a>, or follow one by website above.</p>`;
   } else {
     body = d.people.length ? d.people.map((p) => `<div class="wrow"><div class="wmain"><b>${esc(p.name)}</b> <span class="meta">${esc(p.title)} at ${esc(p.company)}</span>${p.persona ? ` <span class="ptag">${esc(p.persona)}</span>` : ""}${p.unseen ? ` <span class="badge accent">${p.unseen} new</span>` : ""}${lastLine(p.last)}</div>
       <div class="wside">${own ? dd("person", p.id, p.notify) : ""}${watchBtn("person", p.id, true)}</div></div>`).join("")
@@ -1718,19 +1772,130 @@ function logoFromFile(file) {
   });
 }
 
-/* ============ tabs and start ============ */
-document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListener("click", () => {
-  document.querySelectorAll("nav.tabs [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  for (const t of ["today", "research", "accounts", "watchlist", "inbound", "meetings", "setup"]) $(t).hidden = b.dataset.tab !== t;
-  ({ today: loadToday, accounts: loadAccounts, watchlist: loadWatchlist, inbound: loadInbound, meetings: loadMeetings, setup: loadSetup }[b.dataset.tab] || (() => {}))();
-}));
+/* ============ navigation: every view has its own address, so Back, bookmarks and email links work ============ */
+const SECTIONS = ["today", "accounts", "company", "research", "watchlist", "conversations", "setup"];
+const NAV_OF = { today: "today", accounts: "accounts", company: "accounts", research: "accounts", watchlist: "watchlist", conversations: "conversations", setup: "setup" };
+let CUR = { view: "today" }, CO = null, PENDING_CLICK = null;
+function parseRoute(h = location.hash) {
+  const [v, a] = h.replace(/^#\/?/, "").split("?")[0].split("/");
+  if (v === "inbound") return { view: "conversations", sub: "leads" };
+  if (v === "meetings") return { view: "conversations", sub: "meetings" };
+  if (v === "company" && a) return { view: "company", id: a };
+  if (v === "conversations") return { view: v, sub: a === "meetings" ? "meetings" : "leads" };
+  if (v === "setup") return { view: v, sub: a || null };
+  if (["today", "accounts", "watchlist", "research"].includes(v)) return { view: v };
+  return { view: "today" };
+}
+const routeHash = (r) => r.view === "company" ? `#/company/${r.id}` : r.view === "conversations" ? `#/conversations/${r.sub === "meetings" ? "meetings" : "leads"}` : r.view === "setup" ? (r.sub ? `#/setup/${r.sub}` : "#/setup") : `#/${r.view}`;
+let lastView = null;
+function showView(r, { push = true, force = false } = {}) {
+  const view = SECTIONS.includes(r.view) ? r.view : "today";
+  const next = { ...r, view };
+  const sameSetup = view === "setup" && lastView === "setup" && !force; // moving between Setup sections does not reload it
+  CUR = next;
+  document.querySelectorAll("nav.tabs [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.tab === NAV_OF[view])));
+  for (const t of SECTIONS) $(t).hidden = t !== view;
+  const h = routeHash(next);
+  if (location.hash !== h) (push ? history.pushState : history.replaceState).call(history, null, "", h);
+  if (lastView !== view || force) window.scrollTo(0, 0);
+  lastView = view;
+  if (view === "conversations") {
+    const sub = next.sub === "meetings" ? "meetings" : "leads";
+    $("inbound").hidden = sub !== "leads"; $("meetings").hidden = sub !== "meetings";
+    document.querySelectorAll("#convseg [data-csub]").forEach((x) => { x.classList.toggle("on", x.dataset.csub === sub); x.setAttribute("aria-selected", String(x.dataset.csub === sub)); });
+    (sub === "leads" ? loadInbound : loadMeetings)();
+  } else if (view === "company") loadCompany(next.id);
+  else if (view === "setup") { if (sameSetup && SETUP) applySetupSection(); else loadSetup(); }
+  else if (view === "research") { if (next.domain) { $("domain").value = next.domain; run(next.domain); } }
+  else ({ today: loadToday, accounts: loadAccounts, watchlist: loadWatchlist }[view] || (() => {}))();
+}
+document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListener("click", () => showView({ view: b.dataset.tab, sub: b.dataset.tab === "conversations" ? CUR.sub : null })));
+document.querySelectorAll("#convseg [data-csub]").forEach((b) => b.addEventListener("click", () => showView({ view: "conversations", sub: b.dataset.csub })));
+window.addEventListener("hashchange", () => { if (/^#(debrief|loss)=/.test(location.hash)) return; const r = parseRoute(); if (routeHash(r) !== routeHash(CUR) || r.view !== CUR.view) showView(r, { push: false }); });
+// "Check size", "Find people" and similar actions can be started from other views: go there, then press the button once it exists.
+document.addEventListener("click", (e) => {
+  const d = e.target.closest("[data-do]"); if (!d) return;
+  const what = d.dataset.do;
+  if (what === "bulkfind" || what === "bulkfacts") { PENDING_CLICK = what === "bulkfind" ? "[data-bulkfind]" : "[data-bulkfacts]"; showView({ view: "accounts" }); }
+  else if (what === "discover") showView({ view: "setup", sub: "find" });
+  else if (what === "follow") { WLV = "companies"; showView({ view: "watchlist" }); setTimeout(() => { const f = document.querySelector("#wlbody details.fdet"); if (f) { f.open = true; $("wlsite")?.focus(); } }, 700); }
+});
+// Counts for the two parts of Conversations add up on the tab.
+new MutationObserver(() => { const n = Number($("c-inbound").textContent || 0) * ($("c-inbound").hidden ? 0 : 1) + Number($("c-meetings").textContent || 0) * ($("c-meetings").hidden ? 0 : 1); $("c-conv").textContent = n; $("c-conv").hidden = !n; }).observe($("convseg"), { subtree: true, childList: true, attributes: true, characterData: true });
+
+/* ============ one company on one page ============ */
+async function loadCompany(id, quiet) {
+  if (!quiet) $("cobody").innerHTML = skeleton(4);
+  try { CO = await api("queue", { action: "company", account_id: id }); if (CO.error) throw new Error(CO.error); drawCompany(); }
+  catch (e) { $("cobody").innerHTML = `<p style="margin:0 0 12px"><a href="#/accounts">← Accounts</a></p><div class="card err">${esc(e.message)}</div>`; }
+}
+function drawCompany() {
+  const d = CO, a = d.account;
+  const hist = d.history.map((h) => `<div class="wev"><span class="dot"></span><div><div class="wt">${esc(String(h.kind).replace(/_/g, " "))}${h.note ? `: ${esc(h.note)}` : ""}</div><div class="wm">${esc(ago(h.at))}</div></div></div>`).join("");
+  const ev = d.events.map((e) => `<div class="wev"><span class="dot"></span><div><div class="wt"><span class="badge ${e.importance === "big" ? "accent" : ""}">${esc(String(e.kind).replace(/_/g, " "))}</span> ${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a>` : esc(e.title)}</div><div class="wm">${esc(ago(e.detected_at))}</div></div></div>`).join("");
+  const mt = d.meetings.map((m) => `<div class="wev"><span class="dot"></span><div><div class="wt">${esc(m.title || "Meeting")}${m.outcome ? ` · ${esc(String(m.outcome).replace(/_/g, " "))}` : ""}</div><div class="wm">${esc(day(m.starts_at))}</div></div></div>`).join("");
+  $("cobody").innerHTML = `<p style="margin:0 0 12px"><a href="#/accounts" data-back>← Accounts</a></p>${aCard({ ...a, signals: d.signals.slice(0, 3) })}
+    ${d.signals.length > 3 ? `<article class="card"><p class="label">Earlier signals</p>${sigList(d.signals.slice(3), 25)}</article>` : ""}
+    ${ev ? `<article class="card"><p class="label">What moved (Watchlist)</p>${ev}</article>` : ""}
+    ${hist ? `<article class="card"><p class="label">History</p>${hist}</article>` : ""}
+    ${mt ? `<article class="card"><p class="label">Meetings</p>${mt}</article>` : ""}
+    <p class="foot">${d.hubspot_url ? `<a href="${esc(d.hubspot_url)}" target="_blank" rel="noopener noreferrer">Open in HubSpot</a> · ` : ""}<a href="https://${esc(a.domain)}" target="_blank" rel="noopener noreferrer">${esc(a.domain)}</a> · <a href="#/research" data-research="${esc(a.domain)}">Write a dossier</a></p>`;
+}
+wireCards($("cobody"), () => loadCompany(CUR.id, true));
+$("cobody").addEventListener("click", (e) => { const r = e.target.closest("[data-research]"); if (r) { e.preventDefault(); showView({ view: "research", domain: r.dataset.research }); } });
+
+/* ============ search and jump (Ctrl or Cmd + K) ============ */
+const PAL_PAGES = [["Today", { view: "today" }], ["Accounts", { view: "accounts" }], ["Watchlist", { view: "watchlist" }], ["Inbound leads", { view: "conversations", sub: "leads" }], ["Meetings", { view: "conversations", sub: "meetings" }],
+  ["Research a company", { view: "research" }], ["Setup: what you sell", { view: "setup", sub: "sell" }], ["Setup: who we look for", { view: "setup", sub: "look" }], ["Setup: who we contact", { view: "setup", sub: "contact" }], ["Setup: signals", { view: "setup", sub: "signals" }],
+  ["Setup: alerts and email", { view: "setup", sub: "alerts" }], ["Setup: finding companies and credits", { view: "setup", sub: "find" }], ["Setup: HubSpot, name and health", { view: "setup", sub: "conn" }]];
+const PAL_ACTIONS = [["Check size and stage for companies without it", () => { PENDING_CLICK = "[data-bulkfacts]"; showView({ view: "accounts" }); }], ["Find people for the top companies", () => { PENDING_CLICK = "[data-bulkfind]"; showView({ view: "accounts" }); }],
+  ["Follow a company", () => { WLV = "companies"; showView({ view: "watchlist" }); setTimeout(() => { const f = document.querySelector("#wlbody details.fdet"); if (f) { f.open = true; $("wlsite")?.focus(); } }, 700); }], ["Find new companies (run discovery)", () => showView({ view: "setup", sub: "find" })]];
+async function openPalette() {
+  if ($("pal")) return;
+  const bg = document.createElement("div"); bg.className = "pal-bg"; bg.id = "pal";
+  bg.innerHTML = `<div class="pal" role="dialog" aria-modal="true" aria-label="Search"><input id="palq" type="text" placeholder="Search a company or person, or jump to a page or action…" autocomplete="off" spellcheck="false" aria-label="Search"><div class="pal-list" id="pall"></div></div>`;
+  document.body.append(bg); const q = $("palq"); q.focus();
+  if (!ACC?.accounts) api("queue", { action: "accounts" }).then((d) => { ACC = d; render(); }).catch(() => {});
+  let items = [], act = 0;
+  const close = () => { bg.remove(); document.removeEventListener("keydown", key, true); };
+  const match = (text, words) => words.every((w) => text.toLowerCase().includes(w));
+  function render() {
+    const words = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const out = [];
+    const pages = PAL_PAGES.filter(([t]) => match(t, words)).slice(0, words.length ? 5 : 6).map(([t, r]) => ({ sec: "Go to", t, go: () => showView(r) }));
+    const acts = PAL_ACTIONS.filter(([t]) => match(t, words)).slice(0, 3).map(([t, f]) => ({ sec: "Do", t, go: f }));
+    const cos = words.length ? (ACC?.accounts || []).filter((a) => !a.removed && match(`${a.name} ${a.domain} ${a.segment || ""}`, words)).slice(0, 6).map((a) => ({ sec: "Companies", t: a.name, small: a.domain, go: () => showView({ view: "company", id: a.id }) })) : [];
+    const ppl = words.length ? (ACC?.accounts || []).flatMap((a) => (a.contacts || []).map((c) => ({ a, c }))).filter(({ a, c }) => match(`${c.name} ${c.title} ${a.name}`, words)).slice(0, 4).map(({ a, c }) => ({ sec: "People", t: c.name, small: `${c.title} at ${a.name}`, go: () => showView({ view: "company", id: a.id }) })) : [];
+    const dom = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(q.value.trim()) ? [{ sec: "Research", t: `Research ${q.value.trim().toLowerCase()}`, go: () => showView({ view: "research", domain: q.value.trim().toLowerCase() }) }] : [];
+    items = [...cos, ...ppl, ...dom, ...pages, ...acts];
+    act = Math.min(act, Math.max(0, items.length - 1));
+    let last = "";
+    $("pall").innerHTML = items.length ? items.map((it, i) => `${it.sec !== last ? `<div class="pal-sec">${esc((last = it.sec))}</div>` : ""}<div class="pal-opt${i === act ? " act" : ""}" data-i="${i}"><span>${esc(it.t)}</span>${it.small ? `<small>${esc(it.small)}</small>` : ""}</div>`).join("") : `<div class="pal-sec">Nothing matches</div>`;
+  }
+  const run = (i) => { const it = items[i]; if (!it) return; close(); it.go(); };
+  function key(e) {
+    if (e.key === "Escape") { e.preventDefault(); close(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); act = Math.min(items.length - 1, act + 1); render(); document.querySelector(".pal-opt.act")?.scrollIntoView({ block: "nearest" }); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); act = Math.max(0, act - 1); render(); document.querySelector(".pal-opt.act")?.scrollIntoView({ block: "nearest" }); }
+    else if (e.key === "Enter") { e.preventDefault(); run(act); }
+  }
+  document.addEventListener("keydown", key, true);
+  q.addEventListener("input", () => { act = 0; render(); });
+  bg.addEventListener("click", (e) => { if (e.target === bg) close(); const o = e.target.closest(".pal-opt"); if (o) run(Number(o.dataset.i)); });
+  render();
+}
+$("kbar").addEventListener("click", openPalette);
+document.addEventListener("keydown", (e) => {
+  const typing = /^(input|textarea|select)$/i.test(e.target.tagName) || e.target.isContentEditable;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); }
+  else if (e.key === "/" && !typing && !$("pal")) { e.preventDefault(); openPalette(); }
+});
 
 drawMode(false);
 refreshMode();
-loadToday();
-if (location.hash === "#watchlist") setTimeout(() => document.querySelector('[data-tab="watchlist"]').click(), 300);
+
 api("queue", { action: "watchlist" }).then((d) => { const c = $("c-watchlist"); c.textContent = d.unseen; c.hidden = !d.unseen; }).catch(() => {});
-handleLossLink().then((lost) => lost || handleDebriefLink()).then((handled) => { if (!handled) api("queue", { action: "meetings" }).then((d) => { MT = d; const c = $("c-meetings"); c.textContent = d.needs.length; c.hidden = !d.needs.length; }).catch(() => {}); });
+handleLossLink().then((lost) => lost || handleDebriefLink()).then((handled) => { if (!handled) showView(parseRoute(), { push: false }); if (!handled) api("queue", { action: "meetings" }).then((d) => { MT = d; const c = $("c-meetings"); c.textContent = d.needs.length; c.hidden = !d.needs.length; }).catch(() => {}); });
 api("inbound", { action: "list" }).then((d) => { const c = $("c-inbound"); c.textContent = d.stats.waiting; c.hidden = !d.stats.waiting; }).catch(() => {});
 api("queue", { action: "accounts" }).then((d) => { ACC = d; const c = $("c-accounts"), n = d.accounts.filter((a) => !a.low && a.outreach_status === "open").length; c.textContent = n; c.hidden = !n; }).catch(() => {});
 </script>

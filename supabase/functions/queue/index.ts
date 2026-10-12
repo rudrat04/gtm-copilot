@@ -192,6 +192,32 @@ async function accountsView(admin: boolean) {
   };
 }
 
+/** One company in full: its card, every signal, what moved, its history and meetings. */
+async function companyView(id: string, admin: boolean) {
+  const view = await accountsView(admin);
+  const account = view.accounts.find((a) => a.id === id);
+  if (!account) return null;
+  const [{ data: sigs }, { data: events }, { data: outcomes }, { data: meetings }, { data: acct }] = await Promise.all([
+    sb.from("cp_signals").select("kind,title,url,detail,detected_at").eq("account_id", id).order("detected_at", { ascending: false }).limit(40),
+    sb.from("cp_watch_events").select("kind,title,url,detected_at,importance").eq("account_id", id).order("detected_at", { ascending: false }).limit(20),
+    sb.from("cp_outcomes").select("kind,note,created_at").eq("account_id", id).order("created_at", { ascending: false }).limit(15),
+    sb.from("cp_meetings").select("title,starts_at,outcome,status").eq("account_id", id).order("starts_at", { ascending: false }).limit(8),
+    sb.from("cp_accounts").select("hubspot_company_id").eq("id", id).maybeSingle(),
+  ]);
+  const isSummary = (s: { kind: string; detail: unknown }) => s.kind === "hiring" && !!s.detail && typeof s.detail === "object" && "salesOpenings" in (s.detail as object);
+  const seenSummary = { v: false };
+  const signals = (sigs ?? []).filter((s) => !isSummary(s) || (!seenSummary.v && (seenSummary.v = true))).slice(0, 25).map((s) => ({
+    kind: s.kind, title: s.title, url: s.url, first_seen: s.detected_at, published: (s.detail as { published?: string } | null)?.published ?? null,
+    is_new: Date.now() - Date.parse(s.detected_at) < 7 * DAY,
+  }));
+  return {
+    account, signals, events: events ?? [], history: (outcomes ?? []).map((o) => ({ kind: o.kind, note: o.note, at: o.created_at })),
+    meetings: admin ? (meetings ?? []) : [],
+    hubspot_url: acct?.hubspot_company_id ? `https://${icp.owner.hubspotHost}/contacts/${icp.owner.hubspotPortal}/record/0-2/${acct.hubspot_company_id}` : null,
+    admin,
+  };
+}
+
 const shortName = (n: string | null) => { const p = (n ?? "").trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[p.length - 1][0]}.` : p[0] || "Attendee"; };
 
 /** Meetings: what needs a debrief, what is coming up, and what already happened. Public viewers see no names, emails or notes. */
@@ -470,6 +496,7 @@ serve("queue", async (req) => {
     await log("info", restoring ? "account_restored" : "account_removed", { account: a.domain });
     return json({ mode: "live", ok: true });
   }
+  if (body.action === "company" && typeof body.account_id === "string") return json(await companyView(body.account_id, admin) ?? { error: "Company not found" }, 200);
   if (body.action === "watchlist") return json({ ...(await watchlistView(admin)), admin });
   if (body.action === "watch_toggle" && (typeof body.account_id === "string" || typeof body.person_id === "string")) {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to follow companies and people." });

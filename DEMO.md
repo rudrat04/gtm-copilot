@@ -23,15 +23,16 @@ Use it live at https://copilot.f1rstword.com. Everything below works in demo mod
 
 **1:50 Today: "The rep's morning."** Open Today. Point at: the **person** is the headline; the fit line; the one-line *why today*; fresh signals with coloured ages. If it is empty, read the reasons under it (below your fit bar, parked, no contact yet). *Say: "No searching. This is who to contact, and why now."*
 
-**2:10 Inbound: "Speed to lead."** 🔓 Open Inbound, fill the form as a prospect (role *Head of Sales*, "I would like a demo") and press **Send**. While the timeline runs (about 10 seconds), switch to Gmail: the **Hot lead** email with the reason and a Reply button, then HubSpot: the new contact and a to-do due in 15 minutes. Back on Inbound press **Mark contacted**: *Contacted · 40 sec*.
+**2:10 Inbound: "Speed to lead."** 🔓 Open Conversations (Inbound leads), fill the form as a prospect (role *Head of Sales*, "I would like a demo") and press **Send**. While the timeline runs (about 10 seconds), switch to Gmail: the **Hot lead** email with the reason and a Reply button, then HubSpot: the new contact and a to-do due in 15 minutes. Back on the lead press **Mark contacted**: *Contacted · 40 sec*.
 
-**2:35 Meetings.** Open Meetings. Show a booked meeting's private brief (emailed when it was booked), then a past meeting: tap **Went well**, add two lines of notes, and show the **recap and follow-up draft** with *HubSpot updated: lead status, deal opened, note added, to-do created*. *Say: "Nothing is sent to the prospect. The draft is a suggestion."*
+**2:35 Meetings.** Open Conversations, then Meetings. Show a booked meeting's private brief (emailed when it was booked), then a past meeting: tap **Went well**, add two lines of notes, and show the **recap and follow-up draft** with *HubSpot updated: lead status, deal opened, note added, to-do created*. *Say: "Nothing is sent to the prospect. The draft is a suggestion."*
 
 **2:50 Close, on Setup → "Alerts, daily email and flags".** Show the **Quiet / Normal / Busy** styles, the email time (IST) and **Preview today's email**. *Say: "Nothing is ever sent to a prospect. The rep's job is people. F1rstword does everything before and after the conversation, and keeps HubSpot true."*
 
 ## If you have 5 minutes, add
 - **Signals you add:** in Setup → What counts as a buying signal, add *Uses a competitor* (for example Gong) or a watch phrase. They count on the next daily check.
-- **Research:** type a prospect's own domain, get a dossier in about 10 seconds (talk tracks, pains, risks).
+- **Research:** press Ctrl or Cmd + K, type a prospect's own domain and choose Research; you get a dossier in about 10 seconds (talk tracks, pains, risks). The same search jumps to any company, person or page.
+- **Company page:** click any company name for its full page: card, every signal, what moved, history and meetings.
 - **Buyer types:** reorder them with the arrows (the order is the priority) and show department and seniority.
 - **Name and logo:** upload a logo and rename it in Setup. It is white-label.
 - **Closed-lost Revival:** in HubSpot move a deal to Closed lost; within 30 minutes the account shows a *Closed-lost* line and, when a new signal appears, a Revival card in Today.

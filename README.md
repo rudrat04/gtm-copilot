@@ -49,9 +49,9 @@ flowchart LR
 |---|---|---|
 | **Today** | Who do I contact right now? | A short list led by the **person** (name, title, buyer type), with a one-line "why today", the fresh signals and a next step. Followed companies come first. Follow-ups at day 3, 7 and 14. A "Needs attention" card flags what is slipping. |
 | **Accounts** | Where is every company? | One list with clear views (Prospects, In progress, Parked, Low fit, Watching, All, Removed), filters, sorting and search. Every card shows labelled facts (size, stage, location, industry, tools, sales style, with "Unknown" when we don't know), why it fits, why now, the best contact and one next step. Follow, find more people, remove (with undo). |
-| **Inbound** | Who just raised their hand? | A form submit is enriched, scored and routed in about 10 seconds: an email to the rep, a HubSpot to-do due in 15 minutes, and a reminder if nobody answers. Shows time to reply. |
-| **Meetings** | What is booked, and how did it go? | A private brief is emailed when a meeting is booked. After it ends, a one-tap "how did it go?" email updates HubSpot and turns two lines of notes into a recap and a follow-up draft. Cancellations and moves are handled. |
-| **Research** | Tell me about this company. | A dossier for any domain in about 10 seconds. |
+| **Conversations: Inbound** | Who just raised their hand? | A form submit is enriched, scored and routed in about 10 seconds: an email to the rep, a HubSpot to-do due in 15 minutes, and a reminder if nobody answers. Shows time to reply. |
+| **Conversations: Meetings** | What is booked, and how did it go? | A private brief is emailed when a meeting is booked. After it ends, a one-tap "how did it go?" email updates HubSpot and turns two lines of notes into a recap and a follow-up draft. Cancellations and moves are handled. |
+| **Search (Ctrl or Cmd + K)** | Tell me about this company. | Jump to any company, person, page or action, or research any domain for a dossier in about 10 seconds. Every company has its own page (card, signals, movements, history). |
 | **Setup** | What are we looking for? | Describe what you sell and get suggestions for everything else. Searchable industry, stage and location lists, buyer types in priority order (job titles, department, seniority), signals you add yourself, alerts and the daily email, name and logo, and a Health panel. |
 
 ## Set it up in one sentence
