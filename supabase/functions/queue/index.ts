@@ -5,6 +5,10 @@ import { applyOutcome, type OutcomeKind } from "../_shared/lifecycle.ts";
 import { buildToday, reasonLine } from "../_shared/today.ts";
 import { buildBoard } from "../_shared/board.ts";
 import { listNotifications, markRead } from "../_shared/notify.ts";
+import { signalsFeed } from "../_shared/signalsfeed.ts";
+import { addNote, exportPerson, listNotes, suppressPerson } from "../_shared/personnotes.ts";
+import { revealPerson } from "../_shared/peoplepreview.ts";
+import { hunterBalance, monthlyUsed, HUNTER_MONTHLY_CAP } from "../_shared/people.ts";
 import { draftNoteHtml, noteToHubSpot } from "../_shared/hsnotes.ts";
 import { writeDraft } from "../_shared/draft.ts";
 import { fetchFirmo, firmoLine, fitBreakdown, fitReasons, saveFirmo, usdShort } from "../_shared/firmo.ts";
@@ -518,6 +522,7 @@ serve("queue", async (req) => {
     return json({ mode: "live", ok: true });
   }
   if (body.action === "company" && typeof body.account_id === "string") return json(await companyView(body.account_id, admin) ?? { error: "Company not found" }, 200);
+  if (body.action === "person_rows" && Array.isArray(body.ids)) return json({ admin, people: await peopleRows(admin, { personIds: body.ids.map(String).slice(0, 10) }) });
   if (body.action === "people_list") {
     const { people } = await peopleList(admin);
     // Companies we searched that returned nobody: shown so they are not searched again by mistake.
@@ -526,7 +531,7 @@ serve("queue", async (req) => {
     return json({ admin, people, nobody: (s ?? []).filter((x) => !have.has(x.id)).map((x) => ({ id: x.id, name: x.name, domain: x.domain, at: x.people_searched_at, by: x.people_search_source })), personas: icp.personas.map((p) => p.title) });
   }
   if (body.action === "discover_list") {
-    const { data } = await sb.from("cp_discovered").select("domain,name,reason,source,found_at,status").eq("status", "rejected").order("found_at", { ascending: false }).limit(60);
+    const { data } = await sb.from("cp_discovered").select("domain,name,reason,source,source_url,snippet,category,found_at,status").eq("status", "rejected").is("hidden_at", null).order("found_at", { ascending: false }).limit(80);
     const [{ data: last }, { data: sp }, { data: all }] = await Promise.all([
       sb.from("cp_state").select("value").eq("key", "discovery_last").maybeSingle(),
       sb.from("cp_state").select("value").eq("key", "people_skipped").maybeSingle(),
@@ -537,6 +542,15 @@ serve("queue", async (req) => {
     const parse = (v?: string | null) => { try { return v ? JSON.parse(v) : null; } catch { return null; } };
     const { count: unknownFit } = await sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("firmo_at", null).is("removed_at", null);
     return json({ admin, unknown_fit: unknownFit ?? 0, skipped: data ?? [], report: parse(last?.value), people_skipped: parse(sp?.value), sources, enabled: (icp.discovery as { enabled?: boolean }).enabled !== false, web: (icp.discovery as { web?: boolean }).web !== false });
+  }
+  if (body.action === "discover_hide") { // take a skipped company or person off the list (the company is still remembered, so it is not looked at again)
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to remove." });
+    if (typeof body.domain === "string") await sb.from("cp_discovered").update({ hidden_at: new Date().toISOString() }).eq("domain", body.domain);
+    else if (typeof body.person_key === "string") {
+      const { data: sp } = await sb.from("cp_state").select("value").eq("key", "people_skipped").maybeSingle();
+      try { const v = JSON.parse(sp?.value ?? "{}"); v.items = (v.items ?? []).filter((x: { key: string }) => x.key !== body.person_key); await sb.from("cp_state").upsert({ key: "people_skipped", value: JSON.stringify(v), updated_at: new Date().toISOString() }); } catch { /* nothing to remove */ }
+    }
+    return json({ mode: "live", ok: true });
   }
   if (body.action === "discover_add" && typeof body.domain === "string") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to add a company." });
@@ -678,13 +692,63 @@ serve("queue", async (req) => {
   if (body.action === "today") return json({ ...(await buildToday(admin)), attention: admin ? await activeFlags(5) : { items: [], total: 0 }, admin });
   if (body.action === "board") {
     const b = await buildBoard(admin);
-    return json({ ...b, attention: admin ? await activeFlags(5) : { items: [], total: 0 }, admin });
+    return json({ ...b, personas: icp.personas.map((p) => p.title), attention: admin ? await activeFlags(5) : { items: [], total: 0 }, admin });
   }
   if (body.action === "todo_set" && typeof body.person_id === "string") { // pin a person to the board, set them aside, or clear it
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to change your to-do." });
     const state = body.state === "pinned" || body.state === "dismissed" ? body.state : null;
     await sb.from("cp_people").update({ todo_state: state, todo_at: state ? new Date().toISOString() : null }).eq("id", body.person_id);
     return json({ mode: "live", ok: true });
+  }
+  if (body.action === "signals_feed") return json(await signalsFeed(admin, typeof body.days === "number" ? Math.min(90, Math.max(1, body.days)) : 30));
+  if (body.action === "notes_list" && typeof body.person_id === "string") return json({ admin, notes: admin ? await listNotes(body.person_id) : [] });
+  if (body.action === "note_add" && typeof body.person_id === "string" && typeof body.text === "string") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to add notes." });
+    const text = body.text.trim();
+    if (!text) return json({ error: "Write something first" }, 400);
+    await addNote(body.person_id, "note", text);
+    return json({ mode: "live", notes: await listNotes(body.person_id) });
+  }
+  if (body.action === "person_persona" && typeof body.person_id === "string") { // set the buyer type by hand, or mark someone as not a buyer
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to change this." });
+    const want = typeof body.persona === "string" ? body.persona : null;
+    const persona = want ? icp.personas.find((p) => p.title === want) : null;
+    if (want && !persona) return json({ error: "That buyer type does not exist" }, 400);
+    await sb.from("cp_people").update(persona ? { persona: persona.title, relevance: Math.min(100, Math.round((persona as { weight?: number }).weight ?? 70)), persona_manual: true } : want === "" ? { persona: null, relevance: 0, persona_manual: true } : { persona_manual: false }).eq("id", body.person_id);
+    if (!persona && want !== "") await rerankPeople(); // back to the automatic rule
+    await addNote(body.person_id, "buyer", persona ? `Buyer type set to ${persona.title}` : want === "" ? "Marked as not a buyer" : "Back to the automatic buyer match");
+    return json({ mode: "live", ok: true });
+  }
+  if (body.action === "person_suppress" && typeof body.person_id === "string") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to do this." });
+    const r = await suppressPerson(body.person_id, typeof body.reason === "string" ? body.reason : undefined);
+    return r.ok ? json({ mode: "live", label: r.label }) : json({ error: "Person not found" }, 404);
+  }
+  if (body.action === "person_export" && typeof body.person_id === "string") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to download." });
+    const d = await exportPerson(body.person_id);
+    return d ? json({ mode: "live", data: d }) : json({ error: "Person not found" }, 404);
+  }
+  if (body.action === "suppressed_list") {
+    if (!admin) return json({ admin, items: [] });
+    const { data } = await sb.from("cp_suppressed").select("id,label,reason,created_at").order("created_at", { ascending: false }).limit(200);
+    return json({ admin, items: data ?? [] });
+  }
+  if (body.action === "suppressed_remove" && typeof body.id === "string") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to do this." });
+    await sb.from("cp_suppressed").delete().eq("id", body.id);
+    return json({ mode: "live", ok: true });
+  }
+  if (body.action === "reveal_top") { // reveal the best free-list people in one go, with the cost shown first
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to reveal." });
+    const limit = Math.max(1, Math.min(10, Number(body.limit) || 5));
+    const rows = (await peopleRows(true)).filter((p) => p.preview && ["hot", "warm"].includes(p.lead.label) && p.company_fit !== "outside").sort((a, b) => b.priority - a.priority).slice(0, limit);
+    const bal = await hunterBalance();
+    const left = Math.max(0, Math.floor(HUNTER_MONTHLY_CAP - (await monthlyUsed()))); // the monthly limit you set, not the whole plan
+    if (body.dry !== false) return json({ mode: "plan", people: rows.map((p) => ({ id: p.id, name: p.name, title: p.title, company: p.company })), credits: rows.length, credits_left: bal?.remaining ?? null, monthly_limit: HUNTER_MONTHLY_CAP, allowed: Math.min(rows.length, left) });
+    const done: string[] = [];
+    for (const p of rows.slice(0, left)) { const r = await revealPerson(p.id); if (!r.ok) { if (r.code === 429) break; continue; } done.push(p.id); }
+    return json({ mode: "live", revealed: done.length });
   }
   if (body.action === "notifications") return admin ? json({ admin, ...(await listNotifications(40)) }) : json({ admin, items: [], unread: 0 });
   if (body.action === "notifications_read") {

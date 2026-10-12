@@ -4,13 +4,14 @@ import { fitState, heatOf } from "./score.ts";
 import { scorePerson } from "./leadscore.ts";
 import { teamSignals } from "./peoplesignals.ts";
 import { aiHeat, aiMaps } from "./aiscore.ts";
+import { explainRank } from "./people.ts";
 
 // One shape for a person, with everything the cards need: who they are, the company they work at (fit, heat, facts), what is happening
 // around them (their team, their activity, the company's signals), their HubSpot state, and a priority for the To-do board.
 // Used by the People tab, the To-do board and the company page, so a person looks the same everywhere.
 
 const DAY = 86_400_000;
-const COLS = "id,account_id,first_name,last_name,title,persona,relevance,seniority,department,email,email_status,email_confidence,email_revealed,linkedin_url,hubspot_contact_id,hs_status,hs_note,watched_at,watch_notify,watch_checked_at,activity_checked_at,created_at,provider,preview,decision_maker,todo_state,todo_at";
+const COLS = "id,account_id,first_name,last_name,title,persona,relevance,seniority,department,email,email_status,email_confidence,email_revealed,linkedin_url,hubspot_contact_id,persona_manual,hs_status,hs_note,watched_at,watch_notify,watch_checked_at,activity_checked_at,created_at,provider,preview,decision_maker,todo_state,todo_at";
 
 const age = (iso: string | null | undefined) => { const d = Math.floor((Date.now() - Date.parse(iso ?? "")) / DAY); return Number.isNaN(d) ? "" : d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };
 
@@ -46,7 +47,8 @@ export async function peopleRows(admin: boolean, opts: { accountId?: string; per
       id: p.id, account_id: p.account_id, company: c.name as string, domain: c.domain as string,
       name: admin ? `${p.first_name} ${p.last_name}`.trim() : `${p.first_name} ${(p.last_name || "").charAt(0)}.`.trim(),
       title: p.title, persona: p.persona, relevance: p.relevance, seniority: p.seniority, department: p.department,
-      decision_maker: p.decision_maker ?? null, preview: !!p.preview,
+      decision_maker: p.decision_maker ?? null, preview: !!p.preview, persona_manual: !!p.persona_manual,
+      match_why: p.persona_manual ? (p.persona ? `You set this buyer type by hand (${p.persona}).` : "You marked this person as not a buyer.") : explainRank(p.title ?? "", p.department),
       has_email: !!p.email, revealed: admin && !!p.email_revealed, email: admin && p.email_revealed ? p.email : null, email_status: p.email_status, email_confidence: p.email_confidence,
       linkedin: admin && p.linkedin_url ? p.linkedin_url : null,
       in_hubspot: !!p.hubspot_contact_id, hs_status: p.hs_status, hs_note: p.hs_note,

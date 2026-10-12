@@ -20,6 +20,16 @@ import icp from "./icp.json" with { type: "json" };
 // Source today: the monthly Hacker News "Who is hiring" thread, which lists companies that are hiring right now.
 // Companies hiring sales or RevOps roles are the strongest signal for the seller, so only those posts are kept.
 
+/** Pure: a plain-language category for why a company was skipped. */
+export function skipCategory(reason: string): string {
+  if (/^Below the fit bar/i.test(reason)) return "Outside your size or stage";
+  if (/did not load/i.test(reason)) return "Website did not load";
+  if (/(agency|consult|staffing|systems integrator|service provider|services firm|custom software for clients|builds software for clients|reseller)/i.test(reason)) return "Services or agency";
+  if (/(consumer|B2C|personal learning)/i.test(reason)) return "Consumer product";
+  if (/(hardware|manufactur|materials|insurance|brokerage|exchange|marketplace|non-?profit|universit|research-stage|biotech|robot)/i.test(reason)) return "Not a software company";
+  return "Not a fit for what you sell";
+}
+
 export type Candidate = { name: string; domain: string; source: string; sourceUrl: string; snippet: string; band?: string; size?: number; country?: string | null; city?: string | null };
 
 const cfg = icp.discovery;
@@ -199,7 +209,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
     summary.checked++;
     const row = { domain: c.domain, name: (v.name || c.name).slice(0, 80), source: c.source, source_url: c.sourceUrl, snippet: c.snippet };
     if (!v.fit) {
-      await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason: (v.reason ?? "Not a B2B software company").slice(0, 200) }, { onConflict: "domain" });
+      { const reason = (v.reason ?? "Not a B2B software company").slice(0, 200); await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason, category: skipCategory(reason) }, { onConflict: "domain" }); }
       summary.rejected++;
       skipped.push({ name: row.name, reason: (v.reason ?? "Not a B2B software company").slice(0, 120) });
       continue;
@@ -213,7 +223,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
       if (firmo) {
         const f = fitBreakdown({ employees: firmo.employees, stage: firmo.stage, country: firmo.country, firmo_at: "now" });
         if (f.known && !meetsFit(fitState({ employees: firmo.employees, stage: firmo.stage, country: firmo.country, firmo_at: "now" }))) {
-          await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason: `Below the fit bar (${firmo.employees ?? "?"} people, ${firmo.stage ?? "unknown stage"})` }, { onConflict: "domain" });
+          await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason: `Below the fit bar (${firmo.employees ?? "?"} people, ${firmo.stage ?? "unknown stage"})`, category: "Outside your size or stage" }, { onConflict: "domain" });
           summary.rejected++;
           skipped.push({ name: row.name, reason: `Below the fit bar (${firmo.employees ?? "?"} people, ${firmo.stage ?? "unknown stage"})` });
           continue;

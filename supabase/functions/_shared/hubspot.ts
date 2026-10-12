@@ -171,6 +171,7 @@ export type ContactInput = {
   firstName: string;
   lastName: string;
   title: string;
+  companyName?: string;    // fills the contact's Company name column
   email?: string | null;   // missing until the person is revealed: the contact is then created without one and completed later
   persona: string | null;   // HubSpot option value: sales_leader | revops | Founder
   personaScore: number;
@@ -196,6 +197,7 @@ export async function pushContact(c: ContactInput, companyId: string, domain: st
     lastname: c.lastName,
     jobtitle: c.title,
     ...(c.email ? { email: c.email } : {}),
+    ...(c.companyName ? { company: c.companyName } : {}),
     gtm_persona_score: String(Math.min(100, c.personaScore)),
   };
   if (c.persona) props.gtm_persona = c.persona;
@@ -204,7 +206,7 @@ export async function pushContact(c: ContactInput, companyId: string, domain: st
   let created = false;
   if (id) {
     // Existing contact: update title and persona fields only.
-    const { email: _e, ...rest } = props;
+    const { email: _e, company: _c, ...rest } = props; // an existing contact keeps its own company text; the blank-only fill below sets it when empty
     await writeWithFallback((p) => hs(`/crm/v3/objects/contacts/${id}`, { method: "PATCH", body: JSON.stringify({ properties: p }) }), rest, ["gtm_persona"], domain);
   } else {
     const r = await writeWithFallback(

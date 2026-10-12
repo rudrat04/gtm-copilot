@@ -1048,3 +1048,46 @@ Deno.test("the to-do board: lanes and the first reason", async () => {
   assertEquals(whyLine({ activity: [], team: ["Hiring in your area: AE"] }, "x").label, "Their team");
   assertEquals(whyLine(null, "Funding news").text, "Funding news");
 });
+
+Deno.test("why a company or person was skipped, in plain words", async () => {
+  const { skipCategory } = await import("../_shared/discover.ts");
+  const { whyDropped } = await import("../_shared/peoplepreview.ts");
+  assertEquals(skipCategory("Below the fit bar (141 people, Series D)"), "Outside your size or stage");
+  assertEquals(skipCategory("This is a digital marketing services agency, not a B2B software vendor"), "Services or agency");
+  assertEquals(skipCategory("Keet is a B2C consumer app"), "Consumer product");
+  assertEquals(skipCategory("Hardware/materials company"), "Not a software company");
+  assertEquals(skipCategory("Website did not load"), "Website did not load");
+  const personas = [{ title: "Sales", department: "Sales", match: ["head of sales"] }];
+  assertEquals(whyDropped("Backend Engineer", "it", "ic", personas).label, "Different team");
+  assertEquals(whyDropped("Sales Rep", "sales", "ic", personas).label, "Too junior");
+  assertEquals(whyDropped("Partner Lead", "sales", "manager", personas).label, "Title does not match");
+});
+
+Deno.test("signals: categories, buying intent, and the people who should hear about each", async () => {
+  const { categorize, categorizeEvent, responsible } = await import("../_shared/signalsfeed.ts");
+  assertEquals(categorize({ kind: "tech", title: "x", detail: { ruleType: "competitor" } }), { category: "Buying intent", intent: true });
+  assertEquals(categorize({ kind: "tech", title: "x", detail: { ruleType: "visit" } }).intent, true);
+  assertEquals(categorize({ kind: "tech", title: "Added Gong (seen on their website)", detail: { ruleType: "change" } }).category, "Tools and website");
+  assertEquals(categorize({ kind: "news", title: "Acme raises $20M Series A" }).category, "Funding");
+  assertEquals(categorize({ kind: "news", title: "Acme names Sam as head of sales" }).category, "Leadership");
+  assertEquals(categorize({ kind: "hiring", title: "Hiring: Account Executive" }).category, "Hiring");
+  assertEquals(categorizeEvent("activity").category, "People activity");
+  assertEquals(categorizeEvent("visit").intent, true);
+  const p = (id: string, title: string, department: string, relevance = 70) => ({ id, name: id, title, department, relevance, preview: false, revealed: false, decision_maker: false });
+  const people = [p("founder", "CEO", "executive"), p("sales", "Head of Sales", "sales"), p("mkt", "Head of Marketing", "marketing")];
+  assertEquals(responsible("Hiring", "Account Executive", people)[0].id, "sales");
+  assertEquals(responsible("Hiring", "Marketing Manager", people)[0].id, "mkt");
+  assertEquals(responsible("Funding", "Acme raises Series A", people)[0].id, "founder");
+});
+
+Deno.test("never contact list: one key for a person, by email or by shortened name", async () => {
+  const { suppressKey } = await import("../_shared/personnotes.ts");
+  assertEquals(suppressKey({ email: "Nico@Acme.com" }), "nico@acme.com");
+  assertEquals(suppressKey({ first: "Nico", last: "Snyder", domain: "Acme.com", title: "VP Sales" }), suppressKey({ first: "nico", last: "S.", domain: "acme.com", title: "vp sales" }));
+});
+
+Deno.test("a buyer match explains itself", async () => {
+  const { explainRank } = await import("../_shared/people.ts");
+  assertEquals(/the title has/i.test(explainRank("VP of Sales", null)), true);
+  assertEquals(/none of the title words/i.test(explainRank("Senior Gardener", null)), true);
+});

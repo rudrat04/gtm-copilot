@@ -2,6 +2,7 @@ import { normalizeDomain, sb } from "./db.ts";
 import { log } from "./log.ts";
 import { guardPeople } from "./guard.ts";
 import { updateContact } from "./hubspot.ts";
+import { suppressedSet, suppressKey, addNote } from "./personnotes.ts";
 import { HUNTER_MONTHLY_CAP, monthlyUsed, peopleFilter, rank } from "./people.ts";
 import { FIT_COLS } from "./firmo.ts";
 import { worthShowing } from "./fitgate.ts";
@@ -50,13 +51,24 @@ export function pickPeople(rows: PreviewRow[], domains: Set<string>, employeesOf
   return byDomain;
 }
 
+/** Pure: why a person was not kept, in plain words. */
+export function whyDropped(title: string, department: string | null | undefined, seniority: string, personas: { title: string; department?: string; seniority?: string[]; match: string[] }[]): { label: string; reason: string } {
+  const depts = [...new Set(personas.map((p) => p.department).filter(Boolean) as string[])];
+  const dept = (department ?? "").toLowerCase();
+  if (dept && depts.length && !depts.some((d) => d.toLowerCase() === dept || dept.includes(d.toLowerCase().slice(0, 5)))) return { label: "Different team", reason: `Works in ${department}; your buyer types are in ${depts.join(", ")}` };
+  if (seniority === "ic") return { label: "Too junior", reason: "An individual contributor; your buyer types are leaders and managers" };
+  return { label: "Title does not match", reason: `"${title}" has none of the words in your buyer-type titles` };
+}
+
 /** Pure: people the free list showed but that are not one of your buyer types, so they are not kept (listed on the Discover page so nothing is hidden silently). */
 export function droppedPeople(rows: PreviewRow[], domains: Set<string>, employeesOf: (domain: string) => number | null | undefined) {
-  const out: { company: string; name: string; title: string; reason: string }[] = [];
+  const out: { key: string; company: string; name: string; title: string; department: string | null; level: string; label: string; reason: string }[] = [];
+  const personas = icp.personas as { title: string; department?: string; seniority?: string[]; match: string[] }[];
   for (const row of rows) {
     const domain = normalizeDomain(row.domain ?? "");
     if (!domain || !domains.has(domain) || !row.name || !row.position) continue;
-    if (rank(row.position, employeesOf(domain), row.department).relevance < 50) out.push({ company: row.company_name ?? domain, name: row.name, title: row.position, reason: "Not one of your buyer types" });
+    const r = rank(row.position, employeesOf(domain), row.department);
+    if (r.relevance < 50) { const w = whyDropped(row.position, row.department, r.seniority, personas); out.push({ key: `${domain}|${row.name}|${row.position}`.slice(0, 160), company: row.company_name ?? domain, name: row.name, title: row.position, department: row.department ?? null, level: r.seniority, ...w }); }
   }
   return out;
 }
@@ -96,10 +108,12 @@ export async function peekPeople(accounts: { id: string; name: string; domain: s
     await sb.from("cp_people").delete().in("account_id", ids).eq("preview", true).is("watched_at", null).is("hubspot_contact_id", null);
     const { data: have } = await sb.from("cp_people").select("account_id,first_name,last_name,title").in("account_id", ids);
     const seen = new Set((have ?? []).map((p) => `${p.account_id}|${(p.first_name ?? "").toLowerCase()}|${(p.last_name ?? "").charAt(0).toLowerCase()}|${(p.title ?? "").toLowerCase()}`));
+    const blocked = await suppressedSet();
     const inserts = [];
     for (const [domain, list] of picked) {
       const account_id = idOf.get(domain)!;
       for (const { row, short, r } of list) {
+        if (blocked.has(suppressKey({ first: short.first, last: short.last, domain, title: row.position }))) continue; // never listed again
         if (seen.has(`${account_id}|${short.first.toLowerCase()}|${short.last.charAt(0).toLowerCase()}|${row.position!.toLowerCase()}`)) continue; // already known in full
         inserts.push({ account_id, provider: "hunter_preview", first_name: short.first, last_name: short.last, title: row.position, seniority: r.seniority, department: row.department ?? null, persona: r.persona, relevance: r.relevance, email: null, email_status: row.verification?.status ?? null, preview: true, reveal_handle: row.reveal_handle, handle_period: period(), decision_maker: !!row.decision_maker });
       }
@@ -144,6 +158,7 @@ export async function revealPerson(personId: string, retry = true): Promise<{ ok
   }).eq("id", p.id);
   if (p.hubspot_contact_id) await updateContact(p.hubspot_contact_id, { firstname: row.first_name ?? undefined, lastname: row.last_name ?? "", email: row.email.toLowerCase() }, acct.domain).catch(() => false); // a contact added before the reveal is completed in HubSpot
   await guardPeople({ accountId: acct.id });
+  await addNote(p.id, "revealed", "Revealed (1 credit)");
   await log("info", "person_revealed", { account: acct.domain, detail: { credits } });
   return { ok: true, credits };
 }
@@ -155,7 +170,7 @@ export async function peekCandidates(limit = 40): Promise<{ id: string; name: st
     .or(`people_previewed_at.is.null,people_previewed_at.lt.${week}`).order("priority_score", { ascending: false, nullsFirst: false }).limit(300);
   const ok = (data ?? []).filter((a) => a.outreach_status === "open" && worthShowing(a as never));
   if (!ok.length) return [];
-  const { data: have } = await sb.from("cp_people").select("account_id").eq("preview", false).in("account_id", ok.map((a) => a.id)); // people already stored in full
+  const { data: have } = await sb.from("cp_people").select("account_id").eq("preview", false).gte("relevance", 50).in("account_id", ok.map((a) => a.id)); // people already stored who match a buyer type
   const has = new Set((have ?? []).map((p) => p.account_id));
   return ok.filter((a) => !has.has(a.id)).slice(0, limit).map((a) => ({ id: a.id, name: a.name as string, domain: a.domain as string }));
 }

@@ -3,6 +3,7 @@ import { log } from "./log.ts";
 import icp from "./icp.json" with { type: "json" };
 import { guardPeople } from "./guard.ts";
 import { hashStr, recordIfWatched } from "./movements.ts";
+import { suppressedSet, suppressKey } from "./personnotes.ts";
 
 /** A person as returned by any provider, before ranking. */
 export type FoundPerson = {
@@ -68,6 +69,22 @@ function allowed(p: PersonaRule, seniority: string, department?: string | null):
   return true;
 }
 
+/** Pure: in plain words, why a title does or does not match one of the buyer types. */
+export function explainRank(title: string, department?: string | null): string {
+  const t = norm(title);
+  const seniority = seniorityOf(title);
+  const personas = icp.personas as PersonaRule[];
+  const matched = personas.filter((p) => p.match.some((m) => t.includes(norm(m))) && allowed(p, seniority, department)).sort((a, b) => b.weight - a.weight)[0];
+  if (matched) {
+    const word = matched.match.find((m) => t.includes(norm(m)));
+    return `The title has "${word}" (${matched.title})${matched.department ? `, and the team is ${matched.department}` : ""}${matched.seniority?.length ? ", at the level you asked for" : ""}.`;
+  }
+  const near = personas.find((p) => p.match.some((m) => t.includes(norm(m))));
+  if (near) return `The title has a word from "${near.title}", but ${department ? `the team (${department})` : "the level"} is not what that buyer type asks for.`;
+  if (salesBuyer() && seniority !== "ic" && /sales|revenue|growth|business development|partnerships/.test(t)) return "A senior sales or revenue title, counted as a likely buyer.";
+  return `None of the title words of your buyer types (${personas.slice(0, 3).map((p) => p.title).join(", ")}${personas.length > 3 ? "…" : ""}) are in this title.`;
+}
+
 export function rank(title: string, employees?: number | null, department?: string | null): { persona: string | null; relevance: number; seniority: string } {
   const t = norm(title);
   const seniority = seniorityOf(title);
@@ -90,7 +107,7 @@ export function rank(title: string, employees?: number | null, department?: stri
 
 /** Recomputes persona and relevance for every stored person after the persona list changes. No credits. */
 export async function rerankPeople(): Promise<number> {
-  const { data } = await sb.from("cp_people").select("id,title,account_id,department");
+  const { data } = await sb.from("cp_people").select("id,title,account_id,department,persona_manual").eq("persona_manual", false); // a buyer type set by hand is left alone
   const { data: accts } = await sb.from("cp_accounts").select("id,employees");
   const size = new Map((accts ?? []).map((a) => [a.id, a.employees as number | null]));
   for (const p of data ?? []) {
@@ -243,7 +260,8 @@ export async function searchAndStore(account: { id: string; domain: string }, op
   const found = await provider().search(account.domain);
   await sb.from("cp_accounts").update({ people_searched_at: new Date().toISOString(), people_search_source: opts.auto ? "auto" : "manual" }).eq("id", account.id); // remembered even when nobody was found
   const { data: acc } = await sb.from("cp_accounts").select("employees").eq("id", account.id).maybeSingle();
-  const rows = found.people.map((p) => {
+  const blocked = await suppressedSet();
+  const rows = found.people.filter((p) => !(p.email && blocked.has(suppressKey({ email: p.email })))).map((p) => {
     const r = rank(p.title, acc?.employees, p.department);
     return {
       account_id: account.id,

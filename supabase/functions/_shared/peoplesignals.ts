@@ -13,6 +13,15 @@ const TEAM: [RegExp, RegExp][] = [
   [/finance|procurement|admin/i, /finance|accounting|controller|billing|procure/i],
   [/hr|people|talent|recruit/i, /recruit|talent|people|\bhr\b/i],
 ];
+/** Pure: the words that describe the team a piece of text (a job title, a headline) belongs to, or null. */
+export const teamOf = (text: string): RegExp | null => TEAM.find(([, words]) => words.test(text))?.[0] ?? null;
+/** Pure: is this person (department and title) in the team a text is about? Leaders are in every team. */
+export function inTeam(department: string | null | undefined, title: string | null | undefined, text: string): boolean {
+  const t = teamOf(text);
+  const me = `${department ?? ""} ${title ?? ""}`;
+  return !!t && t.test(me);
+}
+export const isLeader = (department: string | null | undefined, title: string | null | undefined) => LEADERS.test(`${department ?? ""} ${title ?? ""}`);
 const LEADERS = /executive|management|founder|chief|ceo|president/i;
 const COMPANY_WIDE = /\b(raises?|raised|funding|series [a-d]|seed|acquir|expands?|expansion|opens? (an? )?office|launch(es|ed)?|appoints?|names?|hires?|joins as|partnership|hosting|summit|conference)\b/i;
 

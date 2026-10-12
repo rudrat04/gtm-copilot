@@ -173,6 +173,7 @@ export async function contactExtras(p: Person, a: Acct): Promise<Extras> {
       gtm_reply_minutes: replyMin != null ? String(replyMin) : null,
     }),
     blankOnly: compact({
+      company: a.name, // the contact's "Company name" column
       hs_linkedin_url: p.linkedin_url,
       job_function: p.department ? p.department.charAt(0).toUpperCase() + p.department.slice(1) : null,
     }),

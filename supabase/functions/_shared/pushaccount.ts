@@ -3,6 +3,7 @@ import { log } from "./log.ts";
 import { refreshAccountFields } from "./hsfields.ts";
 import { type CompanyScores, type Dossier, pushCompany, pushContact, tierLabel } from "./hubspot.ts";
 import { scoreAccount, tierOf } from "./score.ts";
+import { addNote } from "./personnotes.ts";
 import icp from "./icp.json" with { type: "json" };
 
 // Putting a company and its revealed people into HubSpot. Used by the "Add to HubSpot" buttons and, when the owner marks someone
@@ -70,11 +71,12 @@ export async function pushAccount(accountId: string, personIds?: string[], opts:
       if (p.hubspot_contact_id && !p.email_revealed) continue; // already added before being revealed: it is completed when they are revealed
       const known = p.email_revealed && !p.preview && p.email; // the email goes to HubSpot only once it is revealed
       const c = await pushContact(
-        { firstName: p.first_name, lastName: p.last_name ?? "", title: p.title, email: known ? p.email : null, persona: personaValue(p.persona), personaScore: p.relevance, draftHtml: known ? html : `<p><b>Not revealed yet in F1rstword.</b> The name is shortened and there is no email. It is completed here when the person is revealed.</p>${html ?? ""}` },
+        { firstName: p.first_name, lastName: p.last_name ?? "", title: p.title, companyName: a.name, email: known ? p.email : null, persona: personaValue(p.persona), personaScore: p.relevance, draftHtml: known ? html : `<p><b>Not revealed yet in F1rstword.</b> The name is shortened and there is no email. It is completed here when the person is revealed.</p>${html ?? ""}` },
         company.companyId,
         a.domain,
       );
       await sb.from("cp_people").update({ hubspot_contact_id: c.contactId }).eq("id", p.id);
+      await addNote(p.id, "pushed", known ? "Added to HubSpot with the email" : "Added to HubSpot before being revealed (completed when revealed)");
       contacts.push({ name: `${p.first_name} ${p.last_name}`.trim(), ...c });
     }
     await sb.from("cp_accounts").update({ status: "pushed", hubspot_company_id: company.companyId, priority_score: ctx.scores.priority }).eq("id", accountId);

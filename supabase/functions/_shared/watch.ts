@@ -1,6 +1,7 @@
 import { json, sb } from "./db.ts";
 import { log } from "./log.ts";
 import { notify } from "./notify.ts";
+import { categorize } from "./signalsfeed.ts";
 import { collectSignals, eventSignals, saveSiteFacts, type Signal, storedHiringSignals } from "./signals.ts";
 import { competitorEvents, eventsFromSignals, hubspotVisits, marketSignals, personMentions, recordEvent, sendMovementEmail, titleRecheck, watchedPeopleHubspot } from "./movements.ts";
 import { scoreAccount, tierOf } from "./score.ts";
@@ -72,6 +73,7 @@ export async function lightCheck(admin: boolean) {
       );
       newSignals += fresh.length;
     }
+    for (const f of fresh) { const c = categorize(f); if (c.intent && fitState(a as never) !== "outside") await notify({ key: `intent:${a.id}:${hash(f.title)}`, kind: "alert", title: `Buying signal: ${a.name}`, body: f.title.slice(0, 160), route: "#/signals" }); } // buying intent is told in the bell as it is found
     if (fresh.length) await teamEvents(a.id, fresh).catch(() => 0); // what concerns the department of a person you follow
     if (a.watched_at) for (const ev of eventsFromSignals(a, fresh)) await recordEvent(ev); // every movement on a followed company is kept for the Watchlist tab
     const score = scoreAccount([...signals, ...(await storedPlSignals(a.id)), ...(hiringUnknown ? await storedHiringSignals(a.id) : [])], a).score; // PredictLeads events stored earlier still count

@@ -3,6 +3,7 @@ import { normalizeDomain, sb } from "./db.ts";
 import { log } from "./log.ts";
 import { findCompaniesByDomain, readChangedContacts, readCompanyBasics, readCompanyFacts, readCustomerCompanies, readDeals, readTaskStatuses, searchLostDeals } from "./hubspot.ts";
 import { rank } from "./people.ts";
+import { suppressedSet, suppressKey } from "./personnotes.ts";
 import { countryCodeOf } from "./lists.ts";
 import { applyOutcome } from "./lifecycle.ts";
 import { askLossReasons } from "./lossreason.ts";
@@ -64,7 +65,8 @@ export async function importHubspotContacts(limit = 20): Promise<number> {
   if (!contacts.length) return 0;
   const { data: known } = await sb.from("cp_people").select("hubspot_contact_id").in("hubspot_contact_id", contacts.map((c) => c.id));
   const have = new Set((known ?? []).map((k) => k.hubspot_contact_id));
-  const fresh = contacts.filter((c) => !have.has(c.id) && (c.first || c.last) && c.email);
+  const blocked = await suppressedSet();
+  const fresh = contacts.filter((c) => !have.has(c.id) && (c.first || c.last) && c.email && !blocked.has(suppressKey({ email: c.email })));
   const basics = await readCompanyBasics([...new Set(fresh.map((c) => c.companyId).filter(Boolean) as string[])]);
   let n = 0;
   for (const c of fresh) {

@@ -27,6 +27,20 @@ export function whyLine(p: { activity: { kind: string; title: string; url: strin
   return { label: "Why now", text: fallback };
 }
 
+/** Why a strong company has nobody to contact: nobody listed yet, people listed who are not your buyer types, or a search that found nobody. */
+async function needsState(needs: { id: string; name: string; tier: string; priority: number | null; reason: string }[]) {
+  if (!needs.length) return [];
+  const ids = needs.map((n) => n.id);
+  const [{ data: ppl }, { data: acc }] = await Promise.all([
+    sb.from("cp_people").select("account_id").in("account_id", ids),
+    sb.from("cp_accounts").select("id,people_previewed_at,people_searched_at").in("id", ids),
+  ]);
+  const n = new Map<string, number>();
+  for (const p of ppl ?? []) n.set(p.account_id, (n.get(p.account_id) ?? 0) + 1);
+  const looked = new Map((acc ?? []).map((a) => [a.id, !!(a.people_previewed_at || a.people_searched_at)]));
+  return needs.map((x) => ({ ...x, people: n.get(x.id) ?? 0, state: (n.get(x.id) ?? 0) > 0 ? "no_match" : looked.get(x.id) ? "nobody" : "unlisted" }));
+}
+
 export async function buildBoard(admin: boolean) {
   const t = await buildToday(admin, { cap: 40 });
   const items = t.items as TodayItem[];
@@ -87,5 +101,5 @@ export async function buildBoard(admin: boolean) {
   out.sort((x, y) => y.priority - x.priority);
   const lanes = { now: 0, week: 0, waiting: 0, later: 0 } as Record<Lane, number>;
   for (const i of out) lanes[i.lane]++;
-  return { generated_at: t.generated_at, lanes, items: out, needs: t.needs, debriefs: t.debriefs, leads: t.leads, blocked: t.blocked, hidden: t.hidden, attention: undefined as unknown };
+  return { generated_at: t.generated_at, lanes, items: out, needs: await needsState(t.needs), debriefs: t.debriefs, leads: t.leads, blocked: t.blocked, hidden: t.hidden, attention: undefined as unknown };
 }
