@@ -13,7 +13,7 @@ export type WebCandidate = { name: string; domain: string; source: "web"; source
 export function angles(): { id: string; ask: string }[] {
   const c = icp.company as { industries: string[]; keywords?: string[]; employeesMin: number; employeesMax: number; regions: string[] };
   const topic = c.keywords?.length ? `B2B software companies in the areas of ${c.keywords.slice(0, 5).join(", ")}` : "B2B software companies";
-  const where = c.regions.length ? ` based in ${c.regions.slice(0, 3).join(" or ")}` : "";
+  const where = c.regions.length ? ` based in ${c.regions.slice(0, 3).map((r) => r.replace(/^city:/, "")).join(" or ")}` : "";
   const who = `${topic}${where}, with about ${c.employeesMin} to ${c.employeesMax} employees`;
   const roles = icp.signals.hiringRoles.slice(0, 4).join(", ");
   return [

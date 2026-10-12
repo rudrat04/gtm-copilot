@@ -5,7 +5,11 @@ import { codesFor, STAGE_OPTIONS } from "./lists.ts";
 
 // Company facts from Hunter's Company Enrichment (about 0.2 credit per company). Saved once, refreshed rarely.
 
-const inRegions = (cc: string) => icp.company.regions.some((r) => codesFor(r).includes(cc));
+/** A location choice is a country or group, or a city saved as "city:Austin". */
+const inRegions = (cc: string, city?: string | null) => icp.company.regions.some((r) => {
+  if (r.startsWith("city:")) return !!city && city.toLowerCase().includes(r.slice(5).trim().toLowerCase());
+  return codesFor(r).includes(cc);
+});
 const CREDIT_PER_COMPANY = 0.2;
 
 export type Firmo = {
@@ -99,12 +103,12 @@ export async function saveFirmo(accountId: string, f: Firmo) {
 
 /** What we know about a company for fit. Every field is optional; a missing one counts as "not known yet", never as a mismatch. */
 export type FitRow = {
-  employees?: number | null; stage?: string | null; country?: string | null; firmo_at?: string | null; light_source?: string | null; employee_band?: string | null;
+  employees?: number | null; stage?: string | null; country?: string | null; hq_city?: string | null; firmo_at?: string | null; light_source?: string | null; employee_band?: string | null;
   tech?: string[] | null; industry?: string | null; tags?: string[] | null; blurb?: string | null; sales_motion?: string | null;
   domain?: string | null; name?: string | null; known_as?: string | null; last_round_date?: string | null; industry_ai?: string | null;
 };
 /** The columns to select wherever fit is computed, so a new criterion takes effect everywhere. */
-export const FIT_COLS = "employees,stage,country,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date,watched_at,industry_ai";
+export const FIT_COLS = "employees,stage,country,hq_city,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date,watched_at,industry_ai";
 
 /** Is this funding stage one of the stages we target? Each stage the owner picked has its own pattern (see lists.ts). */
 const stageWanted = (s: string) => icp.company.stages.some((w) => (STAGE_OPTIONS.find((o) => o.name === w)?.re ?? new RegExp(w.toLowerCase().replace(/[^a-z0-9 ]/g, ""))).test(s));
@@ -194,7 +198,7 @@ export function fitBreakdown(a: FitRow): { points: number; known: boolean; size:
     : 0; // series d+, IPO, acquired
 
   const cc = (a.country ?? "").toUpperCase();
-  const region = !cc ? 3 : inRegions(cc) ? 5 : 0;
+  const region = inRegions(cc, a.hq_city) ? 5 : !cc ? 3 : 0;
 
   // Each criterion scores 0 to 1; the owner's weights decide how much each counts. With the default weights (size 10, stage 10,
   // region 5, the rest 0) this is exactly size + stage + region, as before.

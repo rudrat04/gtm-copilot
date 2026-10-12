@@ -150,6 +150,7 @@
   .noteline b { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
   .noteadd { display: flex; gap: 6px; margin: 8px 0; } .noteadd input { flex: 1; }
   .tagrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 0; }
+  .tagrow .tsep { width: 1px; height: 16px; background: var(--line); margin: 0 4px; }
   .tagrow .tl { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); width: 66px; }
   .pcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 28px; }
   .pcols .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; padding-top: 12px; }
@@ -170,6 +171,34 @@
   .sigcard .sg-co { margin: 0 0 4px; }
   .sigcard .sg-text { font-size: 14.5px; margin: 0 0 8px; }
   .sigcard .sg-who { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .info { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; margin-left: 6px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--muted); font: italic 700 11px/1 Georgia, serif; cursor: help; vertical-align: middle; flex: none; text-transform: none; letter-spacing: 0; }
+  .info:hover, .info:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+  .info .tip { display: none; position: absolute; z-index: 30; left: -8px; top: calc(100% + 8px); width: max-content; max-width: min(280px, 70vw); padding: 9px 12px; border-radius: 10px; background: #2b2a26; color: #fff; font: 400 12.5px/1.45 var(--sans, system-ui, sans-serif); font-style: normal; text-align: left; white-space: normal; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+  .info:hover .tip, .info:focus .tip { display: block; }
+  details.gaps { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+  details.gaps > summary { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; list-style: none; font-size: 14px; }
+  details.gaps > summary::-webkit-details-marker { display: none; }
+  details.gaps > summary .sum { flex: 1; min-width: 0; }
+  details.gaps > summary::after { content: "▾"; color: var(--muted); font-size: 12px; }
+  details.gaps[open] > summary::after { content: "▴"; }
+  details.gaps .grow { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--soft); }
+  details.gaps .grow span { flex: 1; min-width: 200px; }
+  .sighead { display: flex; justify-content: space-between; align-items: center; margin: 0 0 10px; }
+  .sgroup { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 0 0 12px; background: var(--surface); }
+  .sgroup .persona { margin: 8px 0 0; }
+  .sgh { display: flex; align-items: center; gap: 4px; margin: 0 0 4px; font-size: 14px; }
+  .sgh .sadd { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  details.mail { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); margin: 10px 0 0; }
+  details.mail > summary { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; cursor: pointer; list-style: none; flex-wrap: wrap; }
+  details.mail > summary::-webkit-details-marker { display: none; }
+  details.mail > summary::after { content: "▾"; margin-left: auto; color: var(--muted); font-size: 12px; }
+  details.mail[open] > summary::after { content: "▴"; }
+  .mail .mn { font-weight: 600; font-size: 14.5px; } .mail .mw { color: var(--muted); font-size: 12.5px; }
+  .mail .mbody { padding: 0 16px 14px; border-top: 1px solid var(--line); }
+  .mail .mt { margin: 10px 0 0; font-size: 13.5px; color: var(--soft); }
+  .mail .msets { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .srow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; font-size: 14px; }
+  .mlist { list-style: none; margin: 0; padding: 0; font-size: 13.5px; } .mlist li { padding: 6px 0; border-top: 1px solid var(--line); } .mlist li span { color: var(--muted); }
   .lane { margin: 0 0 26px; }
   .lane > h3 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px; font-size: 15px; letter-spacing: .02em; }
   .lane > h3 span { font-weight: 400; font-size: 12.5px; color: var(--muted); }
@@ -410,6 +439,8 @@ let adminKey = ""; try { adminKey = localStorage.getItem("cp_admin") || ""; } ca
 
 /* ============ helpers ============ */
 const $ = (id) => document.getElementById(id);
+/** A small "i" that explains something on hover, focus or tap, so a screen does not need a paragraph of help text. */
+const info = (text) => `<button type="button" class="info" aria-label="${esc(text)}">i<span class="tip" role="tooltip">${esc(text)}</span></button>`;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 let inflight = 0;
@@ -686,14 +717,18 @@ function drawBoard() {
   const d = BOARD, total = d.items.length; PERSONAS = d.personas || PERSONAS;
   const sort = (BSORTS.find(([k]) => k === BSORT) || BSORTS[0])[2];
   $("thead").innerHTML = `<div class="day"><h2>${esc(new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }))}</h2>
-    <span>${total} on your board · <b>${d.lanes.now}</b> to contact now${d.hidden ? ` · ${d.hidden} more not shown` : ""}</span></div>
+    <span><b>${total}</b> on your board · <b>${d.lanes.now}</b> to contact now${d.hidden ? ` · ${d.hidden} not shown` : ""}${info("Each person is placed by their lead score, how well the company fits and what just happened there.")}</span></div>
     <div class="boardbar"><label style="display:inline-flex;gap:8px;align-items:center">Sort by <select data-bsort aria-label="Sort the board">${BSORTS.map(([k, l]) => `<option value="${k}"${BSORT === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>
-      <span>Each person is placed by lead, company fit and what just happened. <a href="#/people">All people</a></span></div>`;
+      <a href="#/people">All people</a></div>`;
   const nd = (st) => (d.needs || []).filter((n) => n.state === st);
   const names = (l) => `${esc(l.slice(0, 3).map((n) => n.name).join(", "))}${l.length > 3 ? "…" : ""}`;
-  const needs = (nd("unlisted").length ? `<div class="needs"><span><b>${nd("unlisted").length} strong compan${nd("unlisted").length > 1 ? "ies" : "y"}</b> with a fresh signal ${nd("unlisted").length > 1 ? "have" : "has"} nobody listed yet: ${names(nd("unlisted"))}</span><button class="btn ghost sm" data-peekbulk-board>List people (free)</button></div>` : "")
-    + (nd("no_match").length ? `<div class="needs"><span><b>${nd("no_match").length} compan${nd("no_match").length > 1 ? "ies" : "y"}</b> ${nd("no_match").length > 1 ? "have" : "has"} people saved but nobody who matches your buyer types: ${names(nd("no_match"))}</span><a class="btn ghost sm" href="#/people/${esc(nd("no_match")[0].id)}">See who is there</a></div>` : "")
-    + (nd("nobody").length ? `<div class="needs"><span><b>${nd("nobody").length} compan${nd("nobody").length > 1 ? "ies were" : "y was"}</b> looked up and nobody was found: ${names(nd("nobody"))}. They will be tried again in a few days.</span></div>` : "");
+  const gapRows = [
+    nd("unlisted").length ? `<div class="grow"><span><b>${nd("unlisted").length}</b> strong compan${nd("unlisted").length > 1 ? "ies have" : "y has"} a fresh signal but no people listed: ${names(nd("unlisted"))}</span><button class="btn ghost sm" data-peekbulk-board>List people (free)</button></div>` : "",
+    nd("no_match").length ? `<div class="grow"><span><b>${nd("no_match").length}</b> compan${nd("no_match").length > 1 ? "ies have" : "y has"} people saved, but none match your buyer types: ${names(nd("no_match"))}</span><a class="btn ghost sm" href="#/people/${esc(nd("no_match")[0].id)}">See who is there</a></div>` : "",
+    nd("nobody").length ? `<div class="grow"><span><b>${nd("nobody").length}</b> compan${nd("nobody").length > 1 ? "ies were" : "y was"} searched and nobody was found: ${names(nd("nobody"))}. We try again in a few days.</span></div>` : "",
+  ].filter(Boolean);
+  const gapN = nd("unlisted").length + nd("no_match").length + nd("nobody").length;
+  const needs = gapRows.length ? `<details class="gaps"${nd("unlisted").length ? " open" : ""}><summary><span class="sum"><b>${gapN}</b> compan${gapN > 1 ? "ies" : "y"} without a usable contact${info("Strong companies that have no one to contact yet. Listing people is free; emails cost a credit only when you reveal them.")}</span></summary>${gapRows.join("")}</details>` : "";
   const deb = d.debriefs ? `<div class="needs" style="margin-bottom:14px"><span><b>${d.debriefs} meeting${d.debriefs > 1 ? "s" : ""}</b> waiting for your debrief</span><button class="btn ghost sm" data-goto-meetings>Open Meetings</button></div>` : "";
   const lds = d.leads ? `<div class="needs" style="margin-bottom:14px"><span><b>${d.leads} new lead${d.leads > 1 ? "s" : ""}</b> waiting for a reply</span><button class="btn ghost sm" data-goto-inbound>Open Inbound</button></div>` : "";
   const att = d.attention?.items?.length ? `<article class="card attn"><p class="label">Needs attention${d.attention.total > d.attention.items.length ? ` · ${esc(d.attention.total)} in all` : ""}</p>
@@ -705,10 +740,10 @@ function drawBoard() {
   const lane = ([k, title, help]) => {
     const items = d.items.filter((i) => i.lane === k).sort(sort);
     if (!items.length) return "";
-    return `<section class="lane l-${k}"><h3>${esc(title)} <span>${items.length} · ${esc(help)}</span></h3><div class="grid">${items.map(card).join("")}</div></section>`;
+    return `<section class="lane l-${k}"><h3>${esc(title)} <span>${items.length}</span>${info(help)}</h3><div class="grid">${items.map(card).join("")}</div></section>`;
   };
   const empty = !total ? `<div class="card empty">Nothing on your board yet.<br>People appear here when they fit, something happens around them, or a follow-up is due.${emptyWhy(d)}</div>` : "";
-  $("tlist").innerHTML = att + lds + deb + (LANES.map(lane).join("") || empty) + needs;
+  $("tlist").innerHTML = att + lds + deb + needs + (LANES.map(lane).join("") || empty);
   const c = $("c-today"); c.textContent = d.lanes.now; c.hidden = !d.lanes.now;
 }
 
@@ -805,7 +840,8 @@ function aFacts(a) {
   return `<dl class="facts"><p class="label" style="grid-column:1/-1;margin:0">Company</p>
     ${fact("Size", f.size && esc(f.size), none)}
     ${fact("Stage", stage, none)}
-    ${fact("Location", f.location && esc(f.location), none)}
+    ${fact("City", f.city && esc(f.city), none)}
+    ${fact("Country", f.country_name && esc(f.country_name), none)}
     ${f.founded ? fact("Founded", esc(f.founded), none) : ""}
     ${fact("Industry", f.industry && esc(f.industry), "Unknown")}
     ${fact("Tools they use", tools, "Unknown")}
@@ -1108,6 +1144,19 @@ function wireCards(root, reload) {
     if (act === "pexport") {
       try { const r = await api("queue", { action: "person_export", person_id: card.dataset.pid }); if (r.mode === "dry_run") { say(r.message); return; } const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(r.data, null, 2)], { type: "application/json" })); a.download = "f1rstword-person.json"; a.click(); URL.revokeObjectURL(a.href); say("Downloaded."); }
       catch (err) { say(err.message); }
+      return;
+    }
+    if (act === "pbuyer") {
+      const opts = [...(PERSONAS || []).map((t) => ({ key: t, label: t })), { key: "__none", label: "Not a buyer" }, ...(card.querySelector(".ptag") ? [{ key: "__auto", label: "Back to automatic" }] : [])];
+      const pick = await choose({ title: "Buyer type for this person", body: "It is matched automatically from their job title. Choose one to set it by hand.", options: opts });
+      if (!pick) return;
+      card.classList.add("busy");
+      try {
+        const r = await api("queue", { action: "person_persona", person_id: card.dataset.pid, persona: pick === "__auto" ? undefined : pick === "__none" ? "" : pick });
+        if (r.mode === "dry_run") { say(r.message); unbusy(); return; }
+        say("Buyer type updated."); PPL = null; ACC = null;
+        refreshPerson(card).catch(() => (CUR.view === "today" ? loadToday(true) : loadPeople(true)));
+      } catch (err) { say(err.message); unbusy(); }
       return;
     }
     if (act === "psuppress") {
@@ -1553,13 +1602,23 @@ function msDraw(el) {
   const q = (el.querySelector(".mspop input")?.value || "").trim().toLowerCase(), g = Number(el.dataset.groups || 0);
   const open = MS_OPEN === path;
   const items = opts.map((o, i) => [o, i]).filter(([o]) => !q || o.toLowerCase().includes(q));
-  const row = ([o]) => `<button type="button" class="msitem${sel.includes(o) ? " sel" : ""}" data-msopt="${esc(o)}"><i>${sel.includes(o) ? "✓" : ""}</i>${esc(o)}</button>`;
-  const list = g ? `${items.some(([, i]) => i < g) ? `<div class="msgroup">Regions</div>` : ""}${items.filter(([, i]) => i < g).map(row).join("")}${items.some(([, i]) => i >= g) ? `<div class="msgroup">Countries</div>` : ""}${items.filter(([, i]) => i >= g).map(row).join("")}` : items.map(row).join("");
-  el.innerHTML = `<div class="mschips">${sel.map((o) => `<span class="mstag">${esc(o)}<button type="button" data-msrm="${esc(o)}" aria-label="Remove ${esc(o)}">×</button></span>`).join("")}<button type="button" class="msopen" data-msopen>${sel.length ? "+ Add more" : "+ Add"}</button></div>
+  const nice = (o) => (o.startsWith("city:") ? `${o.slice(5)} (city)` : o);
+  const row = ([o]) => `<button type="button" class="msitem${sel.includes(o) ? " sel" : ""}" data-msopt="${esc(o)}"><i>${sel.includes(o) ? "✓" : ""}</i>${esc(nice(o))}</button>`;
+  const cityAdd = path === "regions" && q.length >= 2 && !opts.some((o) => o.toLowerCase() === q) && !sel.includes(`city:${q}`) ? `<div class="msgroup">City</div><button type="button" class="msitem" data-msopt="city:${esc(q.replace(/\b\w/g, (c) => c.toUpperCase()))}"><i></i>Add "${esc(q.replace(/\b\w/g, (c) => c.toUpperCase()))}" as a city</button>` : "";
+  const list = g ? `${items.some(([, i]) => i < g) ? `<div class="msgroup">Regions</div>` : ""}${items.filter(([, i]) => i < g).map(row).join("")}${items.some(([, i]) => i >= g) ? `<div class="msgroup">Countries</div>` : ""}${items.filter(([, i]) => i >= g).map(row).join("")}${cityAdd}` : items.map(row).join("");
+  el.innerHTML = `<div class="mschips">${sel.map((o) => `<span class="mstag">${esc(nice(o))}<button type="button" data-msrm="${esc(o)}" aria-label="Remove ${esc(o)}">×</button></span>`).join("")}<button type="button" class="msopen" data-msopen>${sel.length ? "+ Add more" : "+ Add"}</button></div>
     ${open ? `<div class="mspop"><input type="text" data-msq placeholder="Search…" aria-label="Search ${esc(path)}" value="${esc(q)}"><div class="mslist">${list || `<div class="msnone">Nothing matches.</div>`}</div></div>` : ""}`;
   if (open && !el.dataset.focused) { el.dataset.focused = "1"; el.querySelector("[data-msq]")?.focus(); }
 }
 const msDrawAll = () => document.querySelectorAll("[data-ms]").forEach(msDraw);
+const numIn = (path, min, max, aria, w = 64) => `<input type="number" min="${min}" max="${max}" data-num="${path}" value="${esc(getPath(P, path))}" aria-label="${esc(aria)}" style="width:${w}px">`;
+const chk = (path, title, hint) => `<label class="toggle" style="margin:0 0 8px"><input type="checkbox" data-chk="${path}" ${getPath(P, path) ? "checked" : ""}><span>${esc(title)}${hint ? info(hint) : ""}</span></label>`;
+const MAIL_OPEN = new Set();
+/** One kind of message: its name, when it arrives, what is in it, and its own settings, closed until you open it. */
+const mailBox = (key, name, when, trigger, contents, settings) => `<details class="mail" data-mk="${key}"${MAIL_OPEN.has(key) ? " open" : ""}><summary><span class="mn">${esc(name)}</span><span class="mw">${esc(when)}</span></summary>
+  <div class="mbody"><p class="mt"><b>When:</b> ${esc(trigger)}</p><p class="mt"><b>What is in it:</b> ${esc(contents)}</p><div class="msets">${settings}</div></div></details>`;
+document.addEventListener("toggle", (e) => { const d = e.target; if (d.matches?.("details.mail")) { if (d.open) MAIL_OPEN.add(d.dataset.mk); else MAIL_OPEN.delete(d.dataset.mk); } }, true);
+const SIG_GROUPS = ["Events", "Tools and competitors", "Company changes", "Press and announcements", "New launches", "Your own"];
 const WATCH_ROWS = [
   ["hotUntouched", "A hot account with a contact is still untouched after", "hours", ""],
   ["followupOverdue", "A follow-up is overdue by", "days", ""],
@@ -1614,7 +1673,7 @@ function drawSetup() {
   const d = SETUP, own = !!d.admin;
   $("setupbody").innerHTML = `${setupNavHtml()}${setupChecklistHtml()}
     <article class="card"><p class="label">What you sell</p>
-      <p class="help" style="margin:0 0 10px">Describe your product or service in a sentence or two, and add your website if you like. One click turns it into suggestions for everything below, which you can edit. You decide what is saved.</p>
+      <p class="help" style="margin:0 0 10px">Describe what you sell in a sentence or two. One click turns it into suggestions for the settings below.</p>
       <div class="field"><label for="pdesc">What do you sell, and to whom?</label><textarea id="pdesc" class="big" maxlength="1500" data-text="product.description" placeholder="Example: A tool that cleans up CRM data for sales teams at B2B software companies with 20 to 200 people.">${esc(P.product.description)}</textarea></div>
       <div class="field"><label for="pname">Your product's name (optional)</label><input id="pname" type="text" class="tin" data-text="product.name" value="${esc(P.product.name)}" placeholder="Used in drafts, briefs and deal names" maxlength="40"></div>
       <div class="field"><label for="psite">Your website (optional)</label><input id="psite" type="text" class="tin" data-text="product.website" value="${esc(P.product.website)}" placeholder="yourcompany.com" maxlength="80"></div>
@@ -1630,17 +1689,17 @@ function drawSetup() {
         ${tagField("excludeDomains", "Never show these companies", "Domains, for example partner.com.")}
       </div></details>
     </article>
-    <article class="card"><p class="label">Who we look for</p>
-      <p class="help" style="margin:0 0 12px">How well a company fits is worked out for you from these choices, your product above and what we find out about the company. There is nothing to weigh.</p>
-      ${msField("industries", "Industries", d.options.industries, "The same industry names Hunter uses, so each choice is a filter in the company search. Most software companies are under Software Development; narrow it with the words below.")}
+    <article class="card"><p class="label">Who we look for${info("How well a company fits is worked out from these choices, your product above and what we learn about the company. There is nothing to weigh.")}</p>
+      
+      ${msField("industries", "Industries", d.options.industries, "Hunter's own industry names. Most software companies are under Software Development; narrow it with the words below.")}
       ${tagField("keywords", "Words that describe them", "What these companies make or do, for example crm, sales enablement, revenue operations. They narrow the company search.")}
       <div class="field"><span class="lbl">Company size (people)</span><div class="numrow"><input type="number" min="1" data-num="employeesMin" value="${esc(P.employeesMin)}" aria-label="Minimum people"> to <input type="number" min="1" data-num="employeesMax" value="${esc(P.employeesMax)}" aria-label="Maximum people"></div></div>
       ${msField("stages", "Funding stage", d.options.stages, "Pick every stage you would sell to.")}
-      ${msField("regions", "Where they are based", d.options.regions, "Regions and single countries. Companies elsewhere show as Outside range and are hidden under Low fit.", d.options.region_groups)}
+      ${msField("regions", "Where they are based", d.options.regions, "Pick a region or country, or type a city name to add it. Companies elsewhere show as Outside range.", d.options.region_groups)}
     </article>
     <article class="card" id="icpcard"><p class="label">What your customers look like</p><p class="meta" style="margin:0">${own ? "Loading…" : "Unlock to read your HubSpot customers."}</p></article>
     <article class="card"><p class="label">Who we contact</p>
-      <p class="help" style="margin:0 0 12px">The kinds of buyer you want to reach, <b>best first</b>: the order is the priority. A person is matched when their job title contains one of the title words, and, if you set them, their department and seniority fit. Contacts you already have are re-ranked when you save. The HubSpot "Scored persona" value is set up for you. Departments are the same ones Hunter uses, so they also steer its people search. Hunter only groups people as Junior, Senior or Executive, so the levels here (taken from the job title) are mapped to those when searching.</p>
+      <p class="help" style="margin:0 0 12px">The buyers you want to reach, best first.${info("The order is the priority. A person matches when their job title contains one of the title words and, if set, their department and seniority fit. Saving re-ranks the people you already have. Departments are Hunter's, so they also steer its people search; the levels here come from the job title and are mapped to Hunter's Junior, Senior and Executive.")}</p>
       ${P.personas.map((x, i) => `<div class="persona" data-pi="${i}">
         <div class="phead"><span class="pn">#${i + 1}</span><input type="text" maxlength="40" data-text="personas.${i}.title" value="${esc(x.title)}" aria-label="Name of this buyer type" placeholder="Name, for example Head of Sales">
           <span class="pmove"><button type="button" class="btn ghost sm" data-pup="${i}" aria-label="Move up"${i === 0 ? " disabled" : ""}>↑</button><button type="button" class="btn ghost sm" data-pdown="${i}" aria-label="Move down"${i === P.personas.length - 1 ? " disabled" : ""}>↓</button></span>
@@ -1649,7 +1708,7 @@ function drawSetup() {
         <div class="field"><label for="pd${i}">Department</label><select id="pd${i}" data-sel="personas.${i}.department"><option value="">Any department</option>${d.options.departments.map((o) => `<option${x.department === o ? " selected" : ""}>${esc(o)}</option>`).join("")}</select></div>
         <div class="field" style="margin-bottom:0"><span class="lbl">Seniority</span><div class="chips" style="margin:0">${d.options.seniorities.map(([k, l]) => `<button type="button" class="chip${(x.seniority || []).includes(k) ? " sel" : ""}" data-psen="${i}" data-val="${esc(k)}">${esc(l)}</button>`).join("")}</div><p class="help">Leave all off to accept any seniority.</p></div>
       </div>`).join("")}
-      <div class="actions" style="margin:6px 0 0"><button type="button" class="btn ghost" data-padd${P.personas.length >= 8 ? " disabled" : ""}>Add a buyer type</button><span class="meta">Up to 8. Saving applies it everywhere: search ranking, Today and HubSpot.</span></div>
+      <div class="actions" style="margin:6px 0 0"><button type="button" class="btn ghost" data-padd${P.personas.length >= 8 ? " disabled" : ""}>Add a buyer type</button><span class="meta">Up to 8.</span></div>
     </article>
     <article class="card"><p class="label">What counts as a buying signal</p>
       <div class="toggles">
@@ -1658,50 +1717,63 @@ function drawSetup() {
         <label class="toggle"><input type="checkbox" data-sig="community" ${P.signals.community ? "checked" : ""}><span>Community buzz<small>Hacker News mentions</small></span></label>
       </div>
       <hr class="hr">
-      ${tagField("hiringRoles", "Job titles that count as a hiring signal", "A company hiring for any of these is treated as scaling its sales team.")}
-      <hr class="hr">
-      <p class="lbl" style="font-weight:600;font-size:14px;margin:0 0 4px">Signals you add</p>
-      <p class="help" style="margin:0 0 10px">Anything else that tells you a company is worth a call. They count the next time companies are checked (daily for companies in your queue, weekly for the rest).</p>
-      ${P.signalRules.map((r, i) => { const t = d.options.rule_types.find((x) => x.key === r.type) || {}; return `<div class="persona" data-ri="${i}">
-        <div class="phead"><b style="flex:1">${esc(t.label || r.type)}</b><label class="toggle" style="margin:0"><input type="checkbox" data-chk="signalRules.${i}.on" ${r.on ? "checked" : ""} aria-label="On"><span>On</span></label><button type="button" class="btn ghost sm" data-rrm="${i}">Remove</button></div>
-        ${tagField(`signalRules.${i}.words`, t.words || "Words", t.help)}</div>`; }).join("")}
-      ${P.signalRules.length >= 12 ? "" : `<div class="field" style="margin-bottom:0"><span class="lbl">Add a signal</span><div class="chips" style="margin:0">${d.options.rule_types.map((t) => `<button type="button" class="chip" data-radd="${esc(t.key)}" title="${esc(t.help)}">+ ${esc(t.label)}</button>`).join("")}</div></div>`}
+      <div class="sighead"><p class="lbl" style="font-weight:600;font-size:14px;margin:0">Signals by type${info("Each signal counts the next time companies are checked: daily for companies in your queue, weekly for the rest.")}</p><span class="meta">${P.signalRules.length} of 12 custom</span></div>
+      <div class="sgroup"><div class="sgh"><b>Hiring</b>${info("A company hiring for any of these titles is treated as scaling its sales team.")}</div>
+        ${tagField("hiringRoles", "Job titles that count", "")}</div>
+      ${SIG_GROUPS.map((g) => { const types = d.options.rule_types.filter((t) => t.group === g); if (!types.length) return ""; const rules = P.signalRules.map((r, i) => [r, i]).filter(([r]) => types.some((t) => t.key === r.type));
+        return `<div class="sgroup"><div class="sgh"><b>${esc(g)}</b>${info(types.map((t) => t.help).join(" "))}<span class="sadd">${P.signalRules.length >= 12 ? "" : types.map((t) => `<button type="button" class="chip" data-radd="${esc(t.key)}">+ ${esc(types.length > 1 || rules.length ? t.label : "Add")}</button>`).join("")}</span></div>
+          ${rules.map(([r, i]) => { const t = types.find((x) => x.key === r.type); return `<div class="persona" data-ri="${i}">
+            <div class="phead"><b style="flex:1;font-size:13px">${esc(types.length > 1 || g === "Your own" ? t.label : "Words to look for")}</b><label class="toggle" style="margin:0"><input type="checkbox" data-chk="signalRules.${i}.on" ${r.on ? "checked" : ""} aria-label="On"><span>On</span></label><button type="button" class="btn ghost sm" data-rrm="${i}">Remove</button></div>
+            ${tagField(`signalRules.${i}.words`, t.words, "")}</div>`; }).join("") || `<p class="meta" style="margin:2px 0 0">Nothing set. Use the button above to add some.</p>`}</div>`; }).join("")}
     </article>
     <article class="card"><p class="label">Which companies to show</p>
       <div class="field"><label for="minfit">Lowest fit to show</label>
         <select id="minfit" data-sel="minFit" aria-label="Lowest fit to show">${[["matches", "Fits only"], ["close", "Fits and partly fits"], ["unknown", "Also fit unknown (not checked yet)"], ["outside", "Everything, even outside range"]].map(([v, t]) => `<option value="${v}"${P.minFit === v ? " selected" : ""}>${t}</option>`).join("")}</select>
-        <p class="help">Right now: ${esc(d.fit_counts.matches)} fit, ${esc(d.fit_counts.close)} partly fit, ${esc(d.fit_counts.unknown)} not checked, ${esc(d.fit_counts.outside)} outside range. Companies below your choice move to <b>Low fit</b> in Accounts and never appear in Today, alerts, discovery or automatic contact lookups. Hiding "fit unknown" also hides companies whose size has not been checked yet.</p></div>
+        <p class="help">Right now: ${esc(d.fit_counts.matches)} fit, ${esc(d.fit_counts.close)} partly fit, ${esc(d.fit_counts.unknown)} not checked, ${esc(d.fit_counts.outside)} outside range. ${info("Companies below your choice move to Low fit and never appear on your To-do, in alerts, discovery or automatic contact lookups. Hiding fit unknown also hides companies whose size has not been checked yet.")}</p></div>
       <div class="field"><span class="lbl">Lowest score to count as ready</span><div class="numrow"><input type="number" min="0" max="90" step="5" data-num="minScore" value="${esc(P.minScore)}" aria-label="Lowest score to count as ready"> out of 100</div>
-        <p class="help">A company needs at least this score to enter the queue. Lower it to see more companies, raise it to see fewer.</p></div>
+        <p class="help">Lower it to see more companies, raise it to see fewer.</p></div>
     </article>
     <article class="card"><p class="label">Alerts, daily email and flags</p>
-      <p class="help" style="margin:0 0 12px">Everything here is about being told the right thing at the right time. Pick a style to fill in sensible numbers, then change anything you like. Times are IST.</p>
-      <div class="chips" style="margin:0 0 6px">${[["quiet", "Quiet", "Few emails, only big problems"], ["normal", "Normal", "The defaults"], ["busy", "Busy", "More alerts, quicker nudges"]].map(([k, l, t]) => `<button type="button" class="chip" data-preset="${k}" title="${esc(t)}">${l}</button>`).join("")}</div>
-      <p class="help" style="margin:0 0 4px">A style only fills the boxes below. Nothing changes until you press Save.</p>
+      <p class="help" style="margin:0 0 10px">Every message you can get, when it arrives and what is in it. Open one to change its settings. Times are IST.</p>
+      <div class="chips" style="margin:0 0 4px;align-items:center"><span class="meta">Style</span>${[["quiet", "Quiet", "Few emails, only big problems"], ["normal", "Normal", "The defaults"], ["busy", "Busy", "More alerts, quicker nudges"]].map(([k, l, t]) => `<button type="button" class="chip" data-preset="${k}" title="${esc(t)}">${l}</button>`).join("")}${info("A style only fills in the numbers below. Nothing changes until you press Save.")}</div>
 
-      <hr class="hr"><p class="lbl" style="font-weight:600;font-size:14px;margin:0 0 8px">1. When to alert me</p>
-      <div class="field" style="margin-bottom:10px"><div class="numrow">Send up to <input type="number" min="0" max="10" data-num="watch.alertsPerDay" value="${esc(P.watch.alertsPerDay)}" aria-label="Hot alerts a day" style="width:72px"> instant hot-alert emails a day<span class="help" style="margin:0">When a company in your queue shows a new signal. 0 turns them off.</span></div></div>
-      <div class="field" style="margin-bottom:10px"><div class="numrow">Before an alert, search for people at up to <input type="number" min="0" max="10" data-num="watch.alertSearches" value="${esc(P.watch.alertSearches)}" aria-label="Searches a day before alerts" style="width:72px"> companies a day<span class="help" style="margin:0">So the email names who to contact. Only for companies that fit or that you follow, and never one searched in the last 30 days. A search costs 1 credit (sometimes 2); finding nobody is free. 0 turns it off.</span></div></div>
-      <div class="field" style="margin-bottom:10px"><div class="numrow">Always keep <input type="number" min="0" max="45" data-num="watch.alertReserve" value="${esc(P.watch.alertReserve)}" aria-label="Search credits to keep" style="width:72px"> search credits for my own searches<span class="help" style="margin:0">Automatic searches stop when only this many are left this month.</span></div></div>
-      <div class="toggles">
-        <label class="toggle"><input type="checkbox" data-chk="watch.autoFix" ${P.watch.autoFix ? "checked" : ""}><span>Fix a running-dry list automatically<small>When your To-do is about to run out, search the best 3 companies without a contact and list who was found in the email. Uses 3 to 6 credits when it happens. Off by default.</small></span></label>
-        <label class="toggle"><input type="checkbox" data-chk="watch.titleCheck" ${P.watch.titleCheck ? "checked" : ""}><span>Check job titles of the people I follow, monthly<small>Catches a job change. Uses 1 search credit per company a month, inside your reserve. Off by default.</small></span></label>
-        <div class="field" style="margin:4px 0 10px"><div class="numrow">Look up what the people I follow are doing, for up to <input type="number" min="0" max="6" data-num="watch.activityPerDay" value="${esc(P.watch.activityPerDay)}" aria-label="People a day" style="width:64px"> people a day<span class="help" style="margin:0">Events they speak at or join, podcasts, posts, awards, job moves. A web search by full name: about 5 cents of AI each, each person at most every two weeks. 0 turns it off. Anything that concerns their own team (sales hiring for a sales head) is free and always on.</span></div></div>
-        <label class="toggle"><input type="checkbox" data-chk="watch.autoPush" ${P.watch.autoPush ? "checked" : ""}><span>Add to HubSpot when I start working a company<small>When you mark a company contacted, replied or meeting booked and it is not in HubSpot yet, the company and its best revealed people (at most 2) are added first, so the status updates have somewhere to go. Nothing is added just for looking, revealing or following.</small></span></label>
-        <label class="toggle"><input type="checkbox" data-chk="watch.watchlistAlerts" ${P.watch.watchlistAlerts ? "checked" : ""}><span>Alert me about companies I follow<small>Up to 5 a day, separate from the number above. Any new signal counts, whatever the score.</small></span></label>
-        <label class="toggle"><input type="checkbox" data-chk="watch.urgent" ${P.watch.urgent ? "checked" : ""}><span>Check for urgent problems every 3 hours<small>A hot company left untouched, or a lead past its reply target. Everything else is checked once a day.</small></span></label>
-        <label class="toggle"><input type="checkbox" data-chk="watch.todoForUrgent" ${P.watch.todoForUrgent ? "checked" : ""}><span>Add a HubSpot to-do for urgent problems<small>Only for companies already in HubSpot, at most 3 a run.</small></span></label>
-      </div>
+      ${mailBox("hot", "Hot alert", P.watch.alertsPerDay ? `Instant · up to ${P.watch.alertsPerDay} a day` : "Off", "A company in your queue shows a new buying signal.",
+        "The company, the signal and how old it is, and up to 2 people to contact with their buyer type and whether they are already in HubSpot. Held back for the daily email if the company does not fit and you do not follow it.",
+        `<div class="srow">Send up to ${numIn("watch.alertsPerDay", 0, 10, "Hot alerts a day")} a day ${info("0 turns hot alerts off.")}</div>
+         <div class="srow">Before an alert, look for people at up to ${numIn("watch.alertSearches", 0, 10, "Searches a day before alerts")} companies a day ${info("So the email names who to contact. Only for companies that fit or that you follow, never one searched in the last 30 days. A search costs 1 credit (sometimes 2); finding nobody is free. 0 turns it off.")}</div>
+         <div class="srow">Keep ${numIn("watch.alertReserve", 0, 45, "Search credits to keep")} search credits for my own use ${info("Automatic searches stop when only this many credits are left this month.")}</div>`)}
 
-      <hr class="hr"><p class="lbl" style="font-weight:600;font-size:14px;margin:0 0 8px">2. Daily email</p>
-      <div class="field" style="margin-bottom:10px"><div class="numrow">Arrives at <input type="time" data-dtime value="${esc(DIGEST_TIME ?? d.digest_time_ist)}" aria-label="Time the daily email arrives (IST)" style="width:120px"> IST<span class="help" style="margin:0">Companies are re-checked 90 minutes before, so the email is fresh.</span></div></div>
-      <div class="field" style="margin-bottom:10px"><div class="numrow">Show up to <input type="number" min="3" max="15" data-num="watch.todayCap" value="${esc(P.watch.todayCap)}" aria-label="Most people in the email" style="width:72px"> people on Today and in the email</div></div>
-      <div class="toggles"><label class="toggle"><input type="checkbox" data-chk="watch.digestFlags" ${P.watch.digestFlags ? "checked" : ""}><span>Include a "Needs attention" section<small>The problems found by the checks below.</small></span></label></div>
-      ${own ? `<div class="actions" style="margin:10px 0 0"><button type="button" class="btn ghost" data-digestpreview>Preview today's email</button><span class="meta">Shows it here. Nothing is sent. Uses about a cent of AI.</span></div>` : ""}
+      ${mailBox("watch", "Watchlist alert", P.watch.watchlistAlerts ? "Instant · up to 5 a day" : "Off", "Something happens at a company or with a person you follow.",
+        "What moved: new funding, a leader hired, an event they host, a competitor in use, a deal change, or a followed person in the news. Big movements are grouped into one email (at most 3 a day); smaller ones wait for the daily email.",
+        `${chk("watch.watchlistAlerts", "Alert me about companies I follow", "Up to 5 a day, separate from the hot alerts. Any new signal counts, whatever the score.")}
+         <div class="srow">Look up what followed people are doing, for up to ${numIn("watch.activityPerDay", 0, 6, "People a day", 56)} people a day ${info("Events they speak at or join, podcasts, posts, awards, job moves. A web search by full name: about 5 cents of AI each, each person at most every two weeks. 0 turns it off. Anything about their own team is free and always on.")}</div>
+         ${chk("watch.titleCheck", "Check job titles of followed people monthly", "Catches a job change. Uses 1 search credit per company a month, inside your reserve. Off by default.")}`)}
 
-      <hr class="hr"><p class="lbl" style="font-weight:600;font-size:14px;margin:0 0 4px">3. What counts as a problem</p>
-      <p class="help" style="margin:0 0 10px">Each problem is flagged once, shown under <b>Needs attention</b> on your To-do and in the email, and clears itself when it is fixed.</p>
-      ${WATCH_ROWS.map(([k, before, unit, after]) => `<div class="field" style="margin-bottom:10px"><label class="toggle" style="margin:0"><input type="checkbox" data-chk="watch.checks.${k}.on" ${P.watch.checks[k].on ? "checked" : ""}><span>${esc(before)}${unit ? ` <input type="number" min="0" data-num="watch.checks.${k}.n" value="${esc(P.watch.checks[k].n)}" style="width:72px" aria-label="${esc(before)} ${esc(unit)}"> ${esc(unit)}` : ""}${after ? ` ${esc(after)}` : ""}</span></label></div>`).join("")}
+      ${mailBox("daily", "Daily email", `Every day at ${DIGEST_TIME ?? d.digest_time_ist} IST`, "Your morning summary.",
+        "Since yesterday (new signals, people, replies, leads, held-back alerts), the people to contact today, a Needs attention section if there are problems, and the companies still waiting for a contact.",
+        `<div class="srow">Arrives at <input type="time" data-dtime value="${esc(DIGEST_TIME ?? d.digest_time_ist)}" aria-label="Time the daily email arrives (IST)" style="width:118px"> IST ${info("Companies are re-checked 90 minutes before, so the email is fresh.")}</div>
+         <div class="srow">Show up to ${numIn("watch.todayCap", 3, 15, "Most people in the email")} people ${info("Also the most people on your To-do board.")}</div>
+         ${chk("watch.digestFlags", "Include a Needs attention section", "The problems found by the checks further down.")}
+         ${own ? `<div class="srow"><button type="button" class="btn ghost sm" data-digestpreview>Preview today's email</button><span class="meta">Nothing is sent.</span></div>` : ""}`)}
+
+      ${mailBox("flags", "Problem flags", P.watch.urgent ? "Urgent: every 3 hours" : "Once a day", "Something in your pipeline looks off.",
+        "A card on your To-do, a section in the daily email and a bell notification. Urgent ones (a hot company left alone, a lead past its reply target) are checked every 3 hours and can add a HubSpot to-do. Each flag fires once and clears itself when fixed.",
+        `${chk("watch.urgent", "Check for urgent problems every 3 hours", "Everything else is checked once a day.")}
+         ${chk("watch.todoForUrgent", "Add a HubSpot to-do for urgent problems", "Only for companies already in HubSpot, at most 3 a run.")}
+         <p class="lbl" style="font-weight:600;font-size:13px;margin:12px 0 6px">What counts as a problem</p>
+         ${WATCH_ROWS.map(([k, before, unit, after]) => `<div class="field" style="margin-bottom:8px"><label class="toggle" style="margin:0"><input type="checkbox" data-chk="watch.checks.${k}.on" ${P.watch.checks[k].on ? "checked" : ""}><span>${esc(before)}${unit ? ` <input type="number" min="0" data-num="watch.checks.${k}.n" value="${esc(P.watch.checks[k].n)}" style="width:68px" aria-label="${esc(before)} ${esc(unit)}"> ${esc(unit)}` : ""}${after ? ` ${esc(after)}` : ""}</span></label></div>`).join("")}`)}
+
+      ${mailBox("auto", "Background actions", "Uses credits only inside your reserve", "Things done for you between emails.",
+        "Nothing is sent. These add people or companies to your lists and to HubSpot.",
+        `${chk("watch.autoFix", "Fix a running-dry list automatically", "When your To-do is about to run out, search the best 3 companies without a contact and list who was found in the email. Uses 3 to 6 credits when it happens. Off by default.")}
+         ${chk("watch.autoPush", "Add to HubSpot when I start working a company", "When you mark a company contacted, replied or meeting booked and it is not in HubSpot yet, the company and its best 2 revealed people are added first, so status updates have somewhere to go. Nothing is added just for looking, revealing or following.")}`)}
+
+      <div class="mailfixed"><p class="lbl" style="font-weight:600;font-size:13px;margin:16px 0 6px">Always on, no settings${info("These only ever go to you, never to a prospect.")}</p>
+        <ul class="mlist"><li><b>Meeting brief</b> <span>when a new meeting with an outside guest is booked: who they are, what is new, questions to ask</span></li>
+          <li><b>How did it go?</b> <span>5 minutes after a briefed meeting ends, with four one-tap answers</span></li>
+          <li><b>Meeting cancelled or moved</b> <span>the account goes back to follow up and the debrief re-arms</span></li>
+          <li><b>New lead</b> <span>when someone fills in your form: who, why now and a reply target; plus one reminder if it goes unanswered</span></li>
+          <li><b>Why was it lost?</b> <span>once, when a deal we opened is closed lost without a reason</span></li></ul></div>
     </article>
     <div class="actions" style="margin:0 0 18px"><button class="btn primary" data-save>Save changes</button><span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : "Demo mode: unlock to save changes."}</span></div>
 
@@ -2209,16 +2281,15 @@ function personCard(p, o = {}) {
     <div class="phead">
       <div class="pid">
         <h3 class="title">${esc(p.name)}</h3>
-        <div class="role">${esc(p.title || "Title unknown")} <span class="at">at</span> <a class="clink" href="#/company/${esc(p.account_id)}">${esc(p.company)}</a>${p.co.location ? ` <span class="at">· ${esc(p.co.location)}</span>` : ""}</div>
+        <div class="role">${esc(p.title || "Title unknown")} <span class="at">at</span> <a class="clink" href="#/company/${esc(p.account_id)}">${esc(p.company)}</a></div>
       </div>
       <div class="pwatch">${watchBtn("person", p.id, p.watched, "Watch person")}${watchBtn("company", p.account_id, p.co.watched, "Watch company")}</div>
     </div>
-    <div class="tagrow" aria-label="About the person"><span class="tl">Person</span><span class="badge ${LEAD[p.lead.label][0]}" title="${p.lead.ai ? "Judged by the AI. " : ""}Lead score ${esc(p.lead.score)} of 100">${LEAD[p.lead.label][1]}${p.lead.ai ? " · AI" : ""}</span>${p.decision_maker ? `<span class="badge accent" title="Hunter marks this person as a decision maker">Decision maker</span>` : ""}${p.persona ? `<span class="badge good" title="${esc(BUYER[p.lead.buyer] || "")}">${esc(p.persona)}</span>` : `<span class="badge" title="Not one of your buyer types">Not a buyer type</span>`}${p.seniority ? `<span class="badge">${esc(LEVEL[p.seniority] || p.seniority)}</span>` : ""}${p.department && (p.department || "").toLowerCase() !== (p.persona || "").toLowerCase() ? `<span class="badge">${esc(p.department)}</span>` : ""}${p.in_hubspot ? `<span class="badge good">In HubSpot</span>` : ""}${blocked ? `<span class="badge bad">${p.hs_status === "opted_out" ? "Opted out" : "Bounced"}</span>` : ""}</div>
-    <div class="tagrow" aria-label="About the company"><span class="tl">Company</span><span class="badge ${fit[1] || ""}">${esc(fit[0])}</span><span class="badge ${p.company_heat}">${esc(HEAT[p.company_heat] || "")}</span>${p.co.stage && !/^(other|unknown|undisclosed)/i.test(p.co.stage) ? `<span class="badge">${esc(p.co.stage)}</span>` : ""}${p.co.size ? `<span class="badge">${esc(p.co.size)}</span>` : ""}${p.co.industry ? `<span class="badge">${esc(p.co.industry)}</span>` : ""}${p.hs_company ? `<span class="badge ${p.hs_company.ours ? "good" : "warn"}" title="${p.hs_company.ours ? "This company is in HubSpot" : "HubSpot already has this company"}">In HubSpot${p.hs_company.contacts != null ? ` · ${esc(p.hs_company.contacts)}` : ""}</span>` : ""}</div>
+    <div class="tagrow" aria-label="Summary"><span class="badge ${LEAD[p.lead.label][0]}" title="${p.lead.ai ? "Judged by the AI. " : ""}Lead score ${esc(p.lead.score)} of 100">${LEAD[p.lead.label][1]}${p.lead.ai ? " · AI" : ""}</span>${p.decision_maker ? `<span class="badge accent" title="Hunter marks this person as a decision maker">Decision maker</span>` : ""}<span class="tsep" aria-hidden="true"></span><span class="badge ${fit[1] || ""}" title="How well the company matches who you look for">${esc(fit[0])}</span>${p.company_heat === "hot" || p.company_heat === "warm" ? `<span class="badge ${p.company_heat}" title="Company heat: how much is happening there">${esc(HEAT[p.company_heat] || "")}</span>` : ""}${blocked ? `<span class="badge bad">${p.hs_status === "opted_out" ? "Opted out" : "Bounced"}</span>` : ""}</div>
     ${o.headline ? `<div class="status-line${o.due ? " due" : ""}">${esc(o.headline)}</div>` : ""}
     <div class="pcols">
       <dl class="facts"><p class="label" style="grid-column:1/-1;margin:0">Person</p>
-        ${pf("Buyer type", `${p.persona ? `<span class="ptag">${esc(p.persona)}</span> <small>${esc(BUYER[p.lead.buyer] || "")}</small>` : U("Not one of your buyer types")}<div class="why-small">${esc(p.match_why || "")}</div>${own ? `<select class="mini" data-psetpersona aria-label="Change the buyer type"><option value="__keep">Change…</option>${(PERSONAS || []).map((t) => `<option value="${esc(t)}">Set to ${esc(t)}</option>`).join("")}<option value="">Not a buyer</option>${p.persona_manual ? `<option value="__auto">Back to automatic</option>` : ""}</select>` : ""}`)}
+        ${pf("Buyer type", p.persona ? `<span class="ptag" style="margin:0">${esc(p.persona)}</span> <small title="${esc(p.match_why || "")}">${esc((BUYER[p.lead.buyer] || "").replace(" buyer match", "").replace(" match", ""))}</small>` : `<span class="unk" title="${esc(p.match_why || "")}">Not one of your buyer types</span>`)}
         ${pf("Department", p.department && esc(p.department), "Unknown")}
         ${pf("Level", p.seniority && esc(LEVEL[p.seniority] || p.seniority), "Unknown")}
         ${pf("Email", email)}
@@ -2229,7 +2300,8 @@ function personCard(p, o = {}) {
         ${pf("Size", p.co.size && esc(p.co.size), p.co.checked ? "Unknown" : "Not checked yet")}
         ${pf("Stage", p.co.stage && esc(p.co.stage), p.co.checked ? "Unknown" : "Not checked yet")}
         ${pf("Industry", p.co.industry && esc(p.co.industry), "Unknown")}
-        ${pf("Location", p.co.location && esc(p.co.location), p.co.checked ? "Unknown" : "Not checked yet")}
+        ${pf("City", p.co.city && esc(p.co.city), p.co.checked ? "Unknown" : "Not checked yet")}
+        ${pf("Country", p.co.country_name && esc(p.co.country_name), p.co.checked ? "Unknown" : "Not checked yet")}
         ${pf("Found via", p.co.source && esc({ discovered: "Discovery", hubspot: "HubSpot", inbound: "Inbound form", research: "Your research", fixture: "Sample list" }[p.co.source] || p.co.source), "Unknown")}
         ${pf("Company in HubSpot", hsco)}
       </dl>
@@ -2239,7 +2311,7 @@ function personCard(p, o = {}) {
     ${own ? personLookups(p) : ""}
     ${suggest}
     ${own ? `<details class="notes" data-notes="${esc(p.id)}"><summary>Notes and history</summary><div class="notebody"><p class="meta">Loading…</p></div></details>` : ""}
-    ${own ? actionsHtml({ outreach: o.outreach ?? p.co.outreach ?? "open", hasContacts: true, hasDraft: false, primary: `${lead}${hsBtn}${add}${unpin}${notnow}`, compact: true, removable: false, extra: `<button data-act="pexport">Download their data (JSON)</button><button data-act="psuppress">Never contact this person…</button>` }) : ""}
+    ${own ? actionsHtml({ outreach: o.outreach ?? p.co.outreach ?? "open", hasContacts: true, hasDraft: false, primary: `${lead}${hsBtn}${add}${unpin}${notnow}`, compact: true, removable: false, extra: `<button data-act="pbuyer">Change buyer type…</button><button data-act="pexport">Download their data (JSON)</button><button data-act="psuppress">Never contact this person…</button>` }) : ""}
   </article>`;
 }
 

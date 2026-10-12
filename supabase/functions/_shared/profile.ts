@@ -181,7 +181,7 @@ export function clean(input: unknown): Profile {
   const news = sig.news !== false, community = sig.community !== false;
   const hiring = sig.hiring !== false || (!news && !community); // at least one signal has to count
   const stages = (Array.isArray(i.stages) ? i.stages : []).map(String).filter((s) => STAGES.includes(s));
-  const regions = (Array.isArray(i.regions) ? i.regions : []).map(String).filter((s) => REGIONS.includes(s));
+  const regions = (Array.isArray(i.regions) ? i.regions : []).map(String).map((s) => (/^city:/i.test(s) ? `city:${s.slice(5).trim().slice(0, 50)}` : s)).filter((s) => REGIONS.includes(s) || /^city:.{2,50}$/.test(s)).slice(0, 25);
   const personas = cleanPersonas(i.personas);
   const industries = (Array.isArray(i.industries) ? i.industries : []).map(String);
   const industriesMigrated = migrateIndustries(industries).slice(0, 25); // an industry saved under an older name becomes the matching Hunter industry

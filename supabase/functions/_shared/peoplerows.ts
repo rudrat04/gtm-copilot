@@ -5,6 +5,7 @@ import { scorePerson } from "./leadscore.ts";
 import { teamSignals } from "./peoplesignals.ts";
 import { aiHeat, aiMaps } from "./aiscore.ts";
 import { explainRank } from "./people.ts";
+import { COUNTRIES } from "./lists.ts";
 
 // One shape for a person, with everything the cards need: who they are, the company they work at (fit, heat, facts), what is happening
 // around them (their team, their activity, the company's signals), their HubSpot state, and a priority for the To-do board.
@@ -56,7 +57,7 @@ export async function peopleRows(admin: boolean, opts: { accountId?: string; per
       watched: !!p.watched_at, added: p.created_at, manual: p.provider === "manual", todo_state: p.todo_state ?? null,
       company_fit: fit, company_heat: heat,
       co: {
-        stage: c.stage ?? null, industry: c.industry_ai ?? c.industry ?? null, location: place || null, country: c.country ?? null, size: c.employee_band ? `${c.employee_band} people` : c.employees ? `${c.employees} people` : null,
+        stage: c.stage ?? null, industry: c.industry_ai ?? c.industry ?? null, location: place || null, city: c.hq_city ?? null, country: c.country ?? null, country_name: c.country ? (COUNTRIES.find(([k]) => k === String(c.country).toUpperCase())?.[1] ?? String(c.country)) : null, size: c.employee_band ? `${c.employee_band} people` : c.employees ? `${c.employees} people` : null,
         source: c.source, checked: !!c.firmo_at, industry_read: !!c.industry_ai_at, watched: !!c.watched_at, outreach: c.outreach_status, touches: c.touches,
       },
       signals: mine.filter((s) => !isSummary(s)).slice(0, 3).map((s) => ({ kind: s.kind, title: s.title, url: s.url, age: age(((s.detail as { published?: string } | null)?.published) ?? s.detected_at) })),

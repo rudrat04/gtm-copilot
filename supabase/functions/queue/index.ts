@@ -139,6 +139,8 @@ function accountFacts(a: { firmo_at: string | null; employees: number | null; em
     raised: a.raised_usd ? usdShort(a.raised_usd) : null,
     last_round: a.last_round_date,
     location: place || null,
+    city: a.hq_city || null,
+    country_name: a.country ? countryName(a.country) : null,
     founded: a.founded_year,
     industry: a.industry || (a.tags ?? []).slice(0, 3).join(", ") || null,
     tools: tools.slice(0, 6), more_tools: Math.max(0, tools.length - 6), tech_count: all.length,

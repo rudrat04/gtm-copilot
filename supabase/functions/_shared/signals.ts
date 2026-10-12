@@ -344,14 +344,14 @@ export async function ruleSignals(name: string, domain: string, segment: string,
       if (usesTool(tech, w)) out.push({ kind: "tech", title: r.type === "competitor" ? `Uses a competitor: ${w}` : `Uses ${w}`, detail: { rule: r.id, ruleType: r.type } });
     }
   }
-  const newsRules = on.filter((r) => r.type === "press" || r.type === "change" || r.type === "watch").slice(0, 4);
+  const newsRules = on.filter((r) => ["press", "change", "watch", "event", "launch"].includes(r.type)).slice(0, 5);
   const found = await Promise.all(newsRules.map(async (r) => {
     const q = encodeURIComponent(`"${name}" (${r.words.slice(0, 8).map((w) => `"${w}"`).join(" OR ")}) when:90d`);
     const res = await get(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`);
     return res ? { r, items: newsItems(await res.text(), name, segment) } : { r, items: [] };
   }));
   for (const { r, items } of found) for (const it of items.filter((x) => r.words.some((w) => x.title.toLowerCase().includes(w.toLowerCase()))).slice(0, 2)) { // the headline itself must contain one of the words (Google also returns loose matches)
-    out.push({ kind: "news", title: it.title, url: it.url, detail: { published: it.published, newsType: "rule", rule: r.id, ruleType: r.type } });
+    out.push({ kind: "news", title: it.title, url: it.url, detail: { published: it.published, newsType: r.type === "event" ? "event" : "rule", rule: r.id, ruleType: r.type } });
   }
   return out;
 }

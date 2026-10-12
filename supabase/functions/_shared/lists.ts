@@ -95,10 +95,12 @@ export const _legacyCheck = () => LEGACY_INDUSTRIES.filter((i) => !LEGACY_MAP[i]
 
 
 /** The kinds of signal the owner can add. `words` means: tool names, competitor names, or phrases to look for in news. */
-export const RULE_TYPES: { key: string; label: string; help: string; words: string; starter: string[] }[] = [
-  { key: "tool", label: "Uses a tool", help: "Counts when the company's tools (from its website, job posts and company data) include one of these.", words: "Tool names, for example hubspot, salesforce", starter: [] },
-  { key: "competitor", label: "Uses a competitor", help: "Counts when the company already uses a rival's product. A strong sign: they buy this kind of thing.", words: "Competitor products, for example outreach, gong", starter: [] },
-  { key: "press", label: "Press and announcements", help: "Counts when news about the company mentions one of these words, for example a launch or partnership.", words: "Words to look for in news", starter: ["announces", "launches", "partnership", "partners with"] },
-  { key: "change", label: "Company changes", help: "Leadership hires, expansion, acquisitions: moments when priorities and budgets move.", words: "Words to look for in news", starter: ["appoints", "names new", "joins as", "opens office", "expands into", "acquires", "acquired by"] },
-  { key: "watch", label: "Your own watch phrase", help: "Anything else you want to catch, for example a pain point or a project. Searched in news about the company.", words: "Phrases, for example switching CRM", starter: [] },
+export const RULE_TYPES: { key: string; group: string; label: string; help: string; words: string; starter: string[] }[] = [
+  { key: "event", group: "Events", label: "Events they host or join", help: "Counts when news mentions the company at a conference, webinar or summit.", words: "Words to look for in news, for example webinar, keynote", starter: ["webinar", "conference", "keynote", "summit", "hosts"] },
+  { key: "competitor", group: "Tools and competitors", label: "Uses a competitor", help: "Counts when the company already uses a rival's product. A strong sign: they buy this kind of thing.", words: "Competitor products, for example outreach, gong", starter: [] },
+  { key: "tool", group: "Tools and competitors", label: "Uses a tool", help: "Counts when the company's tools (from its website, job posts and company data) include one of these.", words: "Tool names, for example hubspot, salesforce", starter: [] },
+  { key: "change", group: "Company changes", label: "Leadership and growth", help: "Leadership hires, expansion, acquisitions: moments when priorities and budgets move.", words: "Words to look for in news", starter: ["appoints", "names new", "joins as", "opens office", "expands into", "acquires", "acquired by"] },
+  { key: "press", group: "Press and announcements", label: "Press and announcements", help: "Counts when news about the company mentions one of these words, for example a partnership.", words: "Words to look for in news", starter: ["announces", "partnership", "partners with"] },
+  { key: "launch", group: "New launches", label: "Product launches", help: "Counts when the company launches or unveils something new.", words: "Words to look for in news, for example launches, unveils", starter: ["launches", "unveils", "introduces", "releases", "new product"] },
+  { key: "watch", group: "Your own", label: "Your own watch phrase", help: "Anything else you want to catch, for example a pain point or a project. Searched in news about the company.", words: "Phrases, for example switching CRM", starter: [] },
 ];
