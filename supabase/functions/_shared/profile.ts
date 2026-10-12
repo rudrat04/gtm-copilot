@@ -1,7 +1,7 @@
 import { sb } from "./db.ts";
 import icp from "./icp.json" with { type: "json" };
 import { MIN_FITS, type MinFit } from "./fitgate.ts";
-import { INDUSTRIES, REGIONS, RULE_TYPES, STAGES } from "./lists.ts";
+import { INDUSTRIES, migrateIndustries, REGIONS, RULE_TYPES, STAGES } from "./lists.ts";
 
 export { INDUSTRIES, REGIONS, STAGES };
 
@@ -38,7 +38,8 @@ export type Profile = {
   signalRules: SignalRule[];                // extra signals: tools, competitors, press, changes, watch phrases
   painWords: string[];                      // problems that, when a job post mentions them, show a company needs what you sell
   competitors: string[];                    // competitor names or domains, for the "uses a competitor" signal and the never-show list
-  industries: string[];
+  industries: string[];                     // Hunter's own industry names
+  keywords: string[];                       // words that describe the companies you want (Hunter's keyword filter), for example crm, sales enablement
   employeesMin: number;
   employeesMax: number;
   stages: string[];
@@ -69,6 +70,7 @@ const DEFAULT: Profile = {
   painWords: [...icp.signals.painWords],
   signalRules: [],
   industries: [...icp.company.industries],
+  keywords: [...((icp.company as { keywords?: string[] }).keywords ?? [])],
   employeesMin: icp.company.employeesMin,
   employeesMax: icp.company.employeesMax,
   stages: [...icp.company.stages],
@@ -176,17 +178,19 @@ export function clean(input: unknown): Profile {
   const stages = (Array.isArray(i.stages) ? i.stages : []).map(String).filter((s) => STAGES.includes(s));
   const regions = (Array.isArray(i.regions) ? i.regions : []).map(String).filter((s) => REGIONS.includes(s));
   const personas = cleanPersonas(i.personas);
-  const industries = (Array.isArray(i.industries) ? i.industries : []).map(String).filter((s) => INDUSTRIES.includes(s)).slice(0, 25);
+  const industries = (Array.isArray(i.industries) ? i.industries : []).map(String);
+  const industriesMigrated = migrateIndustries(industries).slice(0, 25); // an industry saved under an older name becomes the matching Hunter industry
   const pr = (i.product && typeof i.product === "object" ? i.product : {}) as Record<string, unknown>;
   const toolsGood = list(i.toolsGood, [], 20, true), toolsAvoid = list(i.toolsAvoid, [], 20, true);
   const motion = (["any", "sales_led", "self_serve"] as const).find((m) => m === i.motion) ?? "any";
-  const industriesOut = industries.length ? industries : DEFAULT.industries;
+  const industriesOut = industriesMigrated.length ? industriesMigrated : DEFAULT.industries;
   return {
     product: { name: String(pr.name ?? "").replace(/[<>\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40), description: String(pr.description ?? "").trim().slice(0, PRODUCT_MAX), website: cleanSite(pr.website) },
     competitors: list(i.competitors, [], 15, true),
     painWords: list(i.painWords, DEFAULT.painWords, 15),
     signalRules: cleanRules(i.signalRules),
     industries: industriesOut,
+    keywords: list(i.keywords, [], 10, true),
     employeesMin: min,
     employeesMax: max,
     stages: stages.length ? stages : DEFAULT.stages,
@@ -212,6 +216,7 @@ export function clean(input: unknown): Profile {
 /** Lays a profile over the shared config, in place. */
 export function apply(p: Profile) {
   icp.company.industries = p.industries;
+  (icp.company as { keywords?: string[] }).keywords = p.keywords;
   icp.company.employeesMin = p.employeesMin;
   icp.company.employeesMax = p.employeesMax;
   icp.company.stages = p.stages;

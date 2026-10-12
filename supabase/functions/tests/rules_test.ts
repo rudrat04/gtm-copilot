@@ -543,7 +543,7 @@ Deno.test("fit model: the default weights give exactly the old size + stage + re
 });
 
 Deno.test("fit model: industry, tools and sales style score 0 to 1 and the weights decide", () => {
-  const profile = clean({ toolsGood: ["HubSpot"], toolsAvoid: ["Clay"], motion: "sales_led", industries: ["B2B SaaS"], excludeWords: ["agency"], excludeDomains: ["rival.com"] });
+  const profile = clean({ toolsGood: ["HubSpot"], toolsAvoid: ["Clay"], motion: "sales_led", industries: ["Software Development"], excludeWords: ["agency"], excludeDomains: ["rival.com"] });
   assertEquals(profile.fitWeights, { size: 10, stage: 10, region: 5, industry: 4, tools: 5, motion: 4 }); // automatic: each extra criterion counts once there is something to compare with
   assertEquals(profile.excludeDomains, ["rival.com"]);
   apply(profile);
@@ -579,10 +579,11 @@ Deno.test("fit model: industry, tools and sales style score 0 to 1 and the weigh
 });
 
 Deno.test("fit model: settings from the page are cleaned", () => {
-  assertEquals(industryWords("B2B SaaS").includes("software"), true);
+  assertEquals(industryWords("Software Development").includes("software"), true);
+  assertEquals(clean({ industries: ["B2B SaaS"] }).industries, ["Software Development"]); // an older name is translated to Hunter's
   assertEquals(clean({}).fitWeights, { size: 10, stage: 10, region: 5, industry: 0, tools: 0, motion: 0 }); // nothing chosen: size, stage and region only
   assertEquals(clean({ fitWeights: { size: 0 } }).fitWeights.size, 10); // weights are no longer settable
-  assertEquals(clean({ industries: ["Fintech", "Not a real industry"] }).industries, ["Fintech"]);
+  assertEquals(clean({ industries: ["Financial Services", "Not a real industry"] }).industries, ["Financial Services"]);
   assertEquals(clean({ stages: ["Series E or later", "Nope"], regions: ["Germany", "Nordics", "Mars"] }).regions, ["Germany", "Nordics"]);
   assertEquals(clean({ product: { description: "x".repeat(2000), website: "https://www.Example.com/about?x=1" } }).product, { name: "", description: "x".repeat(1500), website: "example.com" });
   assertEquals(clean({ product: { website: "not a site" } }).product.website, "");
@@ -892,7 +893,7 @@ Deno.test("customers: the profile is compared with who your customers really are
   assertEquals(fine.suggestions[0].apply, undefined); // already about right: just say so
   assertEquals(summarise([{ employees: 50, industry: null, country: null }], { min: 10, max: 200 }).enough, false);
   assertEquals(summarise(cs).industries[0], { name: "Software", count: 6 });
-  assertEquals(validIndustry("fintech"), "Fintech");
+  assertEquals(validIndustry("financial services"), "Financial Services");
   assertEquals(validIndustry("Made-up industry"), null);
 });
 
@@ -912,12 +913,38 @@ Deno.test("web search candidates are cleaned", async () => {
   assertEquals(pickAngles(2, 0).length, 2);
 });
 
-Deno.test("discovery keeps places for web results", async () => {
+Deno.test("discovery keeps places for each source", async () => {
   const { pickBatch } = await import("../_shared/discover.ts");
-  const hn = Array.from({ length: 30 }, (_, i) => ({ source: "hn_hiring", id: i }));
-  const web = Array.from({ length: 5 }, (_, i) => ({ source: "web", id: 100 + i }));
-  const out = pickBatch([...hn, ...web], 25, 8);
+  const mk = (source: string, n: number, off = 0) => Array.from({ length: n }, (_, i) => ({ source, id: off + i }));
+  const fresh = [...mk("hn_hiring", 30), ...mk("hunter", 20, 100), ...mk("web", 5, 200), ...mk("yc", 3, 300)];
+  const out = pickBatch(fresh, 25, { hunter: 8, web: 6, yc: 5 });
   assertEquals(out.length, 25);
   assertEquals(out.filter((c) => c.source === "web").length, 5);
-  assertEquals(pickBatch([...hn, ...web], 25, 0).filter((c) => c.source === "web").length, 0);
+  assertEquals(out.filter((c) => c.source === "hunter").length >= 8, true);
+  assertEquals(out.filter((c) => c.source === "yc").length, 3);
+  assertEquals(pickBatch(fresh, 25, {}).filter((c) => c.source !== "hn_hiring").length, 0);
+});
+
+Deno.test("Hunter filters: size buckets, locations and searches match Hunter's own values", async () => {
+  const { headcountBuckets, searches, fromResponse } = await import("../_shared/hunterdiscover.ts");
+  const { INDUSTRIES, migrateIndustries, _legacyCheck, REGION_GROUPS } = await import("../_shared/lists.ts");
+  assertEquals(headcountBuckets(20, 200), ["11-50", "51-200"]);
+  assertEquals(headcountBuckets(10, 12), ["1-10", "11-50"]);
+  const s = searches({ industries: ["Software Development"], keywords: ["crm", "sales"], employeesMin: 20, employeesMax: 200, regions: ["US"] }, 0, 3);
+  assertEquals(s.length, 2);
+  assertEquals((s[0].headquarters_location as { include: { country: string }[] }).include[0].country, "US");
+  assertEquals((s[0].keywords as { include: string[] }).include[0], "crm");
+  assertEquals(searches({ industries: [], employeesMin: 20, employeesMax: 200, regions: [] }, 0).length, 1);
+  assertEquals(fromResponse({ data: [{ domain: "https://www.acme.io", organization: "Acme" }, { domain: "", organization: "x" }] }, "t").map((c) => c.domain), ["acme.io"]);
+  assertEquals(INDUSTRIES.includes("Software Development"), true);
+  assertEquals(_legacyCheck(), []);
+  assertEquals(migrateIndustries(["B2B SaaS", "Software Development", "Nonsense"]), ["Software Development"]);
+  assertEquals(REGION_GROUPS.EMEA.includes("DE"), true);
+});
+
+Deno.test("YC companies: B2B, in the size range, keyword matches first", async () => {
+  const { pickYc } = await import("../_shared/yc.ts");
+  const c = (name: string, size: number, tags: string[], industry = "B2B") => ({ name, slug: name.toLowerCase(), website: `https://${name.toLowerCase()}.com`, team_size: size, industry, tags, status: "Active", launched_at: 1 });
+  const out = pickYc([c("Big", 900, []), c("Plain", 50, ["Dev"]), c("Crmy", 40, ["CRM"]), c("Shop", 30, [], "Consumer")], 20, 200, ["crm"]);
+  assertEquals(out.map((x) => x.name), ["Crmy", "Plain"]);
 });

@@ -6,7 +6,7 @@ import { fetchSite } from "./signals.ts";
 // "What you sell" in, a full proposal for the profile out: one small AI call (about 1 to 2 cents). The owner reviews it before saving.
 
 type Raw = Partial<{
-  summary: string; industries: string[]; employeesMin: number; employeesMax: number; stages: string[]; regions: string[];
+  summary: string; industries: string[]; keywords: string[]; employeesMin: number; employeesMax: number; stages: string[]; regions: string[];
   personas: { title: string; match: string[]; department?: string; seniority?: string[] }[];
   hiringRoles: string[]; painWords: string[]; toolsGood: string[]; toolsAvoid: string[]; competitors: string[]; excludeWords: string[]; motion: string;
 }>;
@@ -24,7 +24,8 @@ ${description.slice(0, 1500)}
 ${siteText ? `\nTheir website says:\n${siteText}\n` : ""}
 Return JSON with these keys:
 - "summary": one plain sentence on who this seller should target
-- "industries": 1 to 6 of exactly these: ${INDUSTRIES.join("; ")}
+- "industries": 1 to 6 of exactly these (the broad ones fit most software companies; use narrower ones only when they really fit): ${INDUSTRIES.join("; ")}
+- "keywords": 3 to 8 short words or phrases that describe what the target companies make or do (for example "crm", "sales enablement", "revenue operations"), used to narrow a company search
 - "employeesMin", "employeesMax": the company size (people) that fits best
 - "stages": 1 to 5 of: ${STAGES.join("; ")}
 - "regions": 1 to 4 of: ${Object.keys(REGION_GROUPS).join("; ")} (or a country name)
@@ -42,6 +43,7 @@ Return JSON with these keys:
   const merged = {
     ...current,
     industries: r.industries?.length ? r.industries : current.industries,
+    keywords: r.keywords?.length ? r.keywords : current.keywords,
     employeesMin: r.employeesMin ?? current.employeesMin,
     employeesMax: r.employeesMax ?? current.employeesMax,
     stages: r.stages?.length ? r.stages : current.stages,

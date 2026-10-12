@@ -113,9 +113,10 @@ const stageWanted = (s: string) => icp.company.stages.some((w) => (STAGE_OPTIONS
 const SYNONYMS: Record<string, string[]> = {
   saas: ["saas", "software", "cloud"], software: ["software", "saas", "cloud"], fintech: ["fintech", "financial", "payments", "banking", "insurance"],
   "developer tools": ["developer", "devops", "api", "software"], infrastructure: ["infrastructure", "cloud", "devops", "data"], security: ["security", "cyber", "identity"],
+  "software development": ["software", "saas", "cloud", "developer", "platform"], "it services and it consulting": ["it services", "consulting", "managed services"],
   healthtech: ["health", "medical", "biotech"], ecommerce: ["ecommerce", "e-commerce", "retail", "marketplace"], ai: ["artificial intelligence", "machine learning", "ai"],
 };
-const STOP = new Set(["b2b", "b2c", "and", "the", "tools", "company", "companies", "software"]);
+const STOP = new Set(["b2b", "b2c", "and", "the", "tools", "company", "companies", "software", "development", "services", "service", "management"]);
 
 /** Keywords for one industry from the profile, plus its synonyms. */
 export function industryWords(industry: string): string[] {

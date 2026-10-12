@@ -1374,7 +1374,8 @@ function drawSetup() {
     </article>
     <article class="card"><p class="label">Who we look for</p>
       <p class="help" style="margin:0 0 12px">How well a company fits is worked out for you from these choices, your product above and what we find out about the company. There is nothing to weigh.</p>
-      ${msField("industries", "Industries", d.options.industries, "Pick any number. Newer and older kinds of business are both in the list.")}
+      ${msField("industries", "Industries", d.options.industries, "The same industry names Hunter uses, so each choice is a filter in the company search. Most software companies are under Software Development; narrow it with the words below.")}
+      ${tagField("keywords", "Words that describe them", "What these companies make or do, for example crm, sales enablement, revenue operations. They narrow the company search.")}
       <div class="field"><span class="lbl">Company size (people)</span><div class="numrow"><input type="number" min="1" data-num="employeesMin" value="${esc(P.employeesMin)}" aria-label="Minimum people"> to <input type="number" min="1" data-num="employeesMax" value="${esc(P.employeesMax)}" aria-label="Maximum people"></div></div>
       ${msField("stages", "Funding stage", d.options.stages, "Pick every stage you would sell to.")}
       ${msField("regions", "Where they are based", d.options.regions, "Regions and single countries. Companies elsewhere show as Outside range and are hidden under Low fit.", d.options.region_groups)}
@@ -1599,7 +1600,7 @@ async function loadSetup() {
       try {
         const r = await api("queue", { action: "profile_suggest", description, website });
         if (r.mode === "dry_run") { say(r.message); sg.disabled = false; sg.textContent = "Suggest my settings"; return; }
-        const k = r.proposal; for (const f of ["industries", "employeesMin", "employeesMax", "stages", "regions", "personas", "hiringRoles", "toolsGood", "toolsAvoid", "competitors", "excludeWords", "motion"]) P[f] = k[f];
+        const k = r.proposal; for (const f of ["industries", "keywords", "employeesMin", "employeesMax", "stages", "regions", "personas", "hiringRoles", "toolsGood", "toolsAvoid", "competitors", "excludeWords", "motion"]) P[f] = k[f];
         P.product = k.product; SUGGEST_NOTE = r.summary || "Settings filled in from your description."; drawSetup(); say("Suggestions applied. Review, then save.");
       } catch (err) { say(err.message); sg.disabled = false; sg.textContent = "Suggest my settings"; }
       return;

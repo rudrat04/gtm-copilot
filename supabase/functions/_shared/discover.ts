@@ -6,6 +6,8 @@ import { fetchFirmo, fitBreakdown, saveFirmo } from "./firmo.ts";
 import { meetsFit } from "./fitgate.ts";
 import { fitState } from "./score.ts";
 import { collectWeb } from "./websearch.ts";
+import { collectHunter } from "./hunterdiscover.ts";
+import { collectYc } from "./yc.ts";
 import { autoSearch } from "./autosearch.ts";
 import { aiRefresh } from "./aiscore.ts";
 import { scanOne } from "./scan.ts";
@@ -126,7 +128,7 @@ async function qualify(c: Candidate): Promise<Verdict | null> {
 Target: ${icp.company.industries.join(", ")}; ${icp.company.employeesMin}-${icp.company.employeesMax} employees.
 
 Company: ${c.name} (${c.domain})
-${c.source === "launch_hn" ? "Launch post" : c.source === "web" ? "Found on the web" : "Job post"}: ${c.snippet}
+${c.source === "launch_hn" ? "Launch post" : c.source === "web" ? "Found on the web" : c.source === "hunter" ? "Matches the seller's filters in a company database" : c.source === "yc" ? "Y Combinator company that is hiring" : "Job post"}: ${c.snippet}
 Website title: ${site.title.slice(0, 120)}
 Website description: ${site.description.slice(0, 250)}
 Website text: ${site.text.slice(0, 600)}
@@ -158,11 +160,12 @@ async function readyTheNew(ids: string[]) {
   return { searched, judged: ai.companies };
 }
 
-/** Pure: which candidates get checked this run. A few places are kept for web results, so a busy Hacker News week cannot crowd them out. */
-export function pickBatch<T extends { source: string }>(fresh: T[], max: number, webSlots: number): T[] {
-  const web = fresh.filter((c) => c.source === "web").slice(0, Math.min(webSlots, max));
-  const rest = fresh.filter((c) => !web.includes(c)).slice(0, max - web.length);
-  return [...web, ...rest].sort((a, b) => fresh.indexOf(a) - fresh.indexOf(b)); // keeps the original order (strongest signal first)
+/** Pure: which candidates get checked this run. Each source keeps a few places, so a busy Hacker News week cannot crowd out the others. */
+export function pickBatch<T extends { source: string }>(fresh: T[], max: number, reserve: Record<string, number>): T[] {
+  const chosen = new Set<T>();
+  for (const [source, n] of Object.entries(reserve)) for (const c of fresh.filter((x) => x.source === source).slice(0, n)) if (chosen.size < max) chosen.add(c);
+  for (const c of fresh) if (chosen.size < max) chosen.add(c);
+  return fresh.filter((c) => chosen.has(c)); // keeps the original order (strongest signal first)
 }
 
 export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?: boolean } = {}) {
@@ -171,7 +174,9 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
   const launches = (await collectLaunches()).filter((c) => !seenDomains.has(c.domain));
   const useWeb = (opts.web ?? !opts.dry) && (cfg as { web?: boolean }).web !== false; // a dry run stays free unless asked
   const web = useWeb ? (await collectWeb()).filter((c) => !seenDomains.has(c.domain) && !launches.some((l) => l.domain === c.domain)) : [];
-  const found = [...hiring, ...web, ...launches]; // hiring posts first (the strongest signal), then what the web search found
+  const hunter = (await collectHunter()).filter((c) => !seenDomains.has(c.domain)); // free (no credits), so a dry run uses it too
+  const yc = (await collectYc()).filter((c) => !seenDomains.has(c.domain) && !hunter.some((h) => h.domain === c.domain));
+  const found = [...hiring, ...hunter, ...yc, ...web, ...launches].filter((c, i, all) => all.findIndex((x) => x.domain === c.domain) === i); // hiring posts first (the strongest signal), then the company database, YC, the web search, launches
   const domains = found.map((c) => c.domain);
   const [{ data: have }, { data: seen }] = await Promise.all([
     sb.from("cp_accounts").select("domain").in("domain", domains.length ? domains : ["-"]),
@@ -183,12 +188,12 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
   const fresh = found.filter((c) => !known.has(c.domain)); // all of them; pickBatch decides which get checked
   const addedIds: string[] = [];
   const skipped: { name: string; reason: string }[] = [];
-  const webSlots = (cfg as { webSlots?: number }).webSlots ?? 8;
-  const summary = { collected: found.length, from_web: web.length, already_known: found.length - fresh.length, checked: 0, added: [] as string[], rejected: 0, dry: !!opts.dry };
-  if (opts.dry) return { ...summary, would_check: pickBatch(fresh, cfg.maxAiPerRun, webSlots).map((c) => `${c.name} (${c.domain})`) };
+  const slots = { hunter: 12, web: 6, yc: 5, ...((cfg as { slots?: Record<string, number> }).slots ?? {}) };
+  const summary = { collected: found.length, from_web: web.length, from_hunter: hunter.length, from_yc: yc.length, already_known: found.length - fresh.length, checked: 0, added: [] as string[], rejected: 0, dry: !!opts.dry };
+  if (opts.dry) return { ...summary, would_check: pickBatch(fresh, cfg.maxAiPerRun, slots).map((c) => `${c.name} (${c.domain})`) };
 
   let firmoLeft = opts.firmo === false ? 0 : cfg.firmoPerRun;
-  const batch = pickBatch(fresh, cfg.maxAiPerRun, webSlots);
+  const batch = pickBatch(fresh, cfg.maxAiPerRun, slots);
   const verdicts = new Map<string, Verdict | null>();
   for (let i = 0; i < batch.length; i += 4) await Promise.all(batch.slice(i, i + 4).map(async (c) => { verdicts.set(c.domain, await qualify(c)); })); // four at a time keeps a bigger run inside the time limit
   for (const c of batch) {

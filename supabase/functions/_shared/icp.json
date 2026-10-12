@@ -5,10 +5,10 @@
   },
   "company": {
     "industries": [
-      "B2B SaaS",
-      "Developer tools",
-      "Infrastructure software"
+      "Software Development",
+      "IT Services and IT Consulting"
     ],
+    "keywords": [],
     "employeesMin": 20,
     "employeesMax": 200,
     "stages": [
@@ -169,11 +169,11 @@
     "launchHn": true,
     "maxAgeDays": 45,
     "maxCandidates": 50,
-    "maxAiPerRun": 25,
+    "maxAiPerRun": 30,
     "firmoPerRun": 8,
     "peoplePerRun": 3,
     "web": true,
-    "webSlots": 8,
+    "slots": { "hunter": 12, "web": 6, "yc": 5 },
     "webCalls": 2,
     "webSearches": 2,
     "note": "Weekly: reads the latest Hacker News 'Who is hiring' threads for companies hiring sales or RevOps roles, keeps only B2B software companies that fit the ICP, and adds them for scoring.",
