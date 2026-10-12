@@ -26,8 +26,8 @@ flowchart LR
   end
   Q["2. Qualify<br/>Fit (size, stage, region, tools)<br/>+ Signals (hiring, funding, news, your own)<br/>= Hot / Warm / Watching"]
   subgraph ACT["3. The rep acts (manual)"]
-    T["Today<br/>who to contact now"]
-    A["Accounts<br/>find people, enrich, add to HubSpot"]
+    T["To-do<br/>who to contact now"]
+    A["People<br/>list free, reveal, add to HubSpot"]
     M["Meetings<br/>brief before, debrief after"]
   end
   H[("HubSpot<br/>lead status, deals,<br/>notes, to-dos")]
@@ -45,18 +45,31 @@ flowchart LR
 
 ## What a rep sees
 
-| Tab | The question it answers | What it does |
+A left sidebar holds the sections (it collapses to an icon rail, and becomes a drawer on a phone). Each page has a title bar with the notification bell. The name and logo in the sidebar are set in Setup.
+
+| Section | The question it answers | What it does |
 |---|---|---|
-| **To-do** | Who do I contact right now? | A priority board of **people** in lanes (Contact now, This week, Waiting for a reply, Worth a look), each a full person card with the company's fit and what is happening. Pin or set aside; sort by priority, fit or newest. A bell collects alerts. Before: a short list led by the **person** (name, title, buyer type), with a one-line "why today", the fresh signals and a next step. Followed companies come first. Follow-ups at day 3, 7 and 14. A "Needs attention" card flags what is slipping. |
-| **People** | Who do I talk to? | The main tab. People at the companies that fit, listed free (names shortened until you reveal one for 1 credit), each with the company's fit and heat, buyer type, decision-maker flag, what is happening in their own team and what they are doing (events, talks, posts). A Companies view sits beside it. |
-| **Signals** | What just happened? | Every signal by kind (buying intent, hiring, funding, leadership, events, tools, competitors, news), each naming the people in that company who would care. |
+| **To-do** | Who do I contact right now? | A priority board of **people** in lanes (Contact now, This week, Waiting for a reply, Worth a look), each a person card with the company's fit and what is happening. A strip at the top lists strong companies that still have no usable contact. Pin or set aside; sort by priority, fit or newest. Follow-ups at day 3, 7 and 14. A "Needs attention" card flags what is slipping. |
+| **People** | Who do I talk to? | The main section. People at the companies that fit, listed free (names shortened until you reveal one for 1 credit), grouped by a colour-coded action label (Contact now, This week, Later; the score is in the tooltip). Each card shows the person and company tags, buyer type (changeable from More), City and Country, what is happening in their team and what they are doing. A Companies view sits beside it. |
+| **Research** | What is this company, and who works there? | A centred home screen: enter a website, get a dossier (about 10 seconds) and the people who work there, listed free. **Add to my people** or **Add to to-do** saves a person (their company is already saved); people you do not add stay out of your lists. |
+| **Signals** | What just happened? | Every signal by kind (buying intent, hiring, funding, leadership, events, tools, competitors, news) as a light card, each naming the people at that company who would care. |
 | **Discover** | Where do new leads come from? | Run discovery, see what was added and what was skipped and why, add one back or remove it. |
-| **Watchlist** | What are my followed people and companies doing? | When each was last checked, what is watched for, the latest movements, and Check now. |
+| **Watchlist** | What are my followed people and companies doing? | People first, then Companies and What moved. Each card shows when it was last checked, what is watched for, the latest movements, and Check now. |
 | **Companies** (inside People) | Where is every company? | One list with clear views (Prospects, In progress, Parked, Low fit, Watching, All, Removed), filters, sorting and search. Every card shows labelled facts (size, stage, location, industry, tools, sales style, with "Unknown" when we don't know), why it fits, why now, the best contact and one next step. Follow, find more people, remove (with undo). |
 | **Conversations: Inbound** | Who just raised their hand? | A form submit is enriched, scored and routed in about 10 seconds: an email to the rep, a HubSpot to-do due in 15 minutes, and a reminder if nobody answers. Shows time to reply. |
 | **Conversations: Meetings** | What is booked, and how did it go? | A private brief is emailed when a meeting is booked. After it ends, a one-tap "how did it go?" email updates HubSpot and turns two lines of notes into a recap and a follow-up draft. Cancellations and moves are handled. |
-| **Search (Ctrl or Cmd + K)** | Tell me about this company. | Jump to any company, person, page or action, or research any domain for a dossier in about 10 seconds. Every company has its own page (card, signals, movements, history). |
-| **Setup** | What are we looking for? | Describe what you sell and get suggestions for everything else. Searchable industry, stage and location lists, buyer types in priority order (job titles, department, seniority), signals you add yourself, alerts and the daily email, name and logo, and a Health panel. |
+| **Search (Ctrl or Cmd + K)** | Take me there. | The search box at the top of the sidebar: jump to any company, person, page or action, or research a domain. Every company has its own page (card, signals, movements, history). |
+| **Setup** | What are we looking for? | Sections in a side list. Describe what you sell and get suggestions for everything else. Searchable industry, stage and location lists (a city can be typed in too), buyer types in priority order, signals grouped by type (hiring, events, tools and competitors, company changes, press, launches, your own), alerts and email by message kind, name and logo, and a Health panel. |
+
+## Emails and alerts
+
+Everything goes only to the owner, never to a prospect.
+
+- **Hot alert** (instant, default up to 3 a day): a company in your queue has a new signal, with up to 2 people to contact.
+- **Watchlist alert** (instant, grouped, at most 3 a day): something moved at a company or person you follow.
+- **Daily email**: since yesterday, who to contact today, what needs attention, companies still waiting for a contact.
+- **Problem flags**: on the To-do board, in the daily email and the bell; urgent ones are checked every 3 hours.
+- **Meetings and deals**: a brief when a meeting is booked, "How did it go?" after it, cancel or move notices, a new-lead alert with a reminder, and a one-time "why was it lost?".
 
 ## Set it up in one sentence
 

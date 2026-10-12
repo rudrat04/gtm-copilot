@@ -25,7 +25,7 @@ Owner: Rudra (rudrat04 on GitHub). Public repo: https://github.com/rudrat04/gtm-
 
 ## Structure
 ```
-docs/index.html            The whole UI (static, GitHub Pages). Tabs: To-do (priority board), People (main; Companies is a switch inside), Signals, Watchlist, Discover, Conversations (inbound leads and meetings), Setup (the editable profile). Research is reached with Ctrl or Cmd + K
+docs/index.html            The whole UI (static, GitHub Pages). Left sidebar sections: To-do (priority board), People (main; Companies is a switch inside), Research (home screen: dossier plus free people list), Signals, Watchlist, Discover, Conversations (inbound leads and meetings), Setup (the editable profile). Search is Ctrl or Cmd + K
 supabase/functions/
   research-account/        Domain in, dossier out (cached 24h)
   signal-scan/             Weekly scan: signals, score, AI draft for accounts scoring 30+
@@ -157,7 +157,9 @@ Other ideas, held: territories and multiple profiles, Ask Copilot, Listen to you
 - **Page polish (13 Oct 2026):** Signals cards are lighter (company, fit and heat as plain coloured text, one kind label, the text, up to 2 person chips). Watchlist opens on People, then Companies, then What moved; limits and the email rule are in an "i" tooltip. Research is a centred home screen (`.rhero`, one rounded input with a send button, example chips) that moves to the top once a result is shown (`#research.has-out`). Setup sections are a sticky left list next to the content on desktop and underlined tabs on a phone (`.subnav`).
 
 ## Handoff: open items (as of 13 Oct 2026)
-Everything above is built, deployed and pushed (last commit `0afafaa`). What is still open:
+Everything above is built, deployed and pushed (UI work through the sidebar, Research tab, priority labels and Setup side list). What is still open:
+- **Not yet tried with a real run (the AI budget was used up on 13 Oct):** Research on a live domain with the owner key (free people list, Add to my people, Add to to-do, Add all, Search with credits); the new Events and Product launch signal types (first news searches); a city typed into the location list (fit matches on the HQ city; Hunter and YC discovery still filter by country only).
+- **Decided:** priority and lead scores stay rules-based with the optional AI judgement as it is; no change planned.
 - **Not yet run for real** (the daily AI limit was used up on 12 Oct; it resets 05:30 IST): a full discovery run with every source including the web search (its wording was changed to use keywords and regions, untested); the first person-activity web searches for followed people (`watch.activityPerDay`, 2 a day); HubSpot "Add without revealing" and the automatic add when marking a company contacted (`watch.autoPush`, on); import of contacts changed in HubSpot (`importHubspotContacts`, found nothing yet); "Check now" for a person (about 5 cents).
 - **Limits to remember:** Hunter plan has 50 credits a month (about 15 left on 12 Oct); the app stops at `HUNTER_MONTHLY_CAP` 40 and keeps `watch.alertReserve` 15 for the owner. AI cap is `ai.dailyBudgetUsd` 0.40 a day; the web search is about 5 to 6 cents a call.
 - **P2 ideas (not started):** SEC Form D filings and Product Hunt as free funding and launch signals; import your own list of people or companies; lookalike companies; a page showing which signals preceded replies and meetings (after about 30 outcomes); mobile bottom tab bar and keyboard shortcuts; territories and several profiles; a second people provider. Left out on purpose for now: bulk actions, the product video.
