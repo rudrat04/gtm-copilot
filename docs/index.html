@@ -124,8 +124,13 @@
   .banner b { color: var(--soft); font-weight: 600; }
   .pcard { padding: 20px 22px; }
   .pcard .eyebrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
-  .pcard .prio { margin-left: auto; font-size: 12px; color: var(--muted); }
-  .pcard .prio b { color: var(--ink); font-size: 15px; }
+  .pcard { border-left: 4px solid var(--pc, var(--line)); }
+  .pcard.pr-hi { --pc: var(--bad); } .pcard.pr-mid { --pc: #d98a1f; } .pcard.pr-lo { --pc: #9aa3b5; }
+  .pcard .prio { --pc: var(--muted); margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 4px 11px 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--pt) 13%, transparent); color: var(--pt); }
+  .pcard .prio.hi { --pt: var(--bad); } .pcard .prio.mid { --pt: var(--warn); } .pcard .prio.lo { --pt: #5d6678; }
+  .pcard .prio b { font-size: 15px; color: inherit; }
+  .pcard .prio .pbar { width: 34px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--pt) 22%, transparent); overflow: hidden; display: block; }
+  .pcard .prio .pbar u { display: block; height: 100%; background: var(--pt); text-decoration: none; border-radius: 3px; }
   .pcard .title { margin: 0 0 4px; font-size: 22px; }
   .pcard .sub { color: var(--soft); margin-bottom: 4px; }
   .pcard .phead { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
@@ -2310,12 +2315,13 @@ function personCard(p, o = {}) {
   const unpin = own && p.todo_state === "pinned" ? `<button class="btn ghost sm" data-act="todo" data-state="" title="Takes this person off the board unless something new happens">Unpin</button>` : "";
   const notnow = own && o.board ? `<button class="btn ghost sm" data-act="todo" data-state="dismissed" title="Hides this person from your to-do">Not now</button>` : "";
   const needsReveal = p.preview || (own && p.has_email && !p.revealed && !blocked);
+  const pr = Number(p.priority) || 0, tier = pr >= 70 ? ["hi", "High"] : pr >= 45 ? ["mid", "Medium"] : ["lo", "Low"];
   const keep = own && o.research && !p.kept && p.todo_state !== "pinned" ? `<button class="btn primary sm" data-act="pkeep" title="Saves this person to your People list. Their company is already saved.">Add to my people</button>` : "";
   const lead = needsReveal ? revealBtn(p) : `<button class="btn primary sm" data-life="contacted">${o.outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>`;
   const hsBtn = canPush ? `<button class="btn ghost sm" data-act="ppush" data-pid="${esc(p.id)}" title="Adds the company and this person to HubSpot">Push to HubSpot</button>` : "";
   const suggest = !o.board && p.priority >= 45 && p.todo_state !== "pinned" ? `<div class="meta" style="margin-top:6px">Suggested for your to-do: ${esc(p.priority >= 70 ? "contact now" : "this week")} (${esc((p.lead.reasons || []).slice(0, 2).join(", ").toLowerCase() || "good fit")}).</div>` : "";
-  return `<article class="card pcard${o.board ? " board" : ""}" data-id="${esc(p.account_id)}" data-name="${esc(p.company)}" data-domain="${esc(p.domain)}" data-pid="${esc(p.id)}" data-hsn="${p.hs_company?.contacts ?? ""}" data-o="${esc(JSON.stringify({ board: !!o.board, label: o.label || "", badge: o.badge || "", headline: o.headline || "", due: !!o.due, outreach: o.outreach || "", own, why_line: o.why_line || null, research: !!o.research }))}">
-    <div class="eyebrow">${o.label ? `<span class="badge ${esc(o.badge || "")}">${esc(o.label)}</span>` : ""}${p.todo_state === "pinned" ? `<span class="badge accent">Pinned</span>` : ""}${o.research && (p.kept || p.todo_state === "pinned") ? `<span class="badge good">In your people</span>` : ""}<span class="prio" title="How soon to act: lead score, company fit and anything that just happened">Priority <b>${esc(p.priority)}</b></span></div>
+  return `<article class="card pcard pr-${tier[0]}${o.board ? " board" : ""}" data-id="${esc(p.account_id)}" data-name="${esc(p.company)}" data-domain="${esc(p.domain)}" data-pid="${esc(p.id)}" data-hsn="${p.hs_company?.contacts ?? ""}" data-o="${esc(JSON.stringify({ board: !!o.board, label: o.label || "", badge: o.badge || "", headline: o.headline || "", due: !!o.due, outreach: o.outreach || "", own, why_line: o.why_line || null, research: !!o.research }))}">
+    <div class="eyebrow">${o.label ? `<span class="badge ${esc(o.badge || "")}">${esc(o.label)}</span>` : ""}${p.todo_state === "pinned" ? `<span class="badge accent">Pinned</span>` : ""}${o.research && (p.kept || p.todo_state === "pinned") ? `<span class="badge good">In your people</span>` : ""}<span class="prio ${tier[0]}" title="How soon to act: lead score, company fit and anything that just happened. 70 and up: contact now. 45 to 69: this week."><i class="pbar"><u style="width:${Math.min(100, Math.max(4, Number(p.priority) || 0))}%"></u></i><b>${esc(p.priority)}</b><span>${tier[1]} priority</span></span></div>
     <div class="phead">
       <div class="pid">
         <h3 class="title">${esc(p.name)}</h3>
