@@ -28,6 +28,7 @@ const { meetsFit, worthShowing } = await import("../_shared/fitgate.ts");
 const { alertEmail, digestEmail, noContactText } = await import("../_shared/templates.ts");
 const { creditsLeft, worthASearch } = await import("../_shared/autosearch.ts");
 const { changeLines, emptyChanges, hasChanges } = await import("../_shared/changes.ts");
+const { buyerFit, scorePerson } = await import("../_shared/leadscore.ts");
 const { eventsFromSignals, eventLine, hashStr, KIND_LABEL } = await import("../_shared/movements.ts");
 const { cleanBrand, DEFAULT_BRAND } = await import("../_shared/brand.ts");
 
@@ -845,4 +846,22 @@ Deno.test("discovery: Launch HN titles give a company name, and what you sell re
     apply(clean({}));
   }
   assertEquals(icp.seller.name, "PipelineKit"); // back to the default when nothing is set
+});
+
+Deno.test("lead temperature for a person: buyer match, company fit and heat, job change, email", () => {
+  const base = { relevance: 100, persona: "Head of Sales", companyFit: "matches" as const, companyHeat: "hot" as const, jobChangeDays: null, mentionDays: null, emailStatus: "valid", hasEmail: true, hsStatus: null };
+  const best = scorePerson(base);
+  assertEquals([best.label, best.buyer], ["hot", "strong"]);
+  assertEquals(best.score, 95); // 40 + 20 + 30 + 5
+  assertEquals(best.reasons.includes("Email verified"), true);
+  assertEquals(scorePerson({ ...base, companyHeat: "watching", companyFit: "unknown", emailStatus: null }).label, "warm"); // 40 + 8: a strong buyer at a quiet company
+  assertEquals(scorePerson({ ...base, relevance: 75, companyHeat: "warm", companyFit: "close", emailStatus: null }).label, "warm"); // 30 + 10 + 15
+  assertEquals(scorePerson({ ...base, relevance: 20, persona: null }).label, "cold"); // never a lead if not a buyer, whatever the company
+  assertEquals(scorePerson({ ...base, relevance: 20, persona: null }).score <= 30, true);
+  const newInRole = scorePerson({ ...base, relevance: 75, companyHeat: "watching", companyFit: "close", jobChangeDays: 20, emailStatus: null });
+  assertEquals(newInRole.reasons.some((r) => r.startsWith("New in role")), true);
+  assertEquals(newInRole.score, 55); // 30 + 10 + 15
+  assertEquals(scorePerson({ ...base, emailStatus: "invalid" }).score, 70); // 90, minus 20 for an email that would bounce
+  assertEquals(scorePerson({ ...base, hsStatus: "opted_out" }).label, "blocked");
+  assertEquals([buyerFit(95), buyerFit(75), buyerFit(55), buyerFit(10)], ["strong", "good", "partial", "none"]);
 });

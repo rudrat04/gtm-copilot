@@ -5,7 +5,7 @@ import { applyOutcome, type OutcomeKind } from "../_shared/lifecycle.ts";
 import { buildToday, reasonLine } from "../_shared/today.ts";
 import { draftNoteHtml, noteToHubSpot } from "../_shared/hsnotes.ts";
 import { writeDraft } from "../_shared/draft.ts";
-import { fetchFirmo, firmoLine, fitBreakdown, fitReasons, saveFirmo, usdShort } from "../_shared/firmo.ts";
+import { FIT_COLS, fetchFirmo, firmoLine, fitBreakdown, fitReasons, saveFirmo, usdShort } from "../_shared/firmo.ts";
 import { fitState, heatOf, scoreAccount } from "../_shared/score.ts";
 import { contactsFor } from "../_shared/contacts.ts";
 import { fetchSite } from "../_shared/signals.ts";
@@ -17,6 +17,7 @@ import { clean, DEPARTMENTS, INDUSTRIES, loadProfile, REGIONS, saveProfile, SENI
 import { REGION_GROUPS, RULE_TYPES } from "../_shared/lists.ts";
 import { addPersonToWatchlist, addToWatchlist, markSeen, setNotify, setPersonWatched, setWatched, watchlistView } from "../_shared/watchlist.ts";
 import { cleanBrand, loadBrand, saveBrand } from "../_shared/brand.ts";
+import { scorePerson } from "../_shared/leadscore.ts";
 import { suggestProfile } from "../_shared/suggest.ts";
 import { rerankPeople } from "../_shared/people.ts";
 import { runDiscovery } from "../_shared/discover.ts";
@@ -200,9 +201,17 @@ async function peopleList(admin: boolean, accountId?: string) {
   if (accountId) q = q.eq("account_id", accountId);
   const { data: rows } = await q;
   const ids = [...new Set((rows ?? []).map((p) => p.account_id))];
-  const { data: accts } = ids.length ? await sb.from("cp_accounts").select("id,name,domain,removed_at").in("id", ids) : { data: [] };
+  const { data: accts } = ids.length ? await sb.from("cp_accounts").select(`id,name,domain,removed_at,${FIT_COLS}`).in("id", ids) : { data: [] };
   const a = new Map((accts ?? []).map((x) => [x.id, x]));
+  const [{ data: sigs }, { data: evs }] = await Promise.all([
+    ids.length ? sb.from("cp_signals").select("account_id,kind,title,detail,detected_at").in("account_id", ids).order("detected_at", { ascending: false }).limit(2000) : Promise.resolve({ data: [] }),
+    sb.from("cp_watch_events").select("person_id,kind,detected_at").in("kind", ["job_change", "mention"]).not("person_id", "is", null),
+  ]);
+  const heatOfAcct = new Map<string, "hot" | "warm" | "watching">();
+  for (const id of ids) heatOfAcct.set(id, heatOf((sigs ?? []).filter((s) => s.account_id === id) as never, fitState(a.get(id) as never)));
+  const daysSince = (kind: string, pid: string) => { const e = (evs ?? []).filter((x) => x.person_id === pid && x.kind === kind).sort((x, y) => Date.parse(y.detected_at) - Date.parse(x.detected_at))[0]; return e ? Math.floor((Date.now() - Date.parse(e.detected_at)) / DAY) : null; };
   const people = (rows ?? []).filter((p) => a.has(p.account_id) && !a.get(p.account_id)!.removed_at).map((p) => ({
+    lead: scorePerson({ relevance: p.relevance, persona: p.persona, companyFit: fitState(a.get(p.account_id) as never), companyHeat: heatOfAcct.get(p.account_id) ?? "watching", jobChangeDays: daysSince("job_change", p.id), mentionDays: daysSince("mention", p.id), emailStatus: p.email_status, hasEmail: !!p.email, hsStatus: p.hs_status }),
     id: p.id, account_id: p.account_id, company: a.get(p.account_id)!.name, domain: a.get(p.account_id)!.domain,
     name: admin ? `${p.first_name} ${p.last_name}`.trim() : `${p.first_name} ${(p.last_name || "").charAt(0)}.`.trim(),
     title: p.title, persona: p.persona, relevance: p.relevance, seniority: p.seniority, department: p.department,
