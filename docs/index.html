@@ -649,7 +649,8 @@ function aFacts(a) {
 
 function aCard(a) {
   const ll = progressS(a) ? lifeLine(a) : "";
-  const reason = a.is_new && a.found_reason ? `<b>Found automatically</b> from a Hacker News hiring post.` : esc(a.why_now || "");
+  const VIA = { hn_hiring: "a Hacker News hiring post", launch_hn: "a Launch HN post", web: "a web search" };
+  const reason = a.is_new && a.found_reason ? `<b>Found automatically</b> from ${a.found_via?.url ? `<a href="${esc(a.found_via.url)}" target="_blank" rel="noopener noreferrer">${VIA[a.found_via.source] || "a public source"}</a>` : esc(VIA[a.found_via?.source] || "a public source")}.` : esc(a.why_now || "");
   const fit = FIT[a.fit] || FIT.unknown, f = a.facts;
   const contact = contactLine(a);
   return `<article class="card acard" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}" data-watched="${a.watched ? 1 : 0}">
@@ -1319,7 +1320,7 @@ function setupSteps() {
   return [
     ["Describe what you sell", (P.product.description || "").trim().length >= 20, "sell", "One sentence, then press Suggest my settings."],
     ["Choose your buyers and signals", P.personas.length > 0 && (P.signalRules.length > 0 || P.competitors.length > 0), "contact", "Who to contact, and what counts as a reason to reach out."],
-    ["Find companies", !!d.discovery.last, "find", "Run discovery to pull in companies from Hacker News."],
+    ["Find companies", !!d.discovery.last, "find", "Run discovery to pull in companies from Hacker News and a web search."],
     ["Check size and stage", d.unknown_fit === 0, "find", d.unknown_fit ? `${d.unknown_fit} companies still need it (0.2 credit each).` : "All companies have it."],
   ];
 }
@@ -1442,7 +1443,7 @@ function drawSetup() {
     <div class="actions" style="margin:0 0 18px"><button class="btn primary" data-save>Save changes</button><span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : "Demo mode: unlock to save changes."}</span></div>
 
     <article class="card"><p class="label">Finding new companies</p>
-      <label class="toggle" style="margin-bottom:12px"><input type="checkbox" data-disc ${P.discovery ? "checked" : ""}><span>Search for new companies every week<small>${esc(d.discovery.schedule)}. Reads Hacker News hiring posts and keeps companies that match the profile above.</small></span></label>
+      <label class="toggle" style="margin-bottom:12px"><input type="checkbox" data-disc ${P.discovery ? "checked" : ""}><span>Search for new companies every week<small>${esc(d.discovery.schedule)}. Reads Hacker News hiring and launch posts and searches the public web (recent funding, new sales leaders, sales hiring, launches), and keeps companies that match the profile above.</small></span></label>
       <p class="meta" style="margin:0 0 12px">${d.discovery.last ? `Last run ${esc(ago(d.discovery.last))} · ` : ""}${esc(d.discovery.added_30d)} added in the last 30 days. Results appear in Accounts under <b>New</b>.</p>
       <div class="actions" style="margin:0"><button class="btn ghost" data-run="preview">Preview what it would check</button><button class="btn ghost" data-run="live">Run discovery now</button></div>
       <p class="help" style="margin-top:8px">A run costs about 1 cent of AI and up to 0.8 search credit for company size and stage.</p>
@@ -1683,7 +1684,7 @@ async function loadSetup() {
         if (r.mode === "dry_run") { say(r.message); $("runout").innerHTML = ""; }
         else $("runout").innerHTML = dry
           ? `<p class="meta">${esc(r.collected)} candidates found, ${esc(r.already_known)} already seen before. Would check: ${esc((r.would_check || []).join(", ") || "nothing new")}.</p>`
-          : r.checked === 0 ? `<p class="meta">Looked at ${esc(r.collected)} companies from Hacker News (hiring posts and Launch HN). ${r.already_known === r.collected ? "All of them were seen in earlier runs, so there was nothing new to check." : "None could be checked this time."} New hiring posts and launches appear every few days; try again later.</p>`
+          : r.checked === 0 ? `<p class="meta">Looked at ${esc(r.collected)} companies from Hacker News and a web search. ${r.already_known === r.collected ? "All of them were seen in earlier runs, so there was nothing new to check." : "None could be checked this time."} New hiring posts and launches appear every few days; try again later.</p>`
           : `<p class="meta">Looked at ${esc(r.collected)} companies${r.from_web ? ` (${esc(r.from_web)} from a web search)` : ""}, ${esc(r.already_known)} already seen. Checked ${esc(r.checked)} new: <b>added ${esc(r.added.length)}</b>${r.added.length ? ` (${esc(r.added.join(", "))}), now in Accounts under Prospects` : ""}; <b>${esc(r.rejected)} skipped</b>${(r.skipped || []).length ? `: ${esc(r.skipped.slice(0, 6).map((x) => `${x.name} (${x.reason})`).join("; "))}${r.rejected > 6 ? "…" : ""}` : ""}. Skipped ones stay in the list below, and you can add any back.${r.people_searched ? ` People found for ${esc(r.people_searched)}; see Today.` : ""}</p>`;
         if (!dry && r.mode === "live") { ACC = null; loadSkipped(); say(`Discovery done: ${r.added.length} added, ${r.rejected} skipped.`, { label: "Open Accounts", run: () => { AF = { ...AF_DEFAULT, view: "all", origin: "new" }; saveAF(); showView({ view: "accounts" }); } }); }
       } catch (err) { $("runout").innerHTML = `<p class="err">${esc(err.message)}</p>`; }

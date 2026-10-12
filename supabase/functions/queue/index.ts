@@ -163,13 +163,14 @@ async function accountsView(admin: boolean) {
     contactsFor(ids, admin),
     sb.from("cp_signals").select("account_id,kind,title,url,detail,detected_at").in("account_id", ids).order("detected_at", { ascending: false }).limit(1500),
     sb.from("cp_people").select("account_id").in("account_id", ids),
-    sb.from("cp_discovered").select("domain,reason,found_at").eq("status", "added").order("found_at", { ascending: false }).limit(100),
+    sb.from("cp_discovered").select("domain,reason,found_at,source,source_url").eq("status", "added").order("found_at", { ascending: false }).limit(100),
   ]);
   const { data: lastRun } = await sb.from("cp_state").select("value").eq("key", "discovery_last").maybeSingle();
   const searched = new Set((ppl ?? []).map((p) => p.account_id));
   const peopleCount = new Map<string, number>();
   for (const p of ppl ?? []) peopleCount.set(p.account_id, (peopleCount.get(p.account_id) ?? 0) + 1);
   const why = new Map((disc ?? []).map((d) => [d.domain, d.reason]));
+  const via = new Map((disc ?? []).map((d) => [d.domain, { source: d.source, url: d.source_url }]));
   const sigsBy = new Map<string, NonNullable<typeof signals>>();
   for (const s of signals ?? []) (sigsBy.get(s.account_id) ?? sigsBy.set(s.account_id, []).get(s.account_id)!).push(s);
   const isSummary = (s: { kind: string; detail: unknown }) => s.kind === "hiring" && !!s.detail && typeof s.detail === "object" && "salesOpenings" in (s.detail as object);
@@ -190,7 +191,7 @@ async function accountsView(admin: boolean) {
         firmo_known: !!a.firmo_at, low, removed, watched: !!a.watched_at, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
         lost_at: a.lost_at, lost_reason: a.lost_reason, not_fit_reason: a.not_fit_reason,
-        last_scanned_at: a.last_scanned_at, found_reason: why.get(a.domain) ?? null,
+        last_scanned_at: a.last_scanned_at, found_reason: why.get(a.domain) ?? null, found_via: via.get(a.domain) ?? null,
         searched: searched.has(a.id), people_count: peopleCount.get(a.id) ?? 0, searched_at: a.people_searched_at ?? null, contacts: contactMap.get(a.id) ?? [],
         signals: low || removed ? [] : mine.slice(0, 3).map((s) => ({
           kind: s.kind, title: s.title, url: s.url, first_seen: s.detected_at,
