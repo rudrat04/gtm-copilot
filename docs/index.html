@@ -134,6 +134,9 @@
   .sigrow:first-of-type { border-top: 0; }
   .sigrow b { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
   .sigrow em { color: var(--muted); font-style: normal; font-size: 12px; white-space: nowrap; }
+  .prow { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .prow:first-of-type { border-top: 0; }
+  .prsd { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
   .lane { margin: 0 0 26px; }
   .lane > h3 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px; font-size: 15px; letter-spacing: .02em; }
   .lane > h3 span { font-weight: 400; font-size: 12.5px; color: var(--muted); }
@@ -631,7 +634,7 @@ function drawBoard() {
     ${d.attention.items.map((f) => `<div class="flag" data-flag="${esc(f.key)}"><div><b class="${f.severity === "urgent" ? "bad" : ""}">${esc(f.title)}</b>${f.detail ? `<div class="meta">${esc(f.detail)} · ${esc(ago(f.since))}</div>` : ""}</div>
       <div class="actions" style="margin:0"><button class="btn ghost sm" data-flagdo="snooze">Snooze 3 days</button><button class="btn ghost sm" data-flagdo="dismiss">Dismiss</button></div></div>`).join("")}</article>` : "";
   const card = (i) => i.person
-    ? personCard(i.person, { board: true, label: i.label, badge: TODAY_BADGE[i.type] || "", headline: i.type === "follow_up" || i.type === "waiting" ? i.headline : "", due: i.type === "follow_up", why_line: i.why_line, outreach: i.account?.outreach })
+    ? personCard(i.person, { own: !!d.admin, board: true, label: i.label, badge: TODAY_BADGE[i.type] || "", headline: i.type === "follow_up" || i.type === "waiting" ? i.headline : "", due: i.type === "follow_up", why_line: i.why_line, outreach: i.account?.outreach })
     : tCard(i);
   const lane = ([k, title, help]) => {
     const items = d.items.filter((i) => i.lane === k).sort(sort);
@@ -674,6 +677,7 @@ SELECTS.push(
 );
 const SORTS = [
   ["best", "Best first", (x, y) => (HEAT_RANK[x.heat] - HEAT_RANK[y.heat]) || (y.is_new - x.is_new) || ((y.priority ?? -1) - (x.priority ?? -1))],
+  ["fit", "Best company fit", (x, y) => ((FIT_RANK[y.fit] ?? 1) - (FIT_RANK[x.fit] ?? 1)) || ((y.priority ?? -1) - (x.priority ?? -1))],
   ["newest", "Newest first", (x, y) => Date.parse(y.created_at) - Date.parse(x.created_at)],
   ["name", "Name A to Z", (x, y) => x.name.localeCompare(y.name)],
   ["size", "Biggest first", (x, y) => (y.facts.employees ?? -1) - (x.facts.employees ?? -1)],
@@ -713,14 +717,6 @@ function nextStep(a) {
   return `<button class="btn primary sm" data-life="contacted">${s === "contacted" ? "Contacted again" : "Mark contacted"}</button>`;
 }
 
-function contactLine(a) {
-  const c = a.contacts[0];
-  if (!c) return a.people_count ? `<div class="contact meta">${a.people_count} saved ${a.people_count === 1 ? "person does" : "people do"} not match your buyer types. <a href="#/people/${esc(a.id)}">See ${a.people_count === 1 ? "them" : "all"}</a></div>`
-    : a.searched_at ? `<div class="contact meta">Searched ${esc(day(a.searched_at))}: nobody found. No need to search again for a while.</div>` : "";
-  const mail = c.preview ? "email not revealed (free preview)" : c.revealed && c.email ? (c.email.includes("***") ? esc(c.email) : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : c.email ? "email found, not revealed" : "no email";
-  return `<div class="contact"><b>${esc(c.name)}</b> · ${esc(c.title)} · ${mail}${c.persona ? ` <span class="ptag" title="Matches your buyer type">${esc(c.persona)}</span>` : ""}${c.known ? ` <span class="ptag warnx" title="${esc(c.note || "")}">Already in your HubSpot</span>` : c.pushed ? ` <span class="ptag">In HubSpot</span>` : ""}${(a.people_count || a.contacts.length) > 1 ? ` <a class="meta" href="#/people/${esc(a.id)}" title="Everyone saved for this company">+${(a.people_count || a.contacts.length) - 1} more</a>` : ""}</div>`;
-}
-
 const NOT_FIT = { too_big: "Too big", too_small: "Too small", wrong_industry: "Wrong industry", competitor: "Competitor", agency_b2c: "Agency or B2C", wrong_region: "Wrong region", customer: "Already a customer", other: "Other" };
 const MARK = { ok: ["✓", "good"], partly: ["~", "warn"], no: ["✗", "bad"], unknown: ["?", "muted"] };
 /** One line saying why a company fits or not: a mark per criterion. Hover or tap a mark for the detail. */
@@ -740,7 +736,7 @@ function aFacts(a) {
   const tools = f.tools.length ? `<div class="toolchips">${f.tools.map((t) => `<span${good.has(t.replace(/[^a-z0-9]/g, "")) ? ' class="good"' : ""}>${esc(t)}</span>`).join("")}${f.more_tools ? `<span>+${f.more_tools}</span>` : ""}</div>`
     : f.tech_count ? `<span class="unk">No sales or marketing tools found (${f.tech_count} technical tools only)</span>` : "";
   const motion = f.motion ? { sales_led: "Sales-led (demos)", self_serve: "Self-serve (free start)", both: "Both" }[f.motion] : "";
-  return `<dl class="facts">
+  return `<dl class="facts"><p class="label" style="grid-column:1/-1;margin:0">Company</p>
     ${fact("Size", f.size && esc(f.size), none)}
     ${fact("Stage", stage, none)}
     ${fact("Location", f.location && esc(f.location), none)}
@@ -748,6 +744,7 @@ function aFacts(a) {
     ${fact("Industry", f.industry && esc(f.industry), "Unknown")}
     ${fact("Tools they use", tools, "Unknown")}
     ${fact("Sales style", motion && esc(motion), "Unknown")}
+    ${fact("In HubSpot", a.hubspot ? `Yes${a.hs_contacts != null ? ` · ${esc(a.hs_contacts)} contact${a.hs_contacts === 1 ? "" : "s"}` : ""}` : a.hs_seen ? `Already there${a.hs_contacts != null ? ` · ${esc(a.hs_contacts)} contact${a.hs_contacts === 1 ? "" : "s"}` : ""}` : "Not yet", "Not yet")}
   </dl>`;
 }
 
@@ -764,19 +761,31 @@ function lookupRow(a) {
   return b.length ? `<div class="lookups"><span class="meta">Not looked up yet:</span>${b.join("")}</div>` : "";
 }
 
+/** The people at a company, as small rows with the same buttons as a person card. */
+function aPeople(a) {
+  const own = !!(ACC && ACC.admin), list = a.contacts || [];
+  const total = a.people_count || list.length;
+  const rows = list.map((c) => {
+    const mail = c.preview ? `<span class="unk">email not revealed</span>` : c.revealed && c.email ? (c.email.includes("***") ? esc(c.email) : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : c.email ? `<span class="unk">email found, not revealed</span>` : `<span class="unk">no email</span>`;
+    const btn = c.preview ? `<button class="btn primary sm" data-act="preveal" data-pid="${esc(c.id)}" data-who="${esc(c.name)}" title="Uses 1 search credit">Reveal <small>· 1 credit</small></button>` : own && !c.revealed && c.email ? `<button class="btn ghost sm" data-act="enrich1" data-pid="${esc(c.id)}">Reveal email</button>` : "";
+    return `<div class="prow"><div><b>${esc(c.name)}</b> <span class="meta">${esc(c.title)}</span>${c.persona ? ` <span class="ptag">${esc(c.persona)}</span>` : ""}${c.known ? ` <span class="ptag warnx" title="${esc(c.note || "")}">Already in your HubSpot</span>` : c.pushed ? ` <span class="ptag">In HubSpot</span>` : ""}<div class="meta">${mail}</div></div><div class="prsd">${own ? btn : ""}${watchBtn("person", c.id, c.watched, "Watch person")}</div></div>`;
+  }).join("");
+  const empty = a.searched_at ? `<p class="meta" style="margin:0">Searched ${esc(day(a.searched_at))}: nobody found. No need to search again for a while.</p>` : a.people_count ? `<p class="meta" style="margin:0">${a.people_count} saved ${a.people_count === 1 ? "person does" : "people do"} not match your buyer types.</p>` : `<p class="meta" style="margin:0"><span class="unk">Nobody listed yet</span></p>`;
+  return `<dl class="facts" style="display:block"><p class="label" style="margin:0 0 4px">People${total ? ` (${total})` : ""}</p>${rows || empty}${total ? `<p class="meta" style="margin:8px 0 0"><a href="#/people/${esc(a.id)}">Open ${total === 1 ? "their card" : `all ${total} people`}</a></p>` : ""}</dl>`;
+}
+
 function aCard(a) {
   const ll = progressS(a) ? lifeLine(a) : "";
   const VIA = { hn_hiring: "a Hacker News hiring post", launch_hn: "a Launch HN post", web: "a web search", hunter: "Hunter's company search", yc: "the Y Combinator list" };
   const reason = a.is_new && a.found_reason ? `<b>Found automatically</b> from ${a.found_via?.url ? `<a href="${esc(a.found_via.url)}" target="_blank" rel="noopener noreferrer">${VIA[a.found_via.source] || "a public source"}</a>` : esc(VIA[a.found_via?.source] || "a public source")}.` : esc(a.why_now || "");
   const fit = FIT[a.fit] || FIT.unknown, f = a.facts;
-  const contact = contactLine(a);
-  return `<article class="card acard" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}" data-watched="${a.watched ? 1 : 0}">
+  return `<article class="card acard pcard" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}" data-watched="${a.watched ? 1 : 0}" data-hsn="${a.hs_contacts ?? ""}">
     <div class="ahead"><div>
       <h3 class="title"><a class="cname" href="#/company/${esc(a.id)}">${esc(a.name)}</a><a class="domain" href="https://${esc(a.domain)}" target="_blank" rel="noopener noreferrer">${esc(a.domain)}</a></h3>
       <p class="what">${a.segment ? esc(a.segment) : `<span class="unk">No description yet</span>`}</p>
     </div>
-    <div class="tags">${a.removed ? "" : watchBtn("company", a.id, a.watched)}<span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
-    ${aFacts(a)}
+    <div class="tags">${a.removed ? "" : watchBtn("company", a.id, a.watched, "Watch company")}<span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
+    <div class="pcols">${aFacts(a)}${aPeople(a)}</div>
     ${lookupRow(a)}
     <div class="fitrow"><span class="badge ${fit[1] || ""}">${fit[0]}</span>${fitWhy(a).replace('<div class="fitwhy" aria-label="Why this fit">', '<span class="fitwhy" aria-label="Why this fit" style="margin:0">').replace(/<\/div>$/, "</span>")}</div>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
@@ -785,7 +794,6 @@ function aCard(a) {
     ${reason ? `<section class="blk"><p class="label">Why now</p><div class="why">${reason}</div></section>` : ""}
     ${a.ai ? `<section class="blk"><p class="label">AI view <span class="badge ${a.heat}" title="The AI's judgement of timing, from everything we know">${HEAT[a.heat]} · ${esc(a.ai.score)}</span></p><div class="why">${a.ai.reasons.map(esc).join(" · ") || "No reason given."}${a.ai.risks.length ? `<div class="meta" style="margin-top:6px">Watch out: ${a.ai.risks.map(esc).join(" · ")}</div>` : ""}<div class="meta" style="margin-top:4px">Judged ${esc(ago(a.ai.at))}</div></div></section>` : ""}
     <section class="blk"><p class="label">Signals</p>${sigList(a.signals, 2) || `<p class="meta" style="margin:0"><span class="unk">No signals yet</span></p>`}</section>
-    <section class="blk"><p class="label">Best contact</p>${contact || `<div class="contact meta"><span class="unk">No contact yet</span></div>`}</section>
     ${a.removed ? `<div class="actions">${nextStep(a)}</div>` : actionsHtml({ outreach: a.outreach_status, hasContacts: a.contacts.length > 0, hasDraft: false, primary: nextStep(a), compact: true, removable: !progressS(a), extra: !a.firmo_known && a.contacts.length ? `<button data-act="firmo" title="Uses 0.2 search credit">Check size and stage</button>` : "" })}</article>`;
 }
 
@@ -992,7 +1000,7 @@ function wireCards(root, reload) {
       return;
     }
     if (act === "preveal") {
-      const who = card.querySelector(".title")?.childNodes[0]?.textContent?.trim() || btn.textContent.replace(/·.*$/, "").replace(/^Reveal /, "").trim();
+      const who = btn.dataset.who || card.querySelector(".title")?.childNodes[0]?.textContent?.trim() || btn.textContent.replace(/·.*$/, "").replace(/^Reveal /, "").trim();
       const hsn = Number(card.dataset.hsn || 0);
       if (!(await ask({ title: `Reveal ${who}?`, body: `Hunter shows the full name and email. Uses 1 search credit.${hsn ? `\n\nHubSpot already has this company with ${hsn} contact${hsn === 1 ? "" : "s"}: someone may already be talking to them.` : ""}`, ok: "Reveal" }))) return;
       btn.disabled = true; say("Revealing…");
@@ -1620,8 +1628,7 @@ function drawSetup() {
         <div class="tile"><b>${esc(d.unknown_fit)}</b><span>companies with size and stage not checked</span></div></div>
       ${d.predictleads.configured ? `<p class="meta" style="margin:0 0 10px"><b>PredictLeads:</b> ${esc(d.predictleads.used)} of ${esc(d.predictleads.cap)} monthly calls used.</p>
       <label class="toggle" style="margin:0 0 12px"><input type="checkbox" data-chk="plAuto" ${P.plAuto ? "checked" : ""}><span>Let the daily watch check news for the best accounts<small>At most 2 calls a day, only for accounts that pass your fit bar and have not been checked for 2 weeks. It stops at 60% of the allowance, so the rest stays for meeting briefs and your own checks.</small></span></label>` : ""}
-      ${d.unknown_fit ? `<div class="actions" style="margin:0"><button class="btn ghost" data-facts>Check size and stage for ${esc(d.unknown_fit)} companies</button><span class="meta">0.2 search credit each</span></div>` : `<p class="meta" style="margin:0">All companies have their size and stage.</p>`}
-      <div id="factsout"></div>
+      ${d.unknown_fit ? `<p class="meta" style="margin:0">${esc(d.unknown_fit)} compan${d.unknown_fit === 1 ? "y has" : "ies have"} no size and stage yet (0.2 credit each). <a href="#/discover">Look them up on Discover</a>, or one at a time on a company card.</p>` : ""}
     </article>
 
     ${own ? `<article class="card"><p class="label">HubSpot columns</p>
@@ -2062,7 +2069,7 @@ function personLookups(p) {
 }
 
 function personCard(p, o = {}) {
-  const own = IS_OWNER, fit = FIT[p.company_fit] || FIT.unknown, st = STATUS[p.email_status] || ["Unverified", ""];
+  const own = o.own ?? IS_OWNER, fit = FIT[p.company_fit] || FIT.unknown, st = STATUS[p.email_status] || ["Unverified", ""];
   const blocked = ["opted_out", "bounced"].includes(p.hs_status);
   const email = p.preview ? `<span class="unk">Not revealed</span>${p.email_status === "valid" ? ` <span class="pill ok">Verified address on file</span>` : ""}` : p.revealed ? `<b>${esc(p.email)}</b> <span class="pill ${st[1]}">${esc(st[0])}</span>` : p.has_email ? `<span class="unk">Found, not revealed</span>` : `<span class="unk">No email found</span>`;
   const hub = blocked ? `<span class="pill bad">${p.hs_status === "opted_out" ? "Opted out" : "Email bounced"}</span>` : p.in_hubspot ? `<span class="pill ok">In HubSpot</span>` : p.hs_status === "known" ? `<span class="pill warnx" title="${esc(p.hs_note || "")}">Already in your HubSpot</span>` : `Not in HubSpot`;
@@ -2173,7 +2180,7 @@ function drawPeople() {
   const nobody = !PF.company && !active && d.nobody.length
     ? `<article class="card"><p class="label">Searched, nobody found (${d.nobody.length})</p><p class="help" style="margin:0 0 6px">These companies were searched. No need to search them again for a while.</p>${d.nobody.slice(0, 30).map((n) => `<div class="wrow"><div class="wmain"><b><a class="clink" href="#/company/${esc(n.id)}">${esc(n.name)}</a></b> <span class="meta">${esc(n.domain)} · searched ${esc(day(n.at))}${n.by === "auto" ? " (automatic)" : ""}</span></div></div>`).join("")}</article>` : "";
   const shown = list.slice(0, PF.limit);
-  $("plist").innerHTML = (shown.length ? `<div class="pgrid">${shown.map((p) => personCard(p, {})).join("")}</div>${list.length > shown.length ? `<div class="actions" style="justify-content:center;margin:14px 0"><button class="btn ghost" data-pmore>Show ${Math.min(30, list.length - shown.length)} more</button></div>` : ""}`
+  $("plist").innerHTML = (shown.length ? `<div class="pgrid">${shown.map((p) => personCard(p, { own })).join("")}</div>${list.length > shown.length ? `<div class="actions" style="justify-content:center;margin:14px 0"><button class="btn ghost" data-pmore>Show ${Math.min(30, list.length - shown.length)} more</button></div>` : ""}`
     : `<div class="card empty">${d.people.length ? "No people match these filters." : "No people yet. Press <b>List people at my best companies</b> above (free), or run discovery, and the people who work at the companies that fit appear here."}${d.people.length ? "" : `<div class="actions" style="justify-content:center;margin-top:12px"><a class="btn ghost sm" href="#/discover">Open Discover</a></div>`}</div>`) + nobody;
   const s = $("psearch"); if (PF.q && document.activeElement?.id === "psearch") { s.focus(); s.setSelectionRange(PF.q.length, PF.q.length); }
 }
