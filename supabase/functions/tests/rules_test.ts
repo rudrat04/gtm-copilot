@@ -978,3 +978,13 @@ Deno.test("buyer types use Hunter's departments, and the broader search is built
   assertEquals(peopleFilter([{ department: "Sales", seniority: ["vp"] }, { department: "Marketing" }]), "&department=executive,management,sales,marketing"); // one buyer type has no level: do not narrow
   assertEquals(peopleFilter([{}]), "&department=executive,management");
 });
+
+Deno.test("places written as text become country codes", async () => {
+  const { countryCodeOf } = await import("../_shared/lists.ts");
+  assertEquals(countryCodeOf("Bengaluru, KA, India"), "IN");
+  assertEquals(countryCodeOf("San Francisco, CA, USA"), "US");
+  assertEquals(countryCodeOf("London, England"), "GB");
+  assertEquals(countryCodeOf("IN"), "IN");
+  assertEquals(countryCodeOf("Remote"), null);
+  assertEquals(countryCodeOf(null), null);
+});

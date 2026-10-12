@@ -1,7 +1,8 @@
 import { recordIfWatched } from "./movements.ts";
 import { normalizeDomain, sb } from "./db.ts";
 import { log } from "./log.ts";
-import { readCustomerCompanies, readDeals, readTaskStatuses, searchLostDeals } from "./hubspot.ts";
+import { readCompanyFacts, readCustomerCompanies, readDeals, readTaskStatuses, searchLostDeals } from "./hubspot.ts";
+import { countryCodeOf } from "./lists.ts";
 import { applyOutcome } from "./lifecycle.ts";
 import { askLossReasons } from "./lossreason.ts";
 
@@ -11,7 +12,28 @@ import { askLossReasons } from "./lossreason.ts";
 const DAY = 86_400_000;
 const OPEN_STAGES = new Set(["appointmentscheduled", "qualifiedtobuy", "presentationscheduled", "decisionmakerboughtin", "contractsent"]);
 
-export type BackSummary = { tasks_done: number; marked_contacted: number; deals_changed: number; lost_found: number; imported: number; customers?: number; asked?: number; skipped?: string };
+export type BackSummary = { facts?: number; tasks_done: number; marked_contacted: number; deals_changed: number; lost_found: number; imported: number; customers?: number; asked?: number; skipped?: string };
+
+/** Fills what a card shows as unknown (place, size, founding year) from the company record in HubSpot, for companies that are there. Never overwrites what we already know. */
+export async function pullHubspotFacts(limit = 60): Promise<number> {
+  const { data } = await sb.from("cp_accounts").select("id,hubspot_company_id,hq_city,country,employees,founded_year")
+    .not("hubspot_company_id", "is", null).is("removed_at", null).or("country.is.null,hq_city.is.null,employees.is.null,founded_year.is.null").limit(limit);
+  if (!data?.length) return 0;
+  const facts = new Map((await readCompanyFacts(data.map((a) => a.hubspot_company_id!))).map((f) => [f.id, f]));
+  let n = 0;
+  for (const a of data) {
+    const f = facts.get(a.hubspot_company_id!);
+    if (!f) continue;
+    const upd: Record<string, unknown> = {};
+    if (!a.hq_city && f.city) upd.hq_city = f.city.slice(0, 80);
+    const code = !a.country ? countryCodeOf(f.country) : null;
+    if (code) upd.country = code;
+    if (a.employees == null && f.employees) upd.employees = f.employees;
+    if (!a.founded_year && f.founded) upd.founded_year = f.founded;
+    if (Object.keys(upd).length) { await sb.from("cp_accounts").update(upd).eq("id", a.id); n++; }
+  }
+  return n;
+}
 
 export async function syncFromHubSpot(): Promise<BackSummary> {
   const out: BackSummary = { tasks_done: 0, marked_contacted: 0, deals_changed: 0, lost_found: 0, imported: 0 };
@@ -114,6 +136,8 @@ export async function syncFromHubSpot(): Promise<BackSummary> {
   // 4) Lost deals of ours with no reason: one email with five one-tap choices (once per deal).
   out.asked = await askLossReasons().catch(() => 0);
 
-  if (out.tasks_done || out.deals_changed || out.imported || out.asked || out.customers) await log("info", "crm_read_back", { detail: out });
+  out.facts = await pullHubspotFacts().catch(() => 0); // 5) place, size and founding year from HubSpot where a card still shows them as unknown
+
+  if (out.tasks_done || out.deals_changed || out.imported || out.asked || out.customers || out.facts) await log("info", "crm_read_back", { detail: out });
   return out;
 }

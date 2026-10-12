@@ -40,6 +40,17 @@ export const REGION_GROUPS: Record<string, string[]> = {
 const C = "US:United States|GB:United Kingdom|CA:Canada|IN:India|AU:Australia|NZ:New Zealand|DE:Germany|FR:France|NL:Netherlands|ES:Spain|IT:Italy|PT:Portugal|IE:Ireland|BE:Belgium|LU:Luxembourg|AT:Austria|CH:Switzerland|SE:Sweden|NO:Norway|DK:Denmark|FI:Finland|IS:Iceland|PL:Poland|CZ:Czechia|SK:Slovakia|HU:Hungary|RO:Romania|BG:Bulgaria|GR:Greece|HR:Croatia|SI:Slovenia|EE:Estonia|LV:Latvia|LT:Lithuania|CY:Cyprus|MT:Malta|UA:Ukraine|RS:Serbia|TR:Turkey|IL:Israel|AE:United Arab Emirates|SA:Saudi Arabia|QA:Qatar|KW:Kuwait|BH:Bahrain|OM:Oman|JO:Jordan|LB:Lebanon|EG:Egypt|ZA:South Africa|NG:Nigeria|KE:Kenya|GH:Ghana|MA:Morocco|TN:Tunisia|RW:Rwanda|SG:Singapore|HK:Hong Kong|CN:China|JP:Japan|KR:South Korea|TW:Taiwan|ID:Indonesia|MY:Malaysia|TH:Thailand|VN:Vietnam|PH:Philippines|BD:Bangladesh|LK:Sri Lanka|PK:Pakistan|MX:Mexico|BR:Brazil|AR:Argentina|CL:Chile|CO:Colombia|PE:Peru|UY:Uruguay|CR:Costa Rica|PA:Panama|EC:Ecuador";
 export const COUNTRIES: [string, string][] = C.split("|").map((x) => x.split(":") as [string, string]);
 
+/** Pure: the country code for a place written as text ("Bengaluru, Karnataka, India", "San Francisco, CA, USA", "IN"), or null. */
+export function countryCodeOf(text: string | null | undefined): string | null {
+  const t = (text ?? "").trim();
+  if (!t) return null;
+  if (/^[A-Za-z]{2}$/.test(t)) return COUNTRIES.find(([k]) => k === t.toUpperCase())?.[0] ?? null;
+  const alias: [RegExp, string][] = [[/\b(usa|u\.s\.a?\.?|united states( of america)?)\b/i, "US"], [/\b(uk|united kingdom|england|scotland|wales)\b/i, "GB"]];
+  for (const [re, code] of alias) if (re.test(t)) return code;
+  const hit = [...COUNTRIES].sort((a, b) => b[1].length - a[1].length).find(([, n]) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(t));
+  return hit?.[0] ?? null;
+}
+
 /** Every location choice: the groups first, then countries. */
 export const REGIONS = [...Object.keys(REGION_GROUPS), ...COUNTRIES.map(([, n]) => n).filter((n) => !(n in REGION_GROUPS))]; // India and Canada are both a group and a country: listed once
 

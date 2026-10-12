@@ -1,12 +1,12 @@
 import { normalizeDomain } from "./db.ts";
 import { log } from "./log.ts";
-import { codesFor, COUNTRIES } from "./lists.ts";
+import { codesFor, COUNTRIES, countryCodeOf } from "./lists.ts";
 import icp from "./icp.json" with { type: "json" };
 
 // Y Combinator companies that are hiring right now, from the public community list yc-oss (free, no key, refreshed daily).
 // Only B2B companies inside the owner's size range are kept; ones that match the profile's keywords come first.
 
-export type YcCandidate = { name: string; domain: string; source: "yc"; sourceUrl: string; snippet: string; size?: number };
+export type YcCandidate = { name: string; domain: string; source: "yc"; sourceUrl: string; snippet: string; size?: number; country?: string | null; city?: string | null };
 type Yc = { all_locations?: string; regions?: string[]; name: string; slug: string; website?: string; one_liner?: string; team_size?: number; industry?: string; tags?: string[]; batch?: string; status?: string; launched_at?: number; url?: string };
 
 /** Pure: picks and orders the YC companies worth a look. */
@@ -27,7 +27,7 @@ export function pickYc(all: Yc[], min: number, max: number, keywords: string[] =
   for (const { c } of rows) {
     const domain = normalizeDomain(String(c.website));
     if (!domain) continue;
-    out.push({ name: c.name.slice(0, 60), domain, source: "yc", sourceUrl: c.url ?? `https://www.ycombinator.com/companies/${c.slug}`, snippet: `${c.one_liner ?? "Y Combinator company"} (${c.batch ?? "YC"}, ${c.team_size} people, hiring)`.slice(0, 220), size: c.team_size });
+    out.push({ name: c.name.slice(0, 60), domain, source: "yc", sourceUrl: c.url ?? `https://www.ycombinator.com/companies/${c.slug}`, snippet: `${c.one_liner ?? "Y Combinator company"} (${c.batch ?? "YC"}, ${c.team_size} people, hiring)`.slice(0, 220), size: c.team_size, country: countryCodeOf(c.all_locations) ?? countryCodeOf((c.regions ?? []).join(", ")), city: (c.all_locations ?? "").split(",")[0].trim().slice(0, 60) || null });
     if (out.length >= limit) break;
   }
   return out;

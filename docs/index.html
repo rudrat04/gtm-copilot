@@ -395,7 +395,7 @@ const TIERS = { tier_1: ["Tier 1", "t1"], tier_2: ["Tier 2", "t2"], tier_3: ["Ti
 const tierHtml = (t) => (TIERS[t] ? `<span class="tier ${TIERS[t][1]}">${TIERS[t][0]}</span>` : "");
 const FIT = { matches: ["Fits", "good"], close: ["Partly fits", "warn"], unknown: ["Fit unknown", ""], outside: ["Outside range", "bad"] };
 const fitLine = (state, firmo) => { const f = FIT[state] || FIT.unknown; return `<div class="fit"><b class="${f[1]}">${f[0]}</b>${firmo ? ` · ${esc(firmo)}` : state === "unknown" ? " · size and stage not checked yet" : ""}</div>`; };
-const HEAT = { hot: "Hot", warm: "Warm", watching: "Watching" }, HEAT_RANK = { hot: 0, warm: 1, watching: 2 };
+const HEAT = { hot: "Hot", warm: "Warm", watching: "Quiet" }, HEAT_RANK = { hot: 0, warm: 1, watching: 2 };
 const skeleton = (n = 3) => `<div class="card"><div class="skel">${"<i></i>".repeat(n)}</div></div>`;
 const bullets = (a) => (a?.length ? `<ul class="plain">${a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="meta">Nothing found.</p>`);
 
@@ -507,7 +507,7 @@ function tCard(i) {
   const whoWhy = c ? `<div class="meta" style="margin-top:4px">${c.persona ? `Matches your "${esc(c.persona)}" buyer type.` : "A relevant senior contact."}${c.known ? ` <b class="warnx">${esc(c.note || "Already in your HubSpot.")}</b>` : ""}</div>` : "";
   const aiLine = i.ai ? `<div class="meta" style="margin-top:6px"><span class="badge ${i.ai.label === "hot" ? "hot" : i.ai.label === "warm" ? "warm" : ""}" title="The AI's judgement of timing">AI: ${esc(i.ai.label)} · ${esc(i.ai.score)}</span> ${esc((i.ai.reasons || []).slice(0, 2).join(" · "))}</div>` : "";
   const why = `<div class="why"><b>Why today.</b> ${esc(i.why || i.reason)}${aiLine}</div>`;
-  const VIA = { hn_hiring: "a Hacker News hiring post", launch_hn: "a Launch HN post", web: "a web search" };
+  const VIA = { hn_hiring: "a Hacker News hiring post", launch_hn: "a Launch HN post", web: "a web search", hunter: "Hunter's company search", yc: "the Y Combinator list" };
   const viaLine = i.via ? `<div class="meta" style="margin-top:6px">Found from ${i.via.url ? `<a href="${esc(i.via.url)}" target="_blank" rel="noopener noreferrer">${VIA[i.via.source] || "a public source"}</a>` : esc(VIA[i.via.source] || "a public source")}.</div>` : "";
   const note = fu ? `<div class="status-line due">${esc(i.headline)}</div>` : i.type === "revive" ? `<div class="status-line">${esc(i.headline)}</div>${why}` : why + viaLine;
   return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
@@ -568,7 +568,7 @@ const VIEWS = [
   ["removed", "Removed", "Hidden and blocked. Restore any of them here", (a) => a.removed],
 ];
 const SELECTS = [
-  ["heat", "Heat", [["", "Any"], ["hot", "Hot"], ["warm", "Warm"], ["watching", "Watching"]], (a, v) => a.heat === v],
+  ["heat", "Heat", [["", "Any"], ["hot", "Hot"], ["warm", "Warm"], ["watching", "Quiet"]], (a, v) => a.heat === v],
   ["fit", "Fit", [["", "Any"], ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Not checked"], ["outside", "Outside range"]], (a, v) => a.fit === v],
   ["contact", "Contact", [["", "Any"], ["has", "Has a contact"], ["none", "No contact yet"]], (a, v) => (v === "has" ? a.contacts.length > 0 : a.contacts.length === 0)],
   ["hub", "HubSpot", [["", "Any"], ["yes", "In HubSpot"], ["no", "Not in HubSpot"]], (a, v) => (v === "yes" ? a.hubspot : !a.hubspot)],
@@ -598,7 +598,7 @@ function stageText(a) {
   if (s === "snoozed") return `Snoozed until ${day(a.snoozed_until)}`;
   if (s === "not_now") return "Parked";
   if (a.contacts.length) return "Contact found";
-  return a.heat !== "watching" ? "Ready" : "Watching";
+  return a.heat !== "watching" ? "Ready" : "Not contacted";
 }
 
 /** The one next step for this company, from what we already know about it. */
@@ -667,7 +667,7 @@ function lookupRow(a) {
 
 function aCard(a) {
   const ll = progressS(a) ? lifeLine(a) : "";
-  const VIA = { hn_hiring: "a Hacker News hiring post", launch_hn: "a Launch HN post", web: "a web search" };
+  const VIA = { hn_hiring: "a Hacker News hiring post", launch_hn: "a Launch HN post", web: "a web search", hunter: "Hunter's company search", yc: "the Y Combinator list" };
   const reason = a.is_new && a.found_reason ? `<b>Found automatically</b> from ${a.found_via?.url ? `<a href="${esc(a.found_via.url)}" target="_blank" rel="noopener noreferrer">${VIA[a.found_via.source] || "a public source"}</a>` : esc(VIA[a.found_via?.source] || "a public source")}.` : esc(a.why_now || "");
   const fit = FIT[a.fit] || FIT.unknown, f = a.facts;
   const contact = contactLine(a);
@@ -1092,7 +1092,7 @@ async function loadIcp() {
         <p class="meta" style="margin:6px 0 0">Older evidence counts for less: news after 30 days counts half, after 60 days nothing.</p></article>
       <article class="card"><p class="label">How to read a company</p>
         <ul class="plain"><li><b>Fit</b>: is it the right kind of company? Size, funding stage and region against your profile. "Fit unknown" means size and stage have not been looked up yet.</li>
-          <li><b>Hot</b>: it fits and something happened in the last week, or it just raised, or it has 2+ sales roles open. <b>Warm</b>: some signal. <b>Watching</b>: nothing right now.</li>
+          <li><b>Hot</b>: it fits and something happened in the last week, or it just raised, or it has 2+ sales roles open. <b>Warm</b>: some signal. <b>Quiet</b>: nothing right now. (Following a company is a separate thing: the star.)</li>
           <li><b>Persona score</b>: how closely a person's title matches a target buyer.</li>
           <li>Behind the scenes a 0 to 100 score (the signals above plus fit) sorts the lists and fills the HubSpot fields.</li></ul></article>
       <article class="card"><p class="label">The daily rhythm</p>

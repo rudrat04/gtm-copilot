@@ -11,6 +11,7 @@ import { collectYc } from "./yc.ts";
 import { autoSearch } from "./autosearch.ts";
 import { aiRefresh } from "./aiscore.ts";
 import { scanOne } from "./scan.ts";
+import { industryFromSite } from "./industry.ts";
 import { FIT_COLS } from "./firmo.ts";
 import icp from "./icp.json" with { type: "json" };
 
@@ -18,7 +19,7 @@ import icp from "./icp.json" with { type: "json" };
 // Source today: the monthly Hacker News "Who is hiring" thread, which lists companies that are hiring right now.
 // Companies hiring sales or RevOps roles are the strongest signal for the seller, so only those posts are kept.
 
-export type Candidate = { name: string; domain: string; source: string; sourceUrl: string; snippet: string; band?: string; size?: number };
+export type Candidate = { name: string; domain: string; source: string; sourceUrl: string; snippet: string; band?: string; size?: number; country?: string | null; city?: string | null };
 
 const cfg = icp.discovery;
 /** Sales or RevOps roles to look for: the profile's hiring roles plus the general words. */
@@ -156,7 +157,8 @@ async function readyTheNew(ids: string[]) {
     if (fitState(a as never) !== "matches") continue;
     if ((await autoSearch({ id: a.id, domain: a.domain }, { ignoreDaily: true })) !== "skipped") searched++;
   }
-  const ai = ids.length ? await aiRefresh({ ids, maxCompanies: 12, maxPeopleCompanies: 6 }).catch(() => ({ companies: 0, people: 0 })) : { companies: 0, people: 0 };
+  for (let i = 0; i < ids.length; i += 4) await Promise.allSettled(ids.slice(i, i + 4).map((id) => industryFromSite(id))); // the industry from their website, about 0.1 cent each, no credit
+  const ai = ids.length ? await aiRefresh({ ids: ids.slice(0, 12), maxCompanies: 12, maxPeopleCompanies: 6 }).catch(() => ({ companies: 0, people: 0 })) : { companies: 0, people: 0 };
   return { searched, judged: ai.companies };
 }
 
@@ -224,7 +226,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
       }
     }
     const { data: acct, error } = await sb.from("cp_accounts")
-      .insert({ domain: c.domain, name: row.name, segment: (v.segment ?? "").slice(0, 80) || null, source: "discovered", status: "new", ...(light ? { light_source: c.source, employee_band: c.band ?? null, employees: c.size ?? null } : {}) })
+      .insert({ domain: c.domain, name: row.name, segment: (v.segment ?? "").slice(0, 80) || null, source: "discovered", status: "new", ...(light ? { light_source: c.source, employee_band: c.band ?? null, employees: c.size ?? null, country: c.country ?? null, hq_city: c.city ?? null } : {}) })
       .select("id").single();
     if (error || !acct) {
       await log("warn", "discover_insert_failed", { account: c.domain, message: error?.message });
@@ -237,7 +239,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
   }
   const save = (ready: { searched: number; judged: number }) => summary.checked > 0 ? sb.from("cp_state").upsert({ key: "discovery_last", value: JSON.stringify({ at: new Date().toISOString(), collected: summary.collected, from_web: summary.from_web, already_known: summary.already_known, checked: summary.checked, added: summary.added.slice(0, 20), skipped: skipped.slice(0, 20), skipped_n: summary.rejected, people_searched: ready.searched, judged: ready.judged, facts_checked: (opts.firmo === false ? 0 : cfg.firmoPerRun) - firmoLeft }), updated_at: new Date().toISOString() }) : Promise.resolve(); // an empty run keeps the last real report
   await save({ searched: 0, judged: 0 }); // saved first, in case the slower steps below run out of time
-  const ready = await readyTheNew(addedIds.slice(0, 10)).catch(() => ({ searched: 0, judged: 0 }));
+  const ready = await readyTheNew(addedIds.slice(0, 12)).catch(() => ({ searched: 0, judged: 0 }));
   Object.assign(summary, { people_searched: ready.searched, judged: ready.judged, skipped: skipped.slice(0, 20) });
   await save(ready);
   await log("info", "discover_done", { detail: summary });

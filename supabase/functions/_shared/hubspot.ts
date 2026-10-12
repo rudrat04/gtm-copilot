@@ -267,6 +267,19 @@ export async function readCompanies(ids: string[]): Promise<Map<string, CompanyR
   return out;
 }
 
+export type HsCompanyFacts = { id: string; city: string | null; country: string | null; employees: number | null; founded: number | null };
+
+/** Place, size and founding year HubSpot holds for these companies, to fill what a card still shows as unknown. Read-only. */
+export async function readCompanyFacts(ids: string[]): Promise<HsCompanyFacts[]> {
+  const out: HsCompanyFacts[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const r = await hs("/crm/v3/objects/companies/batch/read", { method: "POST", body: JSON.stringify({ properties: ["city", "country", "numberofemployees", "founded_year"], inputs: ids.slice(i, i + 100).map((id) => ({ id })) }) }, [207]);
+    // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
+    for (const c of (r.body.results ?? []) as any[]) out.push({ id: c.id, city: c.properties?.city || null, country: c.properties?.country || null, employees: Number(c.properties?.numberofemployees) > 0 ? Number(c.properties.numberofemployees) : null, founded: Number(c.properties?.founded_year) > 1800 ? Number(c.properties.founded_year) : null });
+  }
+  return out;
+}
+
 export type TaskInput = {
   subject: string;
   html: string;
