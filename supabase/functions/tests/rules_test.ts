@@ -25,7 +25,9 @@ const { pickTop } = await import("../_shared/bulkfind.ts");
 const { apply, clean } = await import("../_shared/profile.ts");
 const { default: icp } = await import("../_shared/icp.json", { with: { type: "json" } });
 const { meetsFit, worthShowing } = await import("../_shared/fitgate.ts");
-const { alertEmail } = await import("../_shared/templates.ts");
+const { alertEmail, digestEmail, noContactText } = await import("../_shared/templates.ts");
+const { creditsLeft, worthASearch } = await import("../_shared/autosearch.ts");
+const { changeLines, emptyChanges, hasChanges } = await import("../_shared/changes.ts");
 const { cleanBrand, DEFAULT_BRAND } = await import("../_shared/brand.ts");
 
 const DAY = 86_400_000;
@@ -760,4 +762,43 @@ Deno.test("brand: text is cleaned and only small image data URLs are accepted as
   assertEquals(cleanBrand({ logo: "https://evil.example/x.png" }).logo, "");
   assertEquals(cleanBrand({ logo: "data:text/html;base64,PHNjcmlwdD4=" }).logo, "");
   assertEquals(cleanBrand({ logo: "data:image/png;base64," + "A".repeat(300_001) }).logo, "");
+});
+
+Deno.test("automatic searches: only worthwhile companies, and a reserve of credits is always left", () => {
+  assertEquals(worthASearch("matches", false), true);
+  assertEquals(worthASearch("close", false), false);
+  assertEquals(worthASearch("unknown", false), false);
+  assertEquals(worthASearch("outside", false), false);
+  assertEquals(worthASearch("outside", true), true); // a followed company is always worth it
+  assertEquals(creditsLeft(10, 40, 15), 15);
+  assertEquals(creditsLeft(25, 40, 15), 0);
+  assertEquals(creditsLeft(39, 40, 15), 0); // never negative
+  const w = clean({ watch: { alertSearches: 99, alertReserve: 99, autoFix: "yes" } }).watch;
+  assertEquals([w.alertSearches, w.alertReserve, w.autoFix], [10, 45, false]); // autoFix is on only for a real true
+  const d = clean({}).watch;
+  assertEquals([d.alertSearches, d.alertReserve, d.autoFix], [2, 15, false]); // off by default
+});
+
+Deno.test("hot alert: names up to two people with their buyer type, and is honest when nobody was found", () => {
+  const person = (n: string, persona: string | null, known = false) => ({ id: n, name: n, title: "VP Sales", persona, email: null, email_status: null, revealed: false, pushed: false, known, note: null });
+  const a = { name: "Acme", tier: "tier_2", domain: "acme.com" };
+  const withTwo = alertEmail(a, { title: "Acme raises $10M" }, "why", [person("Maya Chen", "Head of Sales", false), person("Dev Patel", null, true)]);
+  assertEquals(withTwo.body.includes("Maya Chen, VP Sales [Head of Sales]"), true);
+  assertEquals(withTwo.body.includes("already in your HubSpot"), true);
+  assertEquals(withTwo.html.includes("Head of Sales"), true);
+  assertEquals(alertEmail(a, { title: "x" }, "why", [], undefined, "none").body.includes("Searched, found nobody."), true);
+  assertEquals(alertEmail(a, { title: "x" }, "why", [], undefined, "never").html.includes("Not searched yet"), true);
+  assertEquals(noContactText("none"), "Searched, found nobody.");
+});
+
+Deno.test("daily email: leads with what changed and lists who is waiting for a contact", () => {
+  const c = { ...emptyChanges(), signals: [{ name: "Acme", title: "Acme raises $10M", more: 1 }], people: [{ name: "Beta", who: "Sam Lee (CRO)" }], moves: ["Gamma replied"], held: [{ name: "Delta", title: "Delta hires" }], waiting: [{ name: "Acme", state: "none" as const }, { name: "Beta", state: "never" as const }] };
+  assertEquals(hasChanges(emptyChanges()), false);
+  assertEquals(changeLines(c).length, 4);
+  const mail = digestEmail([], 0, new Map(), { items: [], total: 0 }, c);
+  assertEquals(mail.body.indexOf("SINCE YESTERDAY") < mail.body.indexOf("WAITING FOR A CONTACT"), true);
+  assertEquals(mail.body.includes("Acme: searched, found nobody"), true);
+  assertEquals(mail.body.includes("Beta: not searched yet"), true);
+  assertEquals(mail.subject, "Since yesterday: 4 changes");
+  assertEquals(mail.html.includes("Waiting for a contact"), true);
 });

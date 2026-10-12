@@ -1,8 +1,5 @@
 import { sb } from "./db.ts";
-import { log } from "./log.ts";
-import { searchAndStore } from "./people.ts";
-import { fitState, tierOf } from "./score.ts";
-import { meetsFit } from "./fitgate.ts";
+import { autoSearch } from "./autosearch.ts";
 import icp from "./icp.json" with { type: "json" };
 
 // "Who do I contact?" for an account. Today, alerts and the morning email lead with a person, so every
@@ -62,35 +59,11 @@ export async function contactsFor(accountIds: string[], admin: boolean, limit = 
 }
 
 /**
- * Finds people for a strong account that has never been searched. Skips weak accounts, accounts already
- * searched, and anything past the daily limit. Returns true when new people were stored.
+ * Finds people for a company that has none, under the owner's rules (see autosearch.ts): it must fit or be followed, a small
+ * daily allowance, a reserve of credits left alone. Returns true when new people were stored.
  */
-export async function autoFindContacts(a: { id: string; domain: string; priority_score: number | null; watched?: boolean }): Promise<boolean> {
-  if (!a.watched && tierOf(a.priority_score) === "tier_3") return false;
-  // Do not spend a search credit on a company that clearly misses the target size or stage.
-  const { data: firm } = await sb.from("cp_accounts").select("employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,domain,name").eq("id", a.id).maybeSingle();
-  if (firm && !a.watched) { // a followed company is searched whatever its fit
-    if (!meetsFit(fitState(firm))) {
-      await log("info", "auto_contact_skipped", { account: a.domain, message: "Below the fit bar set in Setup" });
-      return false;
-    }
-  }
+export async function autoFindContacts(a: { id: string; domain: string; priority_score?: number | null; watched?: boolean }): Promise<boolean> {
   const { count: existing } = await sb.from("cp_people").select("id", { count: "exact", head: true }).eq("account_id", a.id);
   if ((existing ?? 0) > 0) return false;
-
-  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
-  const { count: today } = await sb.from("cp_provider_usage").select("id", { count: "exact", head: true })
-    .eq("provider", "hunter").eq("action", "domain_search").gte("created_at", dayStart.toISOString());
-  if ((today ?? 0) >= icp.contacts.autoPerDay) {
-    await log("info", "auto_contact_skipped", { account: a.domain, message: "Daily automatic lookup limit reached" });
-    return false;
-  }
-  try {
-    const r = await searchAndStore({ id: a.id, domain: a.domain });
-    await log("info", "auto_contact_lookup", { account: a.domain, detail: { stored: r.stored, credits: r.credits } });
-    return r.stored > 0;
-  } catch (e) {
-    await log("warn", "auto_contact_failed", { account: a.domain, message: (e as Error).message });
-    return false;
-  }
+  return (await autoSearch(a)) === "found";
 }

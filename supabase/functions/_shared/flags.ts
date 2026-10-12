@@ -5,6 +5,8 @@ import { fitState, heatOf } from "./score.ts";
 import { worthShowing } from "./fitgate.ts";
 import { endsAt } from "./debrief.ts";
 import { healthView } from "./health.ts";
+import { fixDryList } from "./autosearch.ts";
+import { planBulkFind } from "./bulkfind.ts";
 import icp from "./icp.json" with { type: "json" };
 
 // Pipeline watch. Looks for things that are off (a hot account nobody touched, a late follow-up, a lead past its reply
@@ -71,9 +73,14 @@ export async function collect(mode: "daily" | "urgent"): Promise<Candidate[]> {
   // Companies below the owner's fit bar are never flagged, unless the owner is already working them.
   const inScope = (a: typeof accounts[number]) => a.outreach_status !== "open" || worthShowing(a);
 
-  const { data: people } = await sb.from("cp_people").select("account_id,first_name,last_name,relevance,email,email_status,email_revealed").gte("relevance", 50).limit(2000);
+  const { data: people } = await sb.from("cp_people").select("account_id,first_name,last_name,title,relevance,email,email_status,email_revealed").gte("relevance", 50).order("relevance", { ascending: false }).limit(2000);
   const contactOf = new Map<string, number>();
-  for (const p of people ?? []) contactOf.set(p.account_id, (contactOf.get(p.account_id) ?? 0) + 1);
+  const bestOf = new Map<string, string>(); // the best person at each company, for the details below
+  for (const p of people ?? []) {
+    contactOf.set(p.account_id, (contactOf.get(p.account_id) ?? 0) + 1);
+    if (!bestOf.has(p.account_id)) bestOf.set(p.account_id, `${p.first_name} ${p.last_name}, ${p.title}`.replace("  ", " "));
+  }
+  const who = (id: string) => (bestOf.has(id) ? ` Contact: ${bestOf.get(id)}.` : "");
 
   // 1) Hot and untouched.
   if (on("hotUntouched")) {
@@ -82,9 +89,11 @@ export async function collect(mode: "daily" | "urgent"): Promise<Candidate[]> {
     for (const a of open) {
       const mine = (sigs ?? []).filter((s) => s.account_id === a.id);
       const real = mine.filter((s) => s.kind === "news" || (s.kind === "hiring" && !(s.detail && "salesOpenings" in s.detail)));
-      const newest = real.length ? Math.max(...real.map((s) => { const p = s.kind === "news" && s.detail?.published ? Date.parse(String(s.detail.published)) : NaN; return Number.isNaN(p) ? Date.parse(s.detected_at) : p; })) : 0;
+      const stamp = (s: typeof real[number]) => { const p = s.kind === "news" && s.detail?.published ? Date.parse(String(s.detail.published)) : NaN; return Number.isNaN(p) ? Date.parse(s.detected_at) : p; };
+      const newest = real.length ? Math.max(...real.map(stamp)) : 0;
+      const latest = real.find((s) => stamp(s) === newest);
       if (hotUntouched(a, true, heatOf(mine as never, fitState(a)), newest, now, n("hotUntouched"))) {
-        add({ kind: "hot_untouched", severity: "urgent", accountId: a.id, title: `${a.name}: hot, and nobody has reached out`, detail: `A new signal appeared ${now - newest >= 48 * H ? `${Math.round((now - newest) / DAY)} days` : `${Math.round((now - newest) / H)} hours`} ago and the account is still untouched.`, since: new Date(newest).toISOString() });
+        add({ kind: "hot_untouched", severity: "urgent", accountId: a.id, title: `${a.name}: hot, and nobody has reached out`, detail: `Untouched for ${now - newest >= 48 * H ? `${Math.round((now - newest) / DAY)} days` : `${Math.round((now - newest) / H)} hours`}. Last signal: ${(latest?.title ?? "a new signal").slice(0, 90)}.${who(a.id)}`, since: new Date(newest).toISOString() });
       }
     }
   }
@@ -104,10 +113,10 @@ export async function collect(mode: "daily" | "urgent"): Promise<Candidate[]> {
   for (const a of accounts) {
     if (!inScope(a)) continue;
     if (on("followupOverdue") && followupOverdue(a, now, n("followupOverdue"))) {
-      add({ kind: "followup_overdue", severity: "normal", accountId: a.id, title: `${a.name}: follow-up is ${Math.floor(ago(a.next_followup_at, now) / DAY)} days late`, detail: "It was due and nothing was recorded.", since: a.next_followup_at! });
+      add({ kind: "followup_overdue", severity: "normal", accountId: a.id, title: `${a.name}: follow-up is ${Math.floor(ago(a.next_followup_at, now) / DAY)} days late`, detail: `It was due ${Math.floor(ago(a.next_followup_at, now) / DAY)} days ago and nothing was recorded.${who(a.id)}`, since: a.next_followup_at! });
     }
     if (on("repliedNoNext") && repliedStale(a, now, n("repliedNoNext"))) {
-      add({ kind: "replied_no_next", severity: "normal", accountId: a.id, title: `${a.name}: replied, but no next step`, detail: `They replied ${Math.floor(ago(a.last_touch_at, now) / DAY)} days ago and nothing has happened since.`, since: a.last_touch_at! });
+      add({ kind: "replied_no_next", severity: "normal", accountId: a.id, title: `${a.name}: replied, but no next step`, detail: `They replied ${Math.floor(ago(a.last_touch_at, now) / DAY)} days ago and nothing has happened since.${who(a.id)}`, since: a.last_touch_at! });
     }
   }
 
@@ -131,7 +140,7 @@ export async function collect(mode: "daily" | "urgent"): Promise<Candidate[]> {
       for (const a of deals) {
         const last = Math.max(a.last_touch_at ? Date.parse(a.last_touch_at) : 0, lastOutcome.get(a.id) ?? 0);
         if (dealStuck(a, last, now, n("dealStuck"))) {
-          add({ kind: "deal_stuck", severity: "normal", accountId: a.id, title: `${a.name}: deal has had no activity for ${Math.floor((now - last) / DAY)} days`, detail: `It is still open in HubSpot (${a.deal_stage ?? "open"}).`, since: new Date(last).toISOString() });
+          add({ kind: "deal_stuck", severity: "normal", accountId: a.id, title: `${a.name}: deal has had no activity for ${Math.floor((now - last) / DAY)} days`, detail: `It is still open in HubSpot (${a.deal_stage ?? "open"}).${who(a.id)}`, since: new Date(last).toISOString() });
         }
       }
     }
@@ -141,7 +150,8 @@ export async function collect(mode: "daily" | "urgent"): Promise<Candidate[]> {
   if (on("thinPipeline")) {
     const ready = accounts.filter((a) => a.status === "queued" && a.outreach_status === "open" && contactOf.has(a.id) && worthShowing(a)).length;
     if (thinPipeline(ready, n("thinPipeline"))) {
-      add({ kind: "thin_pipeline", severity: "normal", accountId: null, title: `Only ${ready} ready account${ready === 1 ? "" : "s"} with someone to contact`, detail: `Today will run dry. Use "Find relevant people" on the best hot companies in Accounts (limit set to ${n("thinPipeline")}).`, since: new Date(now).toISOString() });
+      const best = (await planBulkFind(3).catch(() => ({ plan: [] as { name: string }[] }))).plan.map((p) => p.name);
+      add({ kind: "thin_pipeline", severity: "normal", accountId: null, title: `Only ${ready} ready account${ready === 1 ? "" : "s"} with someone to contact`, detail: `You asked to be warned when fewer than ${n("thinPipeline")} are ready, so Today will run dry.${best.length ? ` Best companies to search next: ${best.join(", ")} (about ${best.length} to ${best.length * 2} credits; "Find people for the top companies" in Accounts does it).` : ' Use "Find relevant people" on your best companies in Accounts.'}`, since: new Date(now).toISOString() });
     }
   }
 
@@ -199,6 +209,16 @@ export async function runWatch(mode: "daily" | "urgent", opts: { dry?: boolean }
   const { data: open } = await sb.from("cp_flags").select("key,kind,dismissed_at,hubspot_task_id").is("resolved_at", null).in("kind", kinds);
   const have = new Map((open ?? []).map((f) => [f.key, f]));
   const keys = new Set(found.map((f) => f.key));
+  // If the owner switched it on, a new "running dry" flag searches the best companies without a contact and says who it found (spends search credits).
+  if (!opts.dry && mode === "daily" && icp.watch.autoFix) {
+    const thin = found.find((f) => f.kind === "thin_pipeline" && !have.has(f.key));
+    if (thin) {
+      try {
+        const fix = await fixDryList(3);
+        if (fix.searched) thin.detail = `Today was running dry, so I searched ${fix.searched} compan${fix.searched === 1 ? "y" : "ies"} (${fix.credits} search credit${fix.credits === 1 ? "" : "s"}). ${fix.text}`;
+      } catch (e) { await log("warn", "auto_fix_failed", { message: (e as Error).message }); }
+    }
+  }
   const fresh = found.filter((f) => !have.has(f.key));
   const gone = (open ?? []).filter((f) => !keys.has(f.key));
   const summary = { mode, found: found.length, new: fresh.length, resolved: gone.length, todos: 0, dry: !!opts.dry };

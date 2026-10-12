@@ -1218,9 +1218,9 @@ const chipField = (key, label, options, help) => `<div class="field"><span class
 
 let SUGGEST_NOTE = "", MS_OPEN = null, DIGEST_TIME = null, BRAND_DRAFT = { name: "F1rstword", tagline: "Know who to talk to, and when.", logo: "" };
 const PRESETS = {
-  quiet: { alertsPerDay: 1, watchlistAlerts: true, todayCap: 5, digestFlags: true, urgent: true, todoForUrgent: false, checks: { hotUntouched: 96, followupOverdue: 4, leadPastTarget: 60, meetingNoDebrief: 4, repliedNoNext: 10, dealStuck: 30, thinPipeline: 1, drift: 14 }, off: ["thinPipeline", "drift"] },
-  normal: { alertsPerDay: 3, watchlistAlerts: true, todayCap: 8, digestFlags: true, urgent: true, todoForUrgent: true, checks: { hotUntouched: 48, followupOverdue: 2, leadPastTarget: 30, meetingNoDebrief: 2, repliedNoNext: 5, dealStuck: 14, thinPipeline: 3, drift: 7 }, off: [] },
-  busy: { alertsPerDay: 6, watchlistAlerts: true, todayCap: 12, digestFlags: true, urgent: true, todoForUrgent: true, checks: { hotUntouched: 24, followupOverdue: 1, leadPastTarget: 15, meetingNoDebrief: 1, repliedNoNext: 3, dealStuck: 7, thinPipeline: 5, drift: 3 }, off: [] },
+  quiet: { alertsPerDay: 1, alertSearches: 1, watchlistAlerts: true, todayCap: 5, digestFlags: true, urgent: true, todoForUrgent: false, checks: { hotUntouched: 96, followupOverdue: 4, leadPastTarget: 60, meetingNoDebrief: 4, repliedNoNext: 10, dealStuck: 30, thinPipeline: 1, drift: 14 }, off: ["thinPipeline", "drift"] },
+  normal: { alertsPerDay: 3, alertSearches: 2, watchlistAlerts: true, todayCap: 8, digestFlags: true, urgent: true, todoForUrgent: true, checks: { hotUntouched: 48, followupOverdue: 2, leadPastTarget: 30, meetingNoDebrief: 2, repliedNoNext: 5, dealStuck: 14, thinPipeline: 3, drift: 7 }, off: [] },
+  busy: { alertsPerDay: 6, alertSearches: 4, watchlistAlerts: true, todayCap: 12, digestFlags: true, urgent: true, todoForUrgent: true, checks: { hotUntouched: 24, followupOverdue: 1, leadPastTarget: 15, meetingNoDebrief: 1, repliedNoNext: 3, dealStuck: 7, thinPipeline: 5, drift: 3 }, off: [] },
 };
 /** A searchable multi-select: chosen items show as chips, "Add" opens a list with a search box. */
 function msField(path, label, options, help, groups) {
@@ -1317,7 +1317,10 @@ function drawSetup() {
 
       <hr class="hr"><p class="lbl" style="font-weight:600;font-size:14px;margin:0 0 8px">1. When to alert me</p>
       <div class="field" style="margin-bottom:10px"><div class="numrow">Send up to <input type="number" min="0" max="10" data-num="watch.alertsPerDay" value="${esc(P.watch.alertsPerDay)}" aria-label="Hot alerts a day" style="width:72px"> instant hot-alert emails a day<span class="help" style="margin:0">When a company in your queue shows a new signal. 0 turns them off.</span></div></div>
+      <div class="field" style="margin-bottom:10px"><div class="numrow">Before an alert, search for people at up to <input type="number" min="0" max="10" data-num="watch.alertSearches" value="${esc(P.watch.alertSearches)}" aria-label="Searches a day before alerts" style="width:72px"> companies a day<span class="help" style="margin:0">So the email names who to contact. Only for companies that fit or that you follow, and never one searched in the last 30 days. A search costs 1 credit (sometimes 2); finding nobody is free. 0 turns it off.</span></div></div>
+      <div class="field" style="margin-bottom:10px"><div class="numrow">Always keep <input type="number" min="0" max="45" data-num="watch.alertReserve" value="${esc(P.watch.alertReserve)}" aria-label="Search credits to keep" style="width:72px"> search credits for my own searches<span class="help" style="margin:0">Automatic searches stop when only this many are left this month.</span></div></div>
       <div class="toggles">
+        <label class="toggle"><input type="checkbox" data-chk="watch.autoFix" ${P.watch.autoFix ? "checked" : ""}><span>Fix a running-dry list automatically<small>When Today is about to run out, search the best 3 companies without a contact and list who was found in the email. Uses 3 to 6 credits when it happens. Off by default.</small></span></label>
         <label class="toggle"><input type="checkbox" data-chk="watch.watchlistAlerts" ${P.watch.watchlistAlerts ? "checked" : ""}><span>Alert me about companies I follow<small>Up to 5 a day, separate from the number above. Any new signal counts, whatever the score.</small></span></label>
         <label class="toggle"><input type="checkbox" data-chk="watch.urgent" ${P.watch.urgent ? "checked" : ""}><span>Check for urgent problems every 3 hours<small>A hot company left untouched, or a lead past its reply target. Everything else is checked once a day.</small></span></label>
         <label class="toggle"><input type="checkbox" data-chk="watch.todoForUrgent" ${P.watch.todoForUrgent ? "checked" : ""}><span>Add a HubSpot to-do for urgent problems<small>Only for companies already in HubSpot, at most 3 a run.</small></span></label>
@@ -1466,7 +1469,7 @@ async function loadSetup() {
     const pre = e.target.closest("[data-preset]");
     if (pre) {
       const x = PRESETS[pre.dataset.preset], w = P.watch;
-      Object.assign(w, { alertsPerDay: x.alertsPerDay, watchlistAlerts: x.watchlistAlerts, todayCap: x.todayCap, digestFlags: x.digestFlags, urgent: x.urgent, todoForUrgent: x.todoForUrgent });
+      Object.assign(w, { alertsPerDay: x.alertsPerDay, alertSearches: x.alertSearches, watchlistAlerts: x.watchlistAlerts, todayCap: x.todayCap, digestFlags: x.digestFlags, urgent: x.urgent, todoForUrgent: x.todoForUrgent });
       for (const [k, n] of Object.entries(x.checks)) w.checks[k].n = n;
       for (const k of Object.keys(w.checks)) w.checks[k].on = !x.off.includes(k);
       drawSetup(); say(`${pre.textContent} style filled in. Press Save to keep it.`); return;

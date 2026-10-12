@@ -1,6 +1,7 @@
 import icp from "./icp.json" with { type: "json" };
 import type { TodayItem } from "./today.ts";
 import type { Contact } from "./contacts.ts";
+import { type Changes, changeLines } from "./changes.ts";
 import { button, esc as h, h2, layout, link, list, mailto, muted, quote } from "./emailhtml.ts";
 
 // Internal messages (the owner's morning email, hot alerts, HubSpot task bodies) are fixed templates
@@ -36,6 +37,10 @@ type Links = Map<string, string>; // account id -> HubSpot company id
 
 const person = (c: Contact) => `${c.name}, ${c.title}`;
 
+/** What to say when an alert has nobody to name: be exact about whether we looked. */
+export const noContactText = (state: "searched" | "none" | "never") =>
+  state === "none" ? "Searched, found nobody." : state === "searched" ? "People are known but none match your buyer types." : "Not searched yet (this company is outside the automatic search rules). Open the page and use Find relevant people.";
+
 /** The headline of an item: a person when we know one, otherwise the company with a next step. */
 function headline(n: number, it: TodayItem): string {
   const a = it.account!;
@@ -66,7 +71,7 @@ function itemBlock(n: number, it: TodayItem, links: Links): string {
 type Attention = { items: { severity: string; title: string; detail: string | null }[]; total: number };
 
 /** The morning email to the owner. */
-export function digestEmail(items: TodayItem[], hidden: number, links: Links, attention: Attention = { items: [], total: 0 }) {
+export function digestEmail(items: TodayItem[], hidden: number, links: Links, attention: Attention = { items: [], total: 0 }, changes?: Changes) {
   const group = (types: string[]) => items.filter((i) => types.includes(i.type));
   const fresh = group(["hot", "new"]), fu = group(["follow_up"]), mt = group(["meeting"]), rv = group(["revive"]);
   let n = 0;
@@ -77,21 +82,25 @@ export function digestEmail(items: TodayItem[], hidden: number, links: Links, at
   const attn = attention.items.length
     ? `NEEDS ATTENTION${attention.total > attention.items.length ? ` (${attention.total}, top ${attention.items.length})` : ""}\n${attention.items.map((a) => `  ${a.severity === "urgent" ? "!" : "-"} ${a.title}${a.detail ? `\n      ${a.detail}` : ""}`).join("\n")}\n`
     : "";
+  const since = changes ? changeLines(changes) : [];
+  const waitingLine = (w: { name: string; state: string }) => `  - ${w.name}: ${w.state === "none" ? "searched, found nobody" : w.state === "never" ? "not searched yet (use Find relevant people)" : "people known, none match your buyer types"}`;
   const body = [
     `Good morning ${icp.owner.name},`,
+    since.length ? `SINCE YESTERDAY\n${since.map((l) => `  - ${l}`).join("\n")}\n` : "",
     attn,
     items.length ? `Here is who to contact for ${longDate()}.\n` : "",
     section("NEW AND HOT", fresh),
     section("FOLLOW-UPS DUE", fu),
     section("MEETINGS", mt),
     section("WORTH ANOTHER LOOK", rv),
+    changes?.waiting.length ? `WAITING FOR A CONTACT\n${changes.waiting.slice(0, 6).map(waitingLine).join("\n")}\n` : "",
     `Open the full list: ${page}`,
     `\n— F1rstword${hidden ? ` · ${hidden} lower-priority accounts not shown` : ""} · outreach stays manual, nothing is sent for you`,
   ].filter(Boolean).join("\n");
   const subject = items.length
     ? `Today: ${items.length} prospect${items.length === 1 ? "" : "s"} to focus on (${parts})${attention.total ? ` · ${attention.total} need attention` : ""}`
-    : `${attention.total} thing${attention.total === 1 ? " needs" : "s need"} attention`;
-  return { subject, body, html: digestHtml(items, hidden, links, attention) };
+    : attention.total ? `${attention.total} thing${attention.total === 1 ? " needs" : "s need"} attention` : `Since yesterday: ${changeLines(changes ?? ({ signals: [], people: [], moves: [], held: [], waiting: [] } as Changes)).length} change${changeLines(changes ?? ({ signals: [], people: [], moves: [], held: [], waiting: [] } as Changes)).length === 1 ? "" : "s"}`;
+  return { subject, body, html: digestHtml(items, hidden, links, attention, changes) };
 }
 
 /** An instant alert when a new signal appears on an account you have not contacted yet. */
@@ -101,16 +110,17 @@ export function alertEmail(
   why: string,
   contacts: Contact[],
   hubspotId?: string,
+  searchState: "searched" | "none" | "never" = "never",
 ) {
   const topShort = top.title.replace(/^Hiring:\s*/, "hiring ").slice(0, 70);
   const [c, c2] = contacts;
   const who = c ? `${c.name} at ${a.name}` : a.name;
   return {
     subject: `${a.watched ? "Watchlist" : "Hot"}: ${who} (${TIER[a.tier]}), ${topShort}`,
-    html: alertHtml(a, top, why, contacts, hubspotId),
+    html: alertHtml(a, top, why, contacts, hubspotId, searchState),
     body: [
-      c ? `Contact: ${person(c)}${c.email ? `\nEmail: ${c.email}` : ""}` : `Contact: none found yet, use "Find relevant people"`,
-      c2 ? `Also consider: ${person(c2)}${c2.email ? ` (${c2.email})` : ""}` : "",
+      c ? `Contact: ${person(c)}${c.persona ? ` [${c.persona}]` : ""}${c.known ? " (already in your HubSpot)" : ""}${c.email ? `\nEmail: ${c.email}` : ""}` : `Contact: ${noContactText(searchState)}`,
+      c2 ? `Also consider: ${person(c2)}${c2.persona ? ` [${c2.persona}]` : ""}${c2.known ? " (already in your HubSpot)" : ""}${c2.email ? ` (${c2.email})` : ""}` : "",
       `\n${a.name} just showed a new signal: ${top.title.slice(0, 120)} (${top.published ? `published ${age(top.published)}` : "found today"}).`,
       a.firmo ? `Company: ${a.firmo}` : "",
       `Why today: ${why}`,
@@ -150,11 +160,12 @@ function itemHtml(it: TodayItem, links: Links): string {
   ].join(""));
 }
 
-function digestHtml(items: TodayItem[], hidden: number, links: Links, attention: Attention): string {
+function digestHtml(items: TodayItem[], hidden: number, links: Links, attention: Attention, changes?: Changes): string {
   const group = (types: string[]) => items.filter((i) => types.includes(i.type));
   const section = (title: string, list: TodayItem[]) => (list.length ? h2(title) + list.map((i) => itemHtml(i, links)).join("") : "");
   const inner = [
     `<div style="font-size:20px;font-weight:700">Good morning ${h(icp.owner.name)}</div>`,
+    changes && changeLines(changes).length ? h2("Since yesterday") + list(changeLines(changes).map((l) => h(l))) : "",
     attention.items.length
       ? h2(`Needs attention${attention.total > attention.items.length ? ` (${attention.total})` : ""}`) + attention.items.map((a) => `<div style="margin:6px 0"><b style="color:${a.severity === "urgent" ? "#dc2626" : "inherit"}">${h(a.title)}</b>${a.detail ? muted(h(a.detail), 13) : ""}</div>`).join("")
       : "",
@@ -163,6 +174,7 @@ function digestHtml(items: TodayItem[], hidden: number, links: Links, attention:
     section("Follow-ups due", group(["follow_up"])),
     section("Meetings", group(["meeting"])),
     section("Worth another look", group(["revive"])),
+    changes?.waiting.length ? h2("Waiting for a contact") + list(changes.waiting.slice(0, 6).map((w) => `<b>${h(w.name)}</b>: ${w.state === "none" ? "searched, found nobody" : w.state === "never" ? "not searched yet" : "people known, none match your buyer types"}`)) : "",
     `<div style="margin-top:18px">${button(page, "Open F1rstword")}</div>`,
   ].join("");
   return layout(inner, `F1rstword${hidden ? ` · ${hidden} lower-priority accounts not shown` : ""} · outreach stays manual, nothing is sent for you`);
@@ -174,18 +186,19 @@ function alertHtml(
   why: string,
   contacts: Contact[],
   hubspotId?: string,
+  searchState: "searched" | "none" | "never" = "never",
 ): string {
   const [c, c2] = contacts;
   const open = hubspotId ? hubspotCompanyUrl(hubspotId) : page;
+  const who = (p: Contact) => `<b>${h(p.name)}</b> <span style="color:#78716c">· ${h(p.title)}</span>${p.persona ? ` <span style="color:#3a4bbf;font-size:13px">[${h(p.persona)}]</span>` : ""}${p.known ? ` <span style="color:#b45309;font-size:13px">already in your HubSpot</span>` : ""}${p.email ? ` · ${mailto(p.email)}` : ""}`;
   const inner = [
     `<div style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#78716c">Hot signal</div>`,
-    c
-      ? `<div style="font-size:19px;font-weight:700;margin-top:4px">${h(c.name)} <span style="font-weight:400;color:#78716c">· ${h(c.title)} at ${h(a.name)}</span></div>${c.email ? `<div>${mailto(c.email)}</div>` : ""}`
-      : `<div style="font-size:19px;font-weight:700;margin-top:4px">${h(a.name)} <span style="font-weight:400;color:#78716c">· no contact found yet</span></div>${muted(`Open the page and use <b>Find relevant people</b>`)}`,
+    `<div style="font-size:19px;font-weight:700;margin-top:4px">${h(a.name)}</div>`,
+    c ? `<div style="margin-top:6px">${who(c)}</div>` : muted(h(noContactText(searchState))),
+    c2 ? `<div style="margin-top:4px">${who(c2)}</div>` : "",
     muted(`${h(a.name)} · ${h(TIER[a.tier] ?? "")}${a.firmo ? ` · ${h(a.firmo)}` : ""}`),
     quote("Why today:", why),
     list([`${h(top.title.slice(0, 140))} <span style="color:#78716c">(${top.published ? `published ${h(age(top.published))}` : "found today"})</span>`]),
-    c2 ? `<div>Also consider: <b>${h(c2.name)}</b>, ${h(c2.title)}${c2.email ? ` (${mailto(c2.email)})` : ""}</div>` : "",
     `<div>${button(open, hubspotId ? "Open in HubSpot" : "Open in F1rstword")}</div>`,
   ].join("");
   return layout(inner, `F1rstword · you get at most ${icp.alerts.maxPerDay} of these a day · outreach stays manual`);

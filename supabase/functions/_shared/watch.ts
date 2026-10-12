@@ -6,7 +6,9 @@ import { generateWhy, hash } from "./today.ts";
 import { alertEmail } from "./templates.ts";
 import { googleConfigured, ownerEmail, sendMail } from "./google.ts";
 import { firmoLine } from "./firmo.ts";
-import { autoFindContacts, contactsFor } from "./contacts.ts";
+import { contactsFor } from "./contacts.ts";
+import { autoSearch, searchStates } from "./autosearch.ts";
+import { fitState } from "./score.ts";
 import { autoRefreshPredictLeads, storedPlSignals } from "./predictleads.ts";
 import icp from "./icp.json" with { type: "json" };
 
@@ -86,27 +88,38 @@ export async function lightCheck(admin: boolean) {
   if (candidates.length && googleConfigured()) {
     const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
     // Followed companies have an allowance of their own, so a busy day on the watchlist cannot crowd out the rest (or the other way round).
-    const { data: sentToday } = await sb.from("cp_alerts").select("account_id").gte("sent_at", dayStart.toISOString());
+    const { data: sentToday } = await sb.from("cp_alerts").select("account_id").eq("deferred", false).gte("sent_at", dayStart.toISOString());
     const { data: followed } = sentToday?.length ? await sb.from("cp_accounts").select("id").in("id", sentToday.map((r) => r.account_id)).not("watched_at", "is", null) : { data: [] };
     const followedIds = new Set((followed ?? []).map((r) => r.id));
     const left = { followed: icp.watch.watchlistAlerts === false ? 0 : Math.max(0, WATCHLIST_ALERTS_PER_DAY - followedIds.size), other: Math.max(0, icp.alerts.maxPerDay - ((sentToday?.length ?? 0) - followedIds.size)) };
     for (const c of candidates.sort((x, y) => (Number(!!y.a.watched_at) - Number(!!x.a.watched_at)) || (y.score - x.score))) {
       const lane = c.a.watched_at ? "followed" : "other";
       if (left[lane] <= 0) continue;
+      const { data: seen } = await sb.from("cp_alerts").select("account_id").eq("account_id", c.a.id).eq("signal_hash", c.hash).maybeSingle();
+      if (seen) continue; // already alerted (or held back) for these signals
+      // Find people first, so the email names them. This spends search credits, so it only runs for companies that fit or that you follow.
+      await autoSearch({ id: c.a.id, domain: c.a.domain });
+      const contacts = (await contactsFor([c.a.id], true)).get(c.a.id) ?? [];
+      const fits = fitState(c.a as never) === "matches";
+      if (!c.a.watched_at && !contacts.length && !fits) {
+        // A weak alert: no fit and nobody to contact. It waits for the daily email instead of interrupting you.
+        await sb.from("cp_alerts").insert({ account_id: c.a.id, signal_hash: c.hash, deferred: true });
+        await log("info", "hot_alert_held_back", { account: c.a.domain, detail: { score: c.score } });
+        continue;
+      }
       const { error } = await sb.from("cp_alerts").insert({ account_id: c.a.id, signal_hash: c.hash });
-      if (error) continue; // already alerted for these signals
+      if (error) continue;
+      const searchState = (await searchStates([c.a.id])).get(c.a.id) ?? "never";
       const { data: sigs } = await sb.from("cp_signals").select("kind,title,detail,detected_at").eq("account_id", c.a.id).order("detected_at", { ascending: false }).limit(5);
       const why = (await generateWhy({
         name: c.a.name, tier: tierOf(c.score), type: "hot", touches: 0, lastAction: null,
         sigs: (sigs ?? []).map((s) => ({ ...s, account_id: c.a.id, url: null })) as never,
       })) ?? `New signal: ${c.top.title.slice(0, 100)}`;
-      await autoFindContacts({ id: c.a.id, domain: c.a.domain, priority_score: c.score, watched: !!c.a.watched_at });
-      const contacts = (await contactsFor([c.a.id], true)).get(c.a.id) ?? [];
       const { data: firm } = await sb.from("cp_accounts").select("employees,employee_band,stage,raised_usd,hq_city,country,firmo_at").eq("id", c.a.id).single();
       const mail = alertEmail(
         { name: c.a.name, tier: tierOf(c.score), domain: c.a.domain, firmo: firm ? firmoLine(firm) : "", watched: !!c.a.watched_at },
         { title: c.top.title, published: (c.top.detail as { published?: string } | undefined)?.published },
-        why, contacts, c.a.hubspot_company_id ?? undefined,
+        why, contacts, c.a.hubspot_company_id ?? undefined, searchState,
       );
       try {
         await sendMail(ownerEmail(), mail.subject, mail.body, mail.html);

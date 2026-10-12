@@ -182,6 +182,9 @@
   },
   "watch": {
     "alertsPerDay": 3,
+    "alertSearches": 2,
+    "alertReserve": 15,
+    "autoFix": false,
     "watchlistAlerts": true,
     "todayCap": 8,
     "digestFlags": true,

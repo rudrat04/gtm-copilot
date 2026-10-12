@@ -122,7 +122,7 @@ export function personaTitles(personas: { match: string[]; weight: number }[] = 
   return out.slice(0, 14);
 }
 
-const HUNTER_MONTHLY_CAP = Number(Deno.env.get("HUNTER_MONTHLY_CAP") ?? 40); // free plan has 50
+export const HUNTER_MONTHLY_CAP = Number(Deno.env.get("HUNTER_MONTHLY_CAP") ?? 40); // free plan has 50
 
 export const hunter: PeopleProvider = {
   name: "hunter",
@@ -175,7 +175,7 @@ export const hunter: PeopleProvider = {
   },
 };
 
-async function monthlyUsed(): Promise<number> {
+export async function monthlyUsed(): Promise<number> {
   const since = new Date();
   since.setUTCDate(1);
   since.setUTCHours(0, 0, 0, 0);
@@ -228,8 +228,9 @@ export async function hunterBalance(): Promise<{ remaining: number; available: n
 
 
 /** Searches the active provider for an account and stores what it finds. Returns how many people were stored. */
-export async function searchAndStore(account: { id: string; domain: string }): Promise<{ stored: number; credits: number }> {
+export async function searchAndStore(account: { id: string; domain: string }, opts: { auto?: boolean } = {}): Promise<{ stored: number; credits: number }> {
   const found = await provider().search(account.domain);
+  await sb.from("cp_accounts").update({ people_searched_at: new Date().toISOString(), people_search_source: opts.auto ? "auto" : "manual" }).eq("id", account.id); // remembered even when nobody was found
   const { data: acc } = await sb.from("cp_accounts").select("employees").eq("id", account.id).maybeSingle();
   const rows = found.people.map((p) => {
     const r = rank(p.title, acc?.employees, p.department);

@@ -5,6 +5,7 @@ import { googleConfigured, ownerEmail, sendMail } from "../_shared/google.ts";
 import { buildToday, hash } from "../_shared/today.ts";
 import { digestEmail, summaryTask, taskFor } from "../_shared/templates.ts";
 import { activeFlags, runWatch } from "../_shared/flags.ts";
+import { changesSince, emptyChanges, hasChanges } from "../_shared/changes.ts";
 import { createTask } from "../_shared/hubspot.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
 
@@ -39,7 +40,10 @@ serve("daily-digest", async (req) => {
   const attention = icp.watch.digestFlags === false ? { items: [], total: 0 } : await activeFlags(6); // the owner can leave the "needs attention" section out of the email
 
   if (!preview) await sb.from("cp_state").upsert({ key: "digest_last", value: new Date().toISOString(), updated_at: new Date().toISOString() });
-  if (!today.items.length && !attention.total) {
+  // What changed since the last email (at most 36 hours back), and who is waiting for a contact.
+  const since = new Date(Math.max(last ? Date.parse(last) : 0, Date.now() - 36 * 3_600_000)).toISOString();
+  const changes = await changesSince(since, today.needs).catch(async (e) => { await log("warn", "changes_failed", { message: (e as Error).message }); return emptyChanges(); });
+  if (!today.items.length && !attention.total && !hasChanges(changes)) {
     await log("info", "digest_skipped_empty", {});
     return json({ sent: false, reason: "Nothing on today's list" });
   }
@@ -55,7 +59,7 @@ serve("daily-digest", async (req) => {
   for (const p of people ?? []) if (!contactFor.has(p.account_id)) contactFor.set(p.account_id, { id: p.hubspot_contact_id!, name: `${p.first_name} ${p.last_name}`.trim() });
 
   // 1) The email.
-  const mail = digestEmail(today.items, today.hidden, links, attention);
+  const mail = digestEmail(today.items, today.hidden, links, attention, changes);
   if (admin && opts.dry === true) return json({ dry: true, subject: mail.subject, body: mail.body, html: mail.html }); // preview only: nothing is sent or created
   let emailed = false;
   try {
