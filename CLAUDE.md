@@ -106,7 +106,7 @@ The `signal-scan` cron runs **weekly: Mondays 06:00-06:55 UTC** (every 5 minutes
 ## Current state (as of 11 Oct 2026)
 - Everything in "DONE" below is built, tested live and pushed. CI (GitHub Actions) passes; the live smoke test is 39/39. AI spend for the whole project so far is about $0.20; Hunter about 14 of 50 monthly credits used (resets monthly).
 - Packaging exists: `README.md` (diagrams, costs), `DEMO.md` (2-minute script), `CASE_STUDY.md`, `API.md` (permissions, inbound webhook).
-- Test records in HubSpot to clean up (ask before deleting): the Attio deal "Attio · PipelineKit", its notes and to-do (and Drew Peterson's lead status), companies Clay and Attio, and the Rootly company, "Alex Test" contact and to-do from the inbound test. The user's inbox also holds some test emails.
+- HubSpot test records (the Attio deal, its notes and to-dos, and the Rootly company, "Alex Test" contact, notes and to-do) were deleted on 12 Oct 2026 at the owner's request (HubSpot keeps deleted records in its recycle bin for 90 days). The Attio and Clay companies and Drew Peterson (Attio) remain as sample records. The user's inbox still holds some test emails.
 - Not recorded yet: a demo video and screenshots (the user does these).
 
 ## Next steps (as of 11 Oct 2026)
@@ -132,7 +132,7 @@ DONE since: pipeline watch, fit bar, editable buyer types, HubSpot custom column
 - **Phase 4, make the system do its job: only the necessary parts.** DONE: (15) bulk find people with a credit confirm, (16) why-this-person tag, the known and opted-out markers, and the Today empty-state reasons (the best contact line on Accounts cards already existed). Skipped on purpose: "mark contacted with channel and note", (17) preview what changes.
 - **Phase 5, sources and learning:** (18) more sources (Launch HN / Show HN, funding feeds, accelerator batches, directories); (19) paste best customers, get a suggested ICP; (20) lookalikes (PredictLeads Similar Companies from seed accounts, capped because discovery calls bill per result; later from won deals); (21) Insights / calibration once there are about 30 outcomes.
 - **Phase 6, trust and housekeeping:** (22) audit log, suppression list, delete or export a person, rotate the owner key; (23) draft evidence check, dossier source links, alert grouping, weekly one-page email; (24) tests for the new areas; (25) optional second people provider (costs money; owner decides).
-Other ideas, held: territories and multiple profiles, Ask Copilot, Listen to your day, a People tab (not now: too little data), board view. Blocked on data or paid providers: champion job-change tracker, phone numbers. Test records to clean up in HubSpot (ask first): Attio deal, notes and to-dos, the Rootly company/contact/to-do from the inbound test, the watch to-do on Attio.
+Other ideas, held: territories and multiple profiles, Ask Copilot, Listen to your day, a People tab (not now: too little data), board view. Blocked on data or paid providers: champion job-change tracker, phone numbers.
 
 ## Known gaps
 - (Resolved) Size and stage ARE now enforced via Hunter company data; remaining caveat: Hunter's headcount can be off (it said 30 for Clay), so treat it as an estimate. The old note follows: **The ICP size and stage were not enforced.** icp.json states 20-200 employees and Seed to Series B, but fit is judged by the AI from website text only; there is no headcount or funding data source on the free plans. Ideas: a manual column on the fixture list, or a free enrichment source.
