@@ -964,3 +964,16 @@ Deno.test("size that comes free with a company counts in fit without a paid look
   assertEquals(fitState({ employee_band: "51-200" }), "unknown"); // no source: not a looked-up fact
   assertEquals(fitBreakdown(inside).known, true);
 });
+
+Deno.test("buyer types use Hunter's departments, and the broader search is built from them", async () => {
+  const { DEPARTMENTS, migrateDepartment } = await import("../_shared/profile.ts");
+  const { peopleFilter } = await import("../_shared/people.ts");
+  assertEquals(DEPARTMENTS.includes("Sales") && DEPARTMENTS.includes("HR") && DEPARTMENTS.length, 19);
+  assertEquals(migrateDepartment("Revenue operations"), "Operations");
+  assertEquals(migrateDepartment("People / HR"), "HR");
+  assertEquals(migrateDepartment("Nonsense"), "");
+  assertEquals(peopleFilter([{ department: "Sales" }, { department: "Operations" }]), "&department=executive,management,sales,operations");
+  assertEquals(peopleFilter([{ department: "Sales", seniority: ["vp", "manager"] }]), "&department=executive,management,sales&seniority=executive,senior");
+  assertEquals(peopleFilter([{ department: "Sales", seniority: ["vp"] }, { department: "Marketing" }]), "&department=executive,management,sales,marketing"); // one buyer type has no level: do not narrow
+  assertEquals(peopleFilter([{}]), "&department=executive,management");
+});

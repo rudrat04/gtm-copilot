@@ -123,6 +123,16 @@ export function personaTitles(personas: { match: string[]; weight: number }[] = 
   return out.slice(0, 14);
 }
 
+const HUNTER_SENIORITY: Record<string, string> = { founder_c: "executive", vp: "executive", head_director: "executive", manager: "senior", ic: "junior" };
+/** Pure: the Hunter filter for the broader people search, from the buyer types: their departments (plus executives and managers, where decision makers often sit),
+ *  and seniority only when every buyer type with a department also names its levels. */
+export function peopleFilter(personas: { department?: string; seniority?: string[] }[]): string {
+  const depts = [...new Set(["executive", "management", ...personas.map((p) => (p.department ?? "").toLowerCase()).filter(Boolean)])];
+  const withDept = personas.filter((p) => p.department);
+  const sen = withDept.length && withDept.every((p) => p.seniority?.length) ? [...new Set(withDept.flatMap((p) => p.seniority!.map((x) => HUNTER_SENIORITY[x])).filter(Boolean))] : [];
+  return `&department=${depts.join(",")}${sen.length ? `&seniority=${sen.join(",")}` : ""}`;
+}
+
 export const HUNTER_MONTHLY_CAP = Number(Deno.env.get("HUNTER_MONTHLY_CAP") ?? 40); // free plan has 50
 
 export const hunter: PeopleProvider = {
@@ -152,7 +162,7 @@ export const hunter: PeopleProvider = {
     if (!first || merged.size < 3) {
       const used2 = await monthlyUsed();
       if (used2 + credits < HUNTER_MONTHLY_CAP) {
-        const second = await domainSearch(domain, key, "&department=executive,sales,management,operations");
+        const second = await domainSearch(domain, key, peopleFilter(icp.personas as { department?: string; seniority?: string[] }[]));
         credits += second.credits;
         for (const e of second.emails) if (!merged.has(String(e.value))) merged.set(String(e.value), e);
       }

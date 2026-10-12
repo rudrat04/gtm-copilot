@@ -24,7 +24,12 @@ export type Watch = { urgent: boolean; todoForUrgent: boolean; alertsPerDay: num
  * `onlyBelow` is kept for old saved profiles and is always null now.
  */
 export type Persona = { title: string; match: string[]; weight: number; hubspot: string | null; onlyBelow: number | null; department: string; seniority: string[] };
-export const DEPARTMENTS = ["Executive", "Sales", "Marketing", "Revenue operations", "Operations", "Finance", "Engineering", "Product", "Customer success", "People / HR", "IT"];
+/** Hunter's own departments (what its people search accepts and what it labels each person with), so a choice here is a filter there. */
+export const DEPARTMENTS = ["Executive", "Management", "Sales", "Marketing", "Operations", "Finance", "Product", "IT", "Support", "HR", "Legal", "Communication", "Design", "Procurement", "Research", "Consulting", "Education", "Health", "Administrative"];
+const LEGACY_DEPARTMENTS: Record<string, string> = { "Revenue operations": "Operations", Engineering: "IT", "Customer success": "Support", "People / HR": "HR" };
+/** Pure: a saved department as one of Hunter's (an older name is translated; anything else is dropped). */
+export const migrateDepartment = (v: unknown): string => { const d = String(v ?? ""); return DEPARTMENTS.includes(d) ? d : LEGACY_DEPARTMENTS[d] ?? ""; };
+
 export const SENIORITIES = [["founder_c", "Founder / C-level"], ["vp", "VP"], ["head_director", "Head / Director"], ["manager", "Manager"], ["ic", "Individual contributor"]] as const;
 export const PRODUCT_MAX = 1500;
 
@@ -119,7 +124,7 @@ function cleanPersonas(raw: unknown): Persona[] {
     if (!title || !match.length || seen.has(title.toLowerCase())) continue;
     seen.add(title.toLowerCase());
     const hubspot = g && "hubspot" in g ? (typeof g.hubspot === "string" && g.hubspot.trim() ? g.hubspot.trim().slice(0, 60) : null) : (base?.hubspot ?? null);
-    const department = DEPARTMENTS.find((d) => d === g?.department) ?? "";
+    const department = migrateDepartment(g?.department);
     const seniority = (Array.isArray(g?.seniority) ? g.seniority : []).map(String).filter((x) => SENIORITIES.some(([k]) => k === x));
     out.push({ title, match, weight: Math.max(60, 100 - 5 * out.length), hubspot, onlyBelow: null, department, seniority });
     if (out.length >= MAX_PERSONAS) break;
