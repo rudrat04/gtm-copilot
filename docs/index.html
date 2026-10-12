@@ -193,6 +193,7 @@
   .pcard .role { font-size: 15px; color: var(--ink); margin: 2px 0 0; }
   .pcard .role .at { color: var(--muted); }
   .pcard .pwatch { display: flex; gap: 6px; flex-wrap: wrap; }
+  .wtop { display: flex; align-items: center; gap: 8px; } .wtop .seg { flex: 1; }
   .wgrid { display: grid; gap: 14px; margin-top: 14px; }
   .wcard { margin: 0; padding: 18px 20px; }
   .wcard .wc-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
@@ -224,12 +225,19 @@
   .card.busy { opacity: .55; pointer-events: none; position: relative; }
   .card.busy::after { content: ""; position: absolute; top: 14px; right: 14px; width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .sggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 12px; margin-top: 14px; align-items: start; }
-  .sigcard { margin: 0; padding: 14px 16px; }
+  .sggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 14px; margin-top: 14px; align-items: start; }
+  .sigcard { margin: 0; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+  .sigcard .sg-head { display: flex; align-items: baseline; gap: 10px; }
+  .sigcard .sg-co { font-weight: 700; font-size: 15.5px; }
+  .sigcard .sg-state { font-size: 12px; color: var(--muted); } .sg-state .fz { font-weight: 600; }
+  .sg-state .fz.good, .sg-state .fz.matches { color: var(--good); } .sg-state .fz.warn, .sg-state .fz.close, .sg-state .fz.warm { color: var(--warn); } .sg-state .fz.hot, .sg-state .fz.bad { color: var(--bad); }
+  .sigcard .sg-age { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .sigcard .sg-kind { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); } .sg-kind span { text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .sg-kind.k-accent { color: var(--accent); } .sg-kind.k-good { color: var(--good); } .sg-kind.k-warn { color: var(--warn); } .sg-kind.k-bad { color: var(--bad); }
+  .sg-chip { display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px 3px 4px; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); font-size: 12.5px; font-weight: 600; text-decoration: none; color: var(--ink); }
+  .sg-chip:hover { border-color: var(--accent); } .sg-chip i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); } .sg-chip small { font-weight: 400; color: var(--muted); font-size: 12px; }
   .sigcard.intent { border-left: 3px solid var(--accent); }
-  .sigcard .sg-top { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
-  .sigcard .sg-co { margin: 0 0 4px; }
-  .sigcard .sg-text { font-size: 14.5px; margin: 0 0 8px; }
+  .sigcard .sg-text { font-size: 15px; line-height: 1.45; margin: 0; }
   .sigcard .sg-who { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .info { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; margin-left: 6px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--muted); font: italic 700 11px/1 Georgia, serif; cursor: help; vertical-align: middle; flex: none; text-transform: none; letter-spacing: 0; }
   .info:hover, .info:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
@@ -342,6 +350,19 @@
   details summary { cursor: pointer; color: var(--accent); font-size: 13.5px; margin: 8px 0; }
 
   /* ---- research ---- */
+  #research { display: flex; flex-direction: column; }
+  .rhero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 11vh 0 28px; transition: padding .25s ease; }
+  #research.has-out .rhero { padding-top: 4px; }
+  .rmark { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); margin-bottom: 18px; } .rmark .ico { width: 26px; height: 26px; }
+  .rhero h2 { margin: 0; font-size: 30px; letter-spacing: -.02em; } .rhero > p { margin: 8px 0 22px; color: var(--muted); font-size: 15px; }
+  #research.has-out .rmark, #research.has-out .rhero > p { display: none; } #research.has-out .rhero h2 { font-size: 20px; margin-bottom: 14px; }
+  .rbox { display: flex; align-items: center; gap: 8px; width: min(680px, 100%); padding: 8px 8px 8px 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--card-shadow); }
+  .rbox:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+  .rbox input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; font-size: 17px; color: var(--ink); padding: 8px 0; }
+  .rsend { width: 42px; height: 42px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); cursor: pointer; flex: none; } .rsend:disabled { opacity: .5; cursor: default; } .rsend .ico { width: 20px; height: 20px; stroke-width: 2.2; }
+  .rchips { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 16px; font-size: 13px; color: var(--muted); }
+  .rchips button { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 6px 14px; font-size: 13px; color: var(--soft); cursor: pointer; } .rchips button:hover { border-color: var(--accent); color: var(--accent); }
+  #research #out { width: 100%; }
   .search { display: flex; gap: 8px; }
   .search input { flex: 1; min-width: 0; padding: 12px 14px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
   .hint { color: var(--muted); font-size: 13px; margin: 8px 0 18px; }
@@ -402,7 +423,21 @@
   a.clink { color: inherit; text-decoration: none; } a.clink:hover { text-decoration: underline; }
   #convseg { margin-bottom: 14px; display: flex; gap: 4px; } #convseg i { font-style: normal; background: var(--accent); color: #fff; border-radius: 99px; font-size: 11px; padding: 1px 7px; margin-left: 6px; }
   .credits { text-decoration: none; font-size: 13px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--ink); } .credits.low { color: #8a5a00; border-color: #d9b24a; background: #fbf1d3; } .credits.out { color: #a3261c; border-color: #e3a29d; background: #fbe9e7; }
-  .subnav { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 14px; } .subnav button { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 99px; padding: 6px 14px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; } .subnav button[aria-selected="true"] { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+  #setupbody { display: grid; grid-template-columns: 210px minmax(0, 1fr); column-gap: 28px; align-items: start; }
+  #setupbody > * { grid-column: 2; min-width: 0; }
+  #setupbody > .subnav { grid-column: 1; grid-row: 1 / span 60; position: sticky; top: 92px; display: flex; flex-direction: column; gap: 2px; margin: 0; }
+  .subnav button { display: flex; align-items: center; width: 100%; border: 0; background: none; color: var(--soft); border-radius: 10px; padding: 9px 14px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; text-align: left; position: relative; }
+  .subnav button:hover { background: var(--raised); color: var(--ink); }
+  .subnav button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line), var(--card-shadow); }
+  .subnav button[aria-selected="true"]::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--accent); }
+  @media (max-width: 900px) {
+    #setupbody { display: block; }
+    #setupbody > .subnav { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid var(--line); }
+    .subnav button { width: auto; white-space: nowrap; border-radius: 9px 9px 0 0; padding: 9px 14px; }
+    .subnav button[aria-selected="true"] { background: none; box-shadow: none; color: var(--accent); }
+    .subnav button[aria-selected="true"]::before { left: 10px; right: 10px; top: auto; bottom: -1px; width: auto; height: 2px; }
+    .rhero { padding-top: 5vh; } .rhero h2 { font-size: 24px; }
+  }
   .check { display: flex; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); } .check:first-of-type { border-top: 0; } .check .tick { width: 24px; height: 24px; border-radius: 99px; border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; flex: none; } .check.done .tick { background: var(--green, #1f7a3d); border-color: var(--green, #1f7a3d); } .check .ct { flex: 1; }
   .pal-bg { position: fixed; inset: 0; z-index: 85; background: rgba(40, 35, 27, .45); display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; } .pal { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); width: 100%; max-width: 560px; overflow: hidden; }
   .pal input { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid var(--line); padding: 16px 18px; font: inherit; font-size: 17px; color: var(--ink); background: transparent; outline: 0; } .pal-list { max-height: 50vh; overflow: auto; padding: 6px; }
@@ -485,11 +520,16 @@
   <section id="people" hidden><div id="phead"></div><div id="plist" aria-live="polite"></div></section>
 
   <section id="research" hidden>
-    <form class="search" id="form">
-      <input id="domain" placeholder="Company domain, for example linear.app" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Company domain">
-      <button class="btn primary" id="go" type="submit">Research</button>
-    </form>
-    <p class="hint">Try <a data-d="linear.app">linear.app</a><a data-d="posthog.com">posthog.com</a><a data-d="attio.com">attio.com</a></p>
+    <div class="rhero">
+      <div class="rmark" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
+      <h2>Which company do you want to know?</h2>
+      <p>Enter a website. You get a dossier and the people who work there.</p>
+      <form class="rbox" id="form">
+        <input id="domain" placeholder="linear.app" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Company website" autofocus>
+        <button class="rsend" id="go" type="submit" aria-label="Research this company"><svg class="ico" viewBox="0 0 24 24"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button>
+      </form>
+      <div class="rchips"><span>Try</span><button type="button" data-d="linear.app">linear.app</button><button type="button" data-d="posthog.com">posthog.com</button><button type="button" data-d="attio.com">attio.com</button></div>
+    </div>
     <div id="out" aria-live="polite"></div>
   </section>
 
@@ -1452,7 +1492,7 @@ $("out").addEventListener("click", async (e) => {
   }
 });
 async function run(domain) {
-  $("go").disabled = true;
+  $("go").disabled = true; $("research").classList.add("has-out");
   $("out").innerHTML = skeleton(3) + `<p class="meta" style="text-align:center">Collecting signals and writing the dossier. About 10 seconds.</p>`;
   try {
     const d = await api("research-account", { domain });
@@ -1464,6 +1504,7 @@ async function run(domain) {
 }
 $("form").addEventListener("submit", (e) => { e.preventDefault(); const v = $("domain").value.trim(); if (v) run(v); });
 document.querySelectorAll("[data-d]").forEach((el) => el.addEventListener("click", () => { $("domain").value = el.dataset.d; run(el.dataset.d); }));
+document.querySelector('nav.tabs [data-tab="research"]').addEventListener("click", () => setTimeout(() => $("domain").focus(), 60));
 
 /* ============ ICP & Signals playbook ============ */
 async function loadIcp() {
@@ -2169,7 +2210,7 @@ async function loadSetup() {
 /* ============ Watchlist: follow companies and people, and see what moved ============ */
 const watchLabel = (on, noun) => `${on ? "★ Watching" : "☆ Watch"}${noun ? ` ${noun}` : ""}`;
 const watchBtn = (kind, id, on, noun = "") => `<button type="button" class="star${on ? " on" : ""}" data-watch data-kind="${kind}" data-id="${esc(id)}" data-noun="${esc(noun.replace(/^Watch /, ""))}" data-on="${on ? 1 : 0}" title="${on ? "Following. Click to stop" : kind === "person" ? "Follow this person: you are told about their activity, their team, news, HubSpot changes and job changes" : "Follow this company: never hidden, and you are told when something moves"}">${watchLabel(on, noun.replace(/^Watch /, ""))}</button>`;
-let WL = null, WLV = "moved";
+let WL = null, WLV = "people";
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-watch]"); if (!b) return;
   const on = b.dataset.on !== "1", kind = b.dataset.kind, id = b.dataset.id; b.disabled = true;
@@ -2190,7 +2231,7 @@ document.addEventListener("click", async (e) => {
   try { const r = await api("queue", { action: "watch_check", kind, id }); if (r.mode === "dry_run") { say(r.message); b.disabled = false; return; } say(r.found ? `${r.found} new movement${r.found === 1 ? "" : "s"} found.` : "Nothing new."); BOARD = null; loadWatchlist(true); }
   catch (err) { say(err.message); b.disabled = false; }
 });
-const WL_VIEWS = [["moved", "What moved"], ["companies", "Companies"], ["people", "People"]];
+const WL_VIEWS = [["people", "People"], ["companies", "Companies"], ["moved", "What moved"]];
 const NOTIFY = [["instant", "Email me at once"], ["daily", "In the daily email"], ["off", "No email"]];
 function drawWatchlist() {
   const d = WL, own = !!d.admin;
@@ -2214,7 +2255,7 @@ function drawWatchlist() {
   if (view === "moved") {
     body = d.events.length ? d.events.map((e) => `<div class="wev${e.unseen ? " unseen" : ""}"><span class="dot"></span><div><div class="wt"><b>${e.company_id ? `<a class="clink" href="#/company/${esc(e.company_id)}">${esc(e.who)}</a>` : esc(e.who)}</b>${e.person ? ` · ${esc(e.person)}` : ""} <span class="badge ${e.importance === "big" ? "accent" : ""}">${esc(e.label)}</span></div>
       <div class="wt">${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a>` : esc(e.title)}</div><div class="wm">${esc(ago(e.detected_at))}</div></div></div>`).join("")
-      : `<p class="meta" style="margin:0">Nothing has moved yet. Follow a company or a person and their news, hiring, events, HubSpot changes and more show up here.</p>`;
+      : `<p class="meta" style="margin:0">Nothing has moved yet. Movements at the people and companies you follow show up here.</p>`;
   } else if (view === "companies") {
     body = d.companies.length ? `<div class="wgrid">${d.companies.map((c) => wcard({ title: `<a class="clink" href="#/company/${esc(c.id)}">${esc(c.name)}</a>`, sub: esc(c.domain), tags: `<span class="badge ${c.heat}">${esc(HEAT[c.heat])}</span>${c.unseen ? `<span class="badge accent">${c.unseen} new</span>` : ""}`, since: c.since, checked: c.checked, next: "Checked every day with the daily watch", covers: c.covers, events: d.events.filter((e) => e.company_id === c.id && !e.person_id),
         actions: `${own ? dd("company", c.id, c.notify) : ""}${check("company", c.id)}${watchBtn("company", c.id, true)}` })).join("")}</div>`
@@ -2225,13 +2266,12 @@ function drawWatchlist() {
       : `<p class="meta" style="margin:0">No people yet. Use "☆ Watch person" on a card, or add one above.</p>`;
   }
   $("wlbody").innerHTML = `<div class="fpanel">
-      <div class="seg" role="tablist" aria-label="Watchlist">${WL_VIEWS.map(([k, l]) => `<button role="tab" aria-selected="${k === view}" class="${k === view ? "on" : ""}" data-wview="${k}">${l}<i>${counts[k]}</i></button>`).join("")}</div>
-      ${own ? `<details class="fdet" style="margin-top:12px"><summary>Follow someone or something new</summary>
+      <div class="wtop"><div class="seg" role="tablist" aria-label="Watchlist">${WL_VIEWS.map(([k, l]) => `<button role="tab" aria-selected="${k === view}" class="${k === view ? "on" : ""}" data-wview="${k}">${l}<i>${counts[k]}</i></button>`).join("")}</div>${info(`You can follow up to ${d.limits.people} people and ${d.limits.companies} companies (${d.people.length} and ${d.companies.length} so far). Big movements (funding, leadership, an event, a competitor in use, a job change, a reply, a deal change) are emailed at once, at most 3 a day and grouped. The rest comes in the daily email.`)}</div>
+      ${own ? `<details class="fdet" style="margin-top:12px"><summary>+ Follow someone new</summary>
         <form class="wadd" data-wlcompany style="margin-top:10px"><input type="text" id="wlsite" placeholder="A company website, for example example.com" maxlength="80" aria-label="Company website"><button type="submit" class="btn ghost">Follow company</button></form>
         <form class="wadd" data-wlperson><input type="text" id="wlpname" placeholder="Their name" maxlength="60" aria-label="Person's name"><input type="text" id="wlpsite" placeholder="Their company website" maxlength="80" aria-label="Their company website"><input type="text" id="wlptitle" placeholder="Job title (optional)" maxlength="60" aria-label="Job title"><button type="submit" class="btn ghost">Follow person</button></form></details>` : ""}
-      <div class="fbar"><span>${d.companies.length} of ${d.limits.companies} companies · ${d.people.length} of ${d.limits.people} people${d.competitors.length ? ` · competitors: ${esc(d.competitors.slice(0, 5).join(", "))}` : ""}</span>${own && view === "moved" && d.unseen ? `<span class="acts"><button class="btn link sm" data-wseen>Mark all as seen</button></span>` : ""}</div>
-    </div>${view === "moved" ? `<article class="card">${body}</article>` : body}
-    <p class="foot">You are told at once about big movements (funding, leadership, an event, a competitor in use, a job change, a reply or a deal change), at most 3 emails a day, grouped. Everything else comes in the daily email. Free sources only, except the optional job-title check in Setup.</p>`;
+      ${own && view === "moved" && d.unseen ? `<div class="fbar"><span></span><span class="acts"><button class="btn link sm" data-wseen>Mark all as seen</button></span></div>` : ""}
+    </div>${view === "moved" ? `<article class="card">${body}</article>` : body}`;
 }
 async function loadWatchlist(quiet) {
   if (!quiet) $("wlbody").innerHTML = skeleton(3);
@@ -2560,16 +2600,18 @@ function drawSignals() {
   const shown = list.slice(0, SF.limit);
   const chip = (k, label, n) => `<button type="button" class="chip${SF.cat === k ? " sel" : ""}" data-scat="${esc(k)}" title="${esc(CAT_HELP[k] || "Everything")}">${esc(label)}${n != null ? ` <i>${n}</i>` : ""}</button>`;
   const sel = (k, label, opts) => `<label>${label}<select data-sf="${k}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${SF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
-  const card = (i) => `<article class="card sigcard${i.intent ? " intent" : ""}" data-sid="${esc(i.id)}">
-    <div class="sg-top"><span class="badge ${i.intent ? "accent" : ""}">${esc(i.category)}</span>${i.label !== i.category ? `<span class="badge">${esc(i.label)}</span>` : ""}<span class="meta">${esc(ago(i.at))}</span></div>
-    <div class="sg-co"><a class="clink" href="#/company/${esc(i.company.id)}"><b>${esc(i.company.name)}</b></a> <span class="badge ${(FIT[i.company.fit] || [])[1] || ""}">${esc((FIT[i.company.fit] || FIT.unknown)[0])}</span> <span class="badge ${i.company.heat}">${esc(HEAT[i.company.heat] || "")}</span>${i.who ? ` <span class="meta">· ${esc(i.who)}</span>` : ""}</div>
+  const KCOL = { "Buying intent": "accent", Hiring: "good", Funding: "good", Leadership: "warn", Events: "warn", "People activity": "accent", "Tools and website": "muted", Competitors: "bad", News: "muted" };
+  const card = (i) => { const f = FIT[i.company.fit] || FIT.unknown, ppl = i.people.slice(0, 2);
+    return `<article class="card sigcard${i.intent ? " intent" : ""}" data-sid="${esc(i.id)}">
+    <div class="sg-head"><a class="clink sg-co" href="#/company/${esc(i.company.id)}">${esc(i.company.name)}</a><span class="sg-state"><span class="fz ${f[1] || ""}">${esc(f[0])}</span>${HEAT[i.company.heat] ? ` · <span class="fz ${i.company.heat}">${esc(HEAT[i.company.heat])}</span>` : ""}</span><span class="sg-age">${esc(ago(i.at))}</span></div>
+    <div class="sg-kind k-${KCOL[i.category] || "muted"}">${esc(i.label !== i.category && i.intent ? i.label : i.category)}${i.who ? ` <span>· ${esc(i.who)}</span>` : ""}</div>
     <div class="sg-text">${i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a>` : esc(i.title)}</div>
-    ${i.people.length ? `<div class="sg-who"><span class="meta">Who to talk to:</span> ${i.people.map((p) => `<a class="ptag" href="#/people/${esc(i.company.id)}" title="${esc(p.title || "")}">${esc(p.name)} · ${esc((p.title || "").slice(0, 30))}${p.preview ? " · not revealed" : ""}</a>`).join(" ")}</div>` : `<div class="sg-who meta">Nobody who matches your buyer types is listed yet. <a href="#/people/${esc(i.company.id)}">Open the company</a></div>`}
-  </article>`;
+    ${ppl.length ? `<div class="sg-who">${ppl.map((p) => `<a class="sg-chip" href="#/people/${esc(i.company.id)}" title="${esc(`${p.name}, ${p.title || ""}${p.preview ? " (email not revealed)" : ""}`)}"><i>${esc((p.name || "?").charAt(0))}</i>${esc(p.name)}<small>${esc((p.title || "").slice(0, 24))}</small></a>`).join("")}${i.people.length > 2 ? `<span class="meta">+${i.people.length - 2}</span>` : ""}</div>` : ""}
+  </article>`; };
   $("sbody").innerHTML = `<div class="day"><span>${esc(d.total)} in the last 30 days · ${esc(d.today)} today · <b>${esc(d.intent)}</b> buying-intent</span></div>
     <div class="fpanel"><div class="chips" style="margin:0 0 10px">${chip("", "All", d.total)}${d.categories.map((k) => chip(k, k, d.counts[k] || 0)).join("")}</div>
       <div class="fgrid">${sel("sort", "Sort by", [["new", "Newest"], ["fit", "Best company fit"], ["intent", "Buying intent first"]])}${sel("intent", "Show", [["", "Everything"], ["1", "Buying intent only"]])}${sel("fit", "Company fit", [["", "Any"], ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Fit unknown"]])}</div>
-      <div class="fbar"><span>Showing <b>${shown.length}</b> of ${list.length}. Each signal names the people in that company who would care. Buying intent is also told in the bell.</span></div></div>
+      <div class="fbar"><span>Showing <b>${shown.length}</b> of ${list.length}${info("Each signal names the people at that company who would care. Buying intent is also sent to the bell.")}</span></div></div>
     ${shown.length ? `<div class="sggrid">${shown.map(card).join("")}</div>${list.length > shown.length ? `<div class="actions" style="justify-content:center;margin:14px 0"><button class="btn ghost" data-smore>Show more</button></div>` : ""}` : `<div class="card empty">No signals${SF.cat ? ` of this kind` : ""} yet. They appear as the daily check and discovery find them.</div>`}`;
 }
 $("sbody").addEventListener("click", (e) => {
