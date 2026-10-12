@@ -18,6 +18,9 @@ import { REGION_GROUPS, RULE_TYPES } from "../_shared/lists.ts";
 import { addPersonToWatchlist, addToWatchlist, markSeen, setNotify, setPersonWatched, setWatched, watchlistView } from "../_shared/watchlist.ts";
 import { cleanBrand, loadBrand, saveBrand } from "../_shared/brand.ts";
 import { scorePerson } from "../_shared/leadscore.ts";
+import { aiHeat, aiMaps, aiRefresh, aiScoreCompany, aiScorePeople, candidates } from "../_shared/aiscore.ts";
+import { industryCheckMany, needIndustry } from "../_shared/industry.ts";
+import { customerInsights } from "../_shared/customers.ts";
 import { suggestProfile } from "../_shared/suggest.ts";
 import { rerankPeople } from "../_shared/people.ts";
 import { runDiscovery } from "../_shared/discover.ts";
@@ -69,7 +72,7 @@ async function scanInfo() {
 
 async function list(view = "todo", admin = false) {
   const { data: accounts } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date")
+    .select("id,name,domain,segment,source,created_at,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai")
     .is("removed_at", null).in("status", ["queued", "pushed"])
     .in("outreach_status", VIEWS[view] ?? VIEWS.todo)
     .order("priority_score", { ascending: false })
@@ -143,7 +146,7 @@ function accountFacts(a: { firmo_at: string | null; employees: number | null; em
  */
 async function accountsView(admin: boolean) {
   const { data: all } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,founded_year,linkedin_handle,removed_at,watched_at,people_searched_at")
+    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,founded_year,linkedin_handle,removed_at,watched_at,people_searched_at,industry_ai_at")
     .order("priority_score", { ascending: false, nullsFirst: false }).limit(400);
   const rows = (all ?? []).map((a) => {
     const f = fitBreakdown(a);
@@ -153,6 +156,7 @@ async function accountsView(admin: boolean) {
     const isNew = a.source === "discovered" && a.outreach_status === "open" && Date.now() - Date.parse(a.created_at) < 14 * DAY;
     return { a, removed: !!a.removed_at, low: !a.removed_at && !a.watched_at && (low || (a.source === "discovered" && !meetsFit(fitState(a)) && a.outreach_status === "open")), outside, isNew }; // found by the system and below the fit bar: hidden too
   });
+  const aiById = await aiMaps("company", rows.map((r) => r.a.id));
   const shown = rows.filter((r) => !r.low && !r.removed).map((r) => r.a.id);
   const ids = shown.length ? shown : ["00000000-0000-0000-0000-000000000000"];
   const [contactMap, { data: signals }, { data: ppl }, { data: disc }] = await Promise.all([
@@ -172,6 +176,8 @@ async function accountsView(admin: boolean) {
   return {
     discovery: { added_30d: (disc ?? []).filter((d) => Date.parse(d.found_at) > Date.now() - 30 * DAY).length, last: disc?.[0]?.found_at ?? null },
     scan: await scanInfo(),
+    ai_missing: rows.filter((r) => !r.removed && !r.low && !aiById.has(r.a.id)).length,
+    industry_missing: rows.filter((r) => !r.removed && !r.a.industry_ai_at).length,
     good_tools: (icp.company.toolsGood as string[]).map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, "")),
     accounts: rows.map(({ a, low, removed, outside, isNew }) => {
       const mine = (sigsBy.get(a.id) ?? []).filter((s, i, arr) => !isSummary(s) || arr.findIndex(isSummary) === i);
@@ -179,7 +185,7 @@ async function accountsView(admin: boolean) {
         id: a.id, name: a.name, domain: a.domain, segment: a.segment, source: a.source, created_at: a.created_at,
         tier: tierOf(a.priority_score), priority: a.priority_score, icp_score: a.icp_score, why_now: a.why_now,
         facts: accountFacts(a), firmo: firmoLine(a), outside_icp: outside, fit: fitState(a), fit_reasons: fitReasons(a), excluded: fitBreakdown(a).excluded,
-        heat: heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)),
+        heat: aiById.has(a.id) ? aiHeat(aiById.get(a.id)!.label) : heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)), ai: aiById.get(a.id) ?? null,
         firmo_known: !!a.firmo_at, low, removed, watched: !!a.watched_at, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
         lost_at: a.lost_at, lost_reason: a.lost_reason, not_fit_reason: a.not_fit_reason,
@@ -208,7 +214,9 @@ async function peopleList(admin: boolean, accountId?: string) {
     sb.from("cp_watch_events").select("person_id,kind,detected_at").in("kind", ["job_change", "mention"]).not("person_id", "is", null),
   ]);
   const heatOfAcct = new Map<string, "hot" | "warm" | "watching">();
-  for (const id of ids) heatOfAcct.set(id, heatOf((sigs ?? []).filter((s) => s.account_id === id) as never, fitState(a.get(id) as never)));
+  const aiCo = await aiMaps("company", ids);
+  for (const id of ids) heatOfAcct.set(id, aiCo.has(id) ? aiHeat(aiCo.get(id)!.label) : heatOf((sigs ?? []).filter((s) => s.account_id === id) as never, fitState(a.get(id) as never)));
+  const aiPeople = await aiMaps("person", (rows ?? []).map((p) => p.id));
   const daysSince = (kind: string, pid: string) => { const e = (evs ?? []).filter((x) => x.person_id === pid && x.kind === kind).sort((x, y) => Date.parse(y.detected_at) - Date.parse(x.detected_at))[0]; return e ? Math.floor((Date.now() - Date.parse(e.detected_at)) / DAY) : null; };
   const people = (rows ?? []).filter((p) => a.has(p.account_id) && !a.get(p.account_id)!.removed_at).map((p) => ({
     lead: scorePerson({ relevance: p.relevance, persona: p.persona, companyFit: fitState(a.get(p.account_id) as never), companyHeat: heatOfAcct.get(p.account_id) ?? "watching", jobChangeDays: daysSince("job_change", p.id), mentionDays: daysSince("mention", p.id), emailStatus: p.email_status, hasEmail: !!p.email, hsStatus: p.hs_status }),
@@ -218,6 +226,11 @@ async function peopleList(admin: boolean, accountId?: string) {
     has_email: !!p.email, revealed: admin && !!p.email_revealed, email: admin && p.email_revealed ? p.email : null, email_status: p.email_status, email_confidence: p.email_confidence,
     in_hubspot: !!p.hubspot_contact_id, hs_status: p.hs_status, hs_note: p.hs_note, watched: !!p.watched_at, added: p.created_at, manual: p.provider === "manual",
   }));
+  // The AI's judgement replaces the rule-based lead when there is one; a person who opted out stays blocked either way.
+  for (const p of people) {
+    const ai = aiPeople.get(p.id);
+    if (ai && p.lead.label !== "blocked") p.lead = { ...p.lead, score: ai.score, label: ai.label, reasons: ai.reasons.length ? ai.reasons : p.lead.reasons, ai: true } as typeof p.lead;
+  }
   return { people };
 }
 
@@ -289,7 +302,7 @@ async function setupView() {
     sb.from("cp_discovered").select("status,found_at").order("found_at", { ascending: false }).limit(60),
     sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("firmo_at", null),
     sb.from("cp_ai_spend_today").select("usd").single(),
-    sb.from("cp_accounts").select("employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,domain,name,source,lost_at,outreach_status").limit(1000),
+    sb.from("cp_accounts").select("employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,domain,name,source,lost_at,outreach_status").limit(1000),
   ]);
   const fitCounts = { matches: 0, close: 0, unknown: 0, outside: 0 };
   for (const r of fitRows ?? []) fitCounts[fitState(r)]++;
@@ -385,7 +398,7 @@ async function enrichCompanies(rescoreAll = false, only?: string[]) {
   const ids = rescoreAll ? ((await sb.from("cp_accounts").select("id")).data ?? []).map((a) => a.id) : accounts.map((a) => a.id);
   if (ids.length) {
     const [{ data: rows }, { data: sigs }] = await Promise.all([
-      sb.from("cp_accounts").select("id,status,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,domain,name").in("id", ids),
+      sb.from("cp_accounts").select("id,status,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,domain,name").in("id", ids),
       sb.from("cp_signals").select("account_id,kind,title,detail,detected_at").in("account_id", ids),
     ]);
     for (const r of rows ?? []) {
@@ -557,6 +570,30 @@ serve("queue", async (req) => {
     if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
     const { data } = await sb.from("cp_provider_usage").select("provider,action,credits,account,created_at").order("created_at", { ascending: false }).limit(25);
     return json({ log: data ?? [] });
+  }
+  if (body.action === "icp_insights") {
+    if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
+    return json({ mode: "live", ...(await customerInsights()) });
+  }
+  if (body.action === "ai_rescore") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can score with AI." });
+    if (typeof body.account_id === "string") { // one company, judged again now (the people there too)
+      try { await aiScoreCompany(body.account_id, true); await aiScorePeople(body.account_id, true); } catch (e) { return json({ error: e instanceof BudgetError ? "Today's AI limit is reached." : "Could not score it." }, 429); }
+      return json({ mode: "live", companies: 1 });
+    }
+    const ids = await candidates(60);
+    const have = await aiMaps("company", ids);
+    const todo = ids.filter((id) => !have.has(id)).slice(0, 25);
+    if (body.dry !== false) return json({ mode: "plan", companies: todo.length, cost_usd: +(todo.length * 0.003).toFixed(3) });
+    return json({ mode: "live", ...(await aiRefresh({ ids: todo, maxCompanies: 25, maxPeopleCompanies: 25 })) });
+  }
+  if (body.action === "industry_check") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can run this." });
+    const ids = await needIndustry(30);
+    if (body.dry !== false) return json({ mode: "plan", companies: ids.length, cost_usd: +(ids.length * 0.0015).toFixed(3) });
+    const r = await industryCheckMany(ids);
+    const rescored = (await enrichCompanies(true)).rescored; // fit follows the new industries (no credits)
+    return json({ mode: "live", ...r, rescored });
   }
   if (body.action === "watchlist") return json({ ...(await watchlistView(admin)), admin });
   if (body.action === "watch_toggle" && (typeof body.account_id === "string" || typeof body.person_id === "string")) {

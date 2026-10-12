@@ -130,7 +130,7 @@ export async function refreshFromPredictLeads(accountId: string, purpose: Purpos
   const cap = plCap();
   if (!plConfigured()) return { skipped: "PredictLeads is not set up", used: 0, cap };
   const used = await plUsed();
-  const { data: a } = await sb.from("cp_accounts").select("id,name,domain,status,pl_checked_at,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date").eq("id", accountId).maybeSingle();
+  const { data: a } = await sb.from("cp_accounts").select("id,name,domain,status,pl_checked_at,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai").eq("id", accountId).maybeSingle();
   if (!a) return { error: "Account not found", used, cap };
   if (opts.maxAgeDays && a.pl_checked_at && Date.now() - Date.parse(a.pl_checked_at) < opts.maxAgeDays * DAY) return { skipped: "checked recently", used, cap };
   if (!plAllowed(purpose, used, cap)) return { skipped: purpose === "manual" ? "the monthly allowance is used up" : "kept in reserve for your own checks", used, cap };
@@ -167,7 +167,7 @@ export async function autoRefreshPredictLeads(max = 2): Promise<{ checked: numbe
   const out = { checked: 0, added: 0 };
   if (!plConfigured() || icp.predictleads.auto === false) return out;
   const { data } = await sb.from("cp_accounts")
-    .select("id,name,domain,priority_score,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,pl_checked_at,watched_at")
+    .select("id,name,domain,priority_score,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,pl_checked_at,watched_at")
     .is("removed_at", null).in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted"])
     .order("watched_at", { ascending: false, nullsFirst: false }).order("priority_score", { ascending: false }).limit(40); // followed companies first
   const due = (data ?? []).filter((a) => worthShowing(a) && (!a.pl_checked_at || Date.now() - Date.parse(a.pl_checked_at) > 14 * DAY)).slice(0, max);

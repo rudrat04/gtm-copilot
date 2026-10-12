@@ -99,7 +99,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
   const cfg = icp.today;
 
   const { data: accts } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,lost_at,lost_reason,priority_score,icp_score,why_now,status,outreach_status,touches,contacted_at,last_touch_at,not_fit_reason,next_followup_at,snoozed_until,employee_band,employees,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,watched_at")
+    .select("id,name,domain,segment,lost_at,lost_reason,priority_score,icp_score,why_now,status,outreach_status,touches,contacted_at,last_touch_at,not_fit_reason,next_followup_at,snoozed_until,employee_band,employees,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,watched_at")
     .is("removed_at", null).or("status.in.(queued,pushed),outreach_status.neq.open").limit(300);
   const accounts = accts ?? [];
   const ids = accounts.map((a) => a.id);

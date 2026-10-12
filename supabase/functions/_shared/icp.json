@@ -67,6 +67,7 @@
   ],
   "signals": {
     "rules": [],
+    "painWords": ["crm", "pipeline", "forecasting", "revops", "data quality", "sales process", "attribution", "outbound"],
     "hiringRoles": [
       "sdr",
       "bdr",

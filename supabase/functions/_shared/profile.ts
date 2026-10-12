@@ -36,6 +36,7 @@ export const MAX_PERSONAS = 8;
 export type Profile = {
   product: { name: string; description: string; website: string }; // what the owner sells: the suggestion for everything else is made from this
   signalRules: SignalRule[];                // extra signals: tools, competitors, press, changes, watch phrases
+  painWords: string[];                      // problems that, when a job post mentions them, show a company needs what you sell
   competitors: string[];                    // competitor names or domains, for the "uses a competitor" signal and the never-show list
   industries: string[];
   employeesMin: number;
@@ -65,6 +66,7 @@ const BASE_WEIGHTS = { ...icp.signals.weights };
 const DEFAULT: Profile = {
   product: { name: "", description: "", website: "" },
   competitors: [],
+  painWords: [...icp.signals.painWords],
   signalRules: [],
   industries: [...icp.company.industries],
   employeesMin: icp.company.employeesMin,
@@ -182,6 +184,7 @@ export function clean(input: unknown): Profile {
   return {
     product: { name: String(pr.name ?? "").replace(/[<>\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40), description: String(pr.description ?? "").trim().slice(0, PRODUCT_MAX), website: cleanSite(pr.website) },
     competitors: list(i.competitors, [], 15, true),
+    painWords: list(i.painWords, DEFAULT.painWords, 15),
     signalRules: cleanRules(i.signalRules),
     industries: industriesOut,
     employeesMin: min,
@@ -216,6 +219,7 @@ export function apply(p: Profile) {
   icp.seller.name = p.product.name || BASE_SELLER.name; // what you sell (Setup) is what the dossiers, drafts and screening are written for
   icp.seller.pitch = p.product.description || BASE_SELLER.pitch;
   icp.signals.hiringRoles = p.hiringRoles;
+  icp.signals.painWords = p.painWords;
   (icp.signals as { rules: SignalRule[] }).rules = p.signalRules.map((r) => ({ ...r, words: [...r.words] }));
   icp.signals.weights.hiring = p.signals.hiring ? BASE_WEIGHTS.hiring : 0;
   icp.signals.weights.news = p.signals.news ? BASE_WEIGHTS.news : 0;

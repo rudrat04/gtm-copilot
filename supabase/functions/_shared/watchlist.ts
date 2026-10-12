@@ -8,6 +8,7 @@ import { KIND_LABEL, MAX_WATCHED, type EventKind } from "./movements.ts";
 import { fitState, heatOf } from "./score.ts";
 import { FIT_COLS } from "./firmo.ts";
 import { loadProfile } from "./profile.ts";
+import { aiHeat, aiMaps } from "./aiscore.ts";
 
 // The watchlist: companies the owner chose to follow. They skip the fit bar, get the daily signal check, first call on
 // PredictLeads, and alerts of their own (see watch.ts and today.ts).
@@ -118,6 +119,7 @@ export async function watchlistView(admin: boolean) {
   const pname = (p: { first_name: string; last_name: string }) => (admin ? `${p.first_name} ${p.last_name}`.trim() : `${p.first_name} ${(p.last_name || "").charAt(0)}.`.trim());
   const pById = new Map((ppl ?? []).map((p) => [p.id, p]));
   const last = (pred: (e: NonNullable<typeof ev>[number]) => boolean) => (ev ?? []).find(pred);
+  const aiCo = await aiMaps("company", (accts ?? []).map((x) => x.id));
   const sigs = (accts ?? []).length ? (await sb.from("cp_signals").select("account_id,kind,title,detail,detected_at").in("account_id", (accts ?? []).map((a) => a.id))).data ?? [] : [];
   return {
     unseen: (ev ?? []).filter((e) => !e.seen_at).length,
@@ -130,7 +132,7 @@ export async function watchlistView(admin: boolean) {
     })),
     companies: (accts ?? []).map((a) => {
       const l = last((e) => e.account_id === a.id && !e.person_id);
-      return { id: a.id, name: a.name, domain: a.domain, notify: a.watch_notify, fit: fitState(a), heat: heatOf(sigs.filter((s) => s.account_id === a.id) as never, fitState(a)), last: l ? { label: KIND_LABEL[l.kind as EventKind] ?? l.kind, title: l.title, detected_at: l.detected_at } : null, unseen: (ev ?? []).filter((e) => e.account_id === a.id && !e.seen_at).length };
+      return { id: a.id, name: a.name, domain: a.domain, notify: a.watch_notify, fit: fitState(a), heat: aiCo.has(a.id) ? aiHeat(aiCo.get(a.id)!.label) : heatOf(sigs.filter((s) => s.account_id === a.id) as never, fitState(a)), last: l ? { label: KIND_LABEL[l.kind as EventKind] ?? l.kind, title: l.title, detected_at: l.detected_at } : null, unseen: (ev ?? []).filter((e) => e.account_id === a.id && !e.seen_at).length };
     }),
     people: (ppl ?? []).map((p) => {
       const l = last((e) => e.person_id === p.id);

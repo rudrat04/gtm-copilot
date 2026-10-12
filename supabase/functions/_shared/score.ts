@@ -95,7 +95,7 @@ export function priorityScore(signals: Dated[], fit: number = BASELINE_FIT, timi
     const key = `${s.detail?.rule}|${s.title}`;
     if (seenRule.has(key)) return a;
     seenRule.add(key);
-    return a + (s.detail?.ruleType === "competitor" ? 10 : 5);
+    return a + (s.detail?.ruleType === "competitor" ? 10 : s.detail?.ruleType === "visit" ? 12 : 5);
   }, 0));
 
   const parts = { hiring, news: Math.round(newsPts), community: Math.round(community), custom, fit: Math.round(fit) };

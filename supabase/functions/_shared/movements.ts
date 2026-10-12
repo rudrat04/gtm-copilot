@@ -3,7 +3,7 @@ import { log } from "./log.ts";
 import { isEventHeadline, newsRaw, type Signal } from "./signals.ts";
 import { googleConfigured, ownerEmail, sendMail } from "./google.ts";
 import { button, esc as h, h2, layout, link, list } from "./emailhtml.ts";
-import { lookupContactsByEmail } from "./hubspot.ts";
+import { lookupContactsByEmail, readContactVisits } from "./hubspot.ts";
 import { guardStatus } from "./guard.ts";
 import { HUNTER_MONTHLY_CAP, monthlyUsed, provider, rank } from "./people.ts";
 import { creditsLeft } from "./autosearch.ts";
@@ -13,13 +13,13 @@ import icp from "./icp.json" with { type: "json" };
 // and emailed: big ones at once (grouped, at most 3 emails a day), the rest in the daily email. All free except the optional
 // title re-check, which spends search credits inside the owner's reserve.
 
-export type EventKind = "funding" | "leadership" | "event" | "competitor_event" | "news" | "hiring" | "tool" | "competitor_tool" | "deal" | "lead" | "people" | "mention" | "contact" | "job_change";
+export type EventKind = "tool_change" | "pain" | "visit" | "market" | "funding" | "leadership" | "event" | "competitor_event" | "news" | "hiring" | "tool" | "competitor_tool" | "deal" | "lead" | "people" | "mention" | "contact" | "job_change";
 export type WatchEvent = { key: string; kind: EventKind; importance: "big" | "small"; accountId?: string | null; personId?: string | null; subject?: string | null; title: string; url?: string | null };
 
 export const KIND_LABEL: Record<EventKind, string> = {
   funding: "Funding", leadership: "Leadership change", event: "Hosting an event", competitor_event: "Competitor event", news: "In the news", hiring: "Hiring",
   tool: "Uses a tool you track", competitor_tool: "Uses a competitor", deal: "HubSpot deal", lead: "Inbound lead", people: "People found", mention: "Mentioned in the news",
-  contact: "HubSpot contact changed", job_change: "Job change",
+  contact: "HubSpot contact changed", job_change: "Job change", tool_change: "Tool change on their website", pain: "Job posts mention your problem", visit: "Visited your website", market: "Market signal",
 };
 export const MAX_WATCHED = { companies: 40, people: 40 };
 
@@ -42,6 +42,10 @@ export function eventsFromSignals(account: { id: string }, fresh: Signal[]): Wat
       else out.push({ ...base, key: key("news"), kind: "news", importance: "small" });
     } else if (s.kind === "hiring" && !("salesOpenings" in d)) {
       out.push({ ...base, key: key("hiring"), kind: "hiring", importance: LEADER.test(s.title) ? "big" : "small" });
+    } else if (s.kind === "tech" && d.ruleType === "change") {
+      out.push({ ...base, key: key("tool_change"), kind: "tool_change", importance: "big" });
+    } else if (s.kind === "tech" && d.ruleType === "pain") {
+      out.push({ ...base, key: key("pain"), kind: "pain", importance: "small" });
     } else if (s.kind === "tech" && d.ruleType) {
       out.push({ ...base, key: key("tool"), kind: d.ruleType === "competitor" ? "competitor_tool" : "tool", importance: d.ruleType === "competitor" ? "big" : "small" });
     }
@@ -74,6 +78,52 @@ export async function competitorEvents(): Promise<number> {
       if (await recordEvent({ key: `competitor_event::${hashStr(i.title)}`, kind: "competitor_event", importance: "big", subject: name, title: i.title.slice(0, 240), url: i.url ?? null })) n++;
     }
   }
+  return n;
+}
+
+/** People talking about leaving or replacing a competitor on Hacker News, free. Not tied to one company: it shows where the market is moving. */
+export async function marketSignals(): Promise<number> {
+  const names = ((icp.company as { competitors?: string[] }).competitors ?? []).map((c) => c.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\.[a-z]{2,}.*$/, "")).filter(Boolean).slice(0, 4);
+  const since = Math.floor((Date.now() - 30 * 86_400_000) / 1000);
+  let n = 0;
+  for (const name of names) {
+    for (const q of [`alternative to ${name}`, `switching from ${name}`]) {
+      try {
+        const r = await fetch(`https://hn.algolia.com/api/v1/search_by_date?query=${encodeURIComponent(`"${q}"`)}&tags=(story,comment)&numericFilters=created_at_i>${since}&hitsPerPage=4`, { signal: AbortSignal.timeout(12000) });
+        const hits = r.ok ? (await r.json()).hits ?? [] : [];
+        for (const h of hits as { objectID: string; title?: string; comment_text?: string; story_title?: string }[]) {
+          const text = (h.title ?? h.comment_text ?? h.story_title ?? "").replace(/<[^>]+>/g, " ").replace(/&[a-z#0-9]+;/g, " ").replace(/\s+/g, " ").trim();
+          if (!text.toLowerCase().includes(name.toLowerCase())) continue;
+          if (await recordEvent({ key: `market:${h.objectID}`, kind: "market", importance: "small", subject: name, title: `${name}: "${text.slice(0, 150)}"`, url: `https://news.ycombinator.com/item?id=${h.objectID}` })) n++;
+        }
+      } catch { /* a search that fails is skipped */ }
+    }
+  }
+  return n;
+}
+
+const INTENT_PAGE = /pricing|demo|contact|book|trial|signup|sign-up|request|talk-to|quote/i;
+
+/** Contacts of ours who visited your website (needs HubSpot's tracking code on your site). A visit to pricing or a demo page is the strongest intent there is. */
+export async function hubspotVisits(): Promise<number> {
+  if (!Deno.env.get("HUBSPOT_TOKEN")) return 0;
+  const { data: people } = await sb.from("cp_people").select("id,account_id,first_name,last_name,hubspot_contact_id").not("hubspot_contact_id", "is", null).limit(200);
+  if (!people?.length) return 0;
+  let n = 0;
+  try {
+    const visits = await readContactVisits(people.map((p) => p.hubspot_contact_id!));
+    for (const p of people) {
+      const v = visits.get(p.hubspot_contact_id!);
+      if (!v?.lastVisit) continue;
+      const days = (Date.now() - Date.parse(v.lastVisit)) / 86_400_000;
+      if (Number.isNaN(days) || days > 3) continue; // only fresh visits
+      const path = (() => { try { return new URL(v.lastUrl ?? "").pathname; } catch { return v.lastUrl ?? "a page"; } })();
+      const intent = INTENT_PAGE.test(path);
+      const title = `${p.first_name} ${p.last_name} visited your website: ${path.slice(0, 80)}`;
+      await sb.from("cp_signals").upsert({ account_id: p.account_id, kind: "tech", title: `${title} (${v.lastVisit.slice(0, 10)})`.slice(0, 300), detail: { ruleType: "visit", rule: "visit", published: v.lastVisit, intentPage: intent } }, { onConflict: "account_id,kind,title", ignoreDuplicates: true });
+      if (await recordEvent({ key: `visit:${p.id}:${v.lastVisit.slice(0, 10)}`, kind: "visit", importance: intent ? "big" : "small", accountId: p.account_id, personId: p.id, title })) n++;
+    }
+  } catch (e) { await log("warn", "visits_failed", { message: (e as Error).message }); }
   return n;
 }
 
@@ -168,9 +218,10 @@ export async function sendMovementEmail(): Promise<number> {
   const { data: ppl } = pids.length ? await sb.from("cp_people").select("id,watch_notify,watched_at").in("id", pids) : { data: [] };
   const p = new Map((ppl ?? []).map((x) => [x.id, x]));
   const send = rows.filter((r) => {
+    if (r.kind === "visit") return true; // someone on your website is always worth a message
     if (r.person_id) { const x = p.get(r.person_id); return !!x?.watched_at && x.watch_notify === "instant"; }
     if (r.account_id) { const x = a.get(r.account_id); return !!x?.watched_at && x.watch_notify === "instant"; }
-    return true; // a competitor event
+    return true; // a competitor event, a visit to your website or a market signal
   });
   if (!send.length) return 0;
   const who = (r: Row) => (r.account_id ? a.get(r.account_id)?.name ?? "A followed company" : r.subject ?? "Competitor");

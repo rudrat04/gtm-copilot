@@ -8,7 +8,7 @@ import { fetchSite } from "./signals.ts";
 type Raw = Partial<{
   summary: string; industries: string[]; employeesMin: number; employeesMax: number; stages: string[]; regions: string[];
   personas: { title: string; match: string[]; department?: string; seniority?: string[] }[];
-  hiringRoles: string[]; toolsGood: string[]; toolsAvoid: string[]; competitors: string[]; excludeWords: string[]; motion: string;
+  hiringRoles: string[]; painWords: string[]; toolsGood: string[]; toolsAvoid: string[]; competitors: string[]; excludeWords: string[]; motion: string;
 }>;
 
 /** Reads the owner's description (and homepage, when given) and proposes who to sell to. Returns a cleaned profile and a one-line summary. */
@@ -32,6 +32,7 @@ Return JSON with these keys:
 - "hiringRoles": 4 to 10 job titles that, when a company hires them, show it needs this seller
 - "toolsGood": tools (software names) a good customer probably uses, up to 8
 - "toolsAvoid": only software that directly competes with what the seller offers, up to 4 (empty is fine)
+- "painWords": 4 to 10 short problems a company has when it needs this seller, as words that would appear in its job posts (for example "crm", "data quality")
 - "competitors": only real competitors you are sure exist, up to 5 (empty is fine; never invent names)
 - "excludeWords": words that mark a company as not a customer (for example agency, staffing), up to 6
 - "motion": "any", "sales_led" or "self_serve"`,
@@ -47,6 +48,7 @@ Return JSON with these keys:
     regions: r.regions?.length ? r.regions : current.regions,
     personas: r.personas?.length ? r.personas.map((p) => ({ ...p, hubspot: keepHubspot(p.title) })) : current.personas,
     hiringRoles: r.hiringRoles?.length ? r.hiringRoles : current.hiringRoles,
+    painWords: r.painWords?.length ? r.painWords : current.painWords,
     toolsGood: r.toolsGood ?? current.toolsGood,
     toolsAvoid: r.toolsAvoid ?? current.toolsAvoid,
     competitors: r.competitors ?? current.competitors,

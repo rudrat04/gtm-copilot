@@ -180,7 +180,7 @@ export async function contactExtras(p: Person, a: Acct): Promise<Extras> {
   };
 }
 
-const ACCT_COLS = "id,name,domain,employees,country,hq_city,founded_year,raised_usd,source,outreach_status,lost_at,won_at,why_now,firmo_at,last_scanned_at,stage,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,employee_band,last_round_date,touches,last_touch_at,next_followup_at,hubspot_company_id";
+const ACCT_COLS = "id,name,domain,employees,country,hq_city,founded_year,raised_usd,source,outreach_status,lost_at,won_at,why_now,firmo_at,last_scanned_at,stage,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,employee_band,last_round_date,touches,last_touch_at,next_followup_at,hubspot_company_id";
 
 /** Refreshes the extra columns on one account's HubSpot company and its pushed contacts. Never throws: HubSpot trouble is logged. */
 export async function refreshAccountFields(accountId: string): Promise<{ company: boolean; contacts: number }> {

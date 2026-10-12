@@ -1,7 +1,7 @@
 import { json, sb } from "./db.ts";
 import { log } from "./log.ts";
 import { collectSignals, eventSignals, saveSiteFacts, type Signal, storedHiringSignals } from "./signals.ts";
-import { competitorEvents, eventsFromSignals, personMentions, recordEvent, sendMovementEmail, titleRecheck, watchedPeopleHubspot } from "./movements.ts";
+import { competitorEvents, eventsFromSignals, hubspotVisits, marketSignals, personMentions, recordEvent, sendMovementEmail, titleRecheck, watchedPeopleHubspot } from "./movements.ts";
 import { scoreAccount, tierOf } from "./score.ts";
 import { generateWhy, hash } from "./today.ts";
 import { alertEmail } from "./templates.ts";
@@ -9,6 +9,8 @@ import { googleConfigured, ownerEmail, sendMail } from "./google.ts";
 import { firmoLine } from "./firmo.ts";
 import { contactsFor } from "./contacts.ts";
 import { autoSearch, searchStates } from "./autosearch.ts";
+import { aiRefresh } from "./aiscore.ts";
+import { industryCheckMany, needIndustry } from "./industry.ts";
 import { fitState } from "./score.ts";
 import { autoRefreshPredictLeads, storedPlSignals } from "./predictleads.ts";
 import icp from "./icp.json" with { type: "json" };
@@ -40,7 +42,7 @@ export async function lightCheck(admin: boolean) {
   await setState("watch_last", new Date().toISOString());
 
   const { data } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,watched_at")
+    .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,watched_at")
     .is("removed_at", null).in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted", "snoozed"])
     .order("watched_at", { ascending: false, nullsFirst: false }).order("priority_score", { ascending: false }).limit(MAX_ACCOUNTS); // followed companies are always checked first
   const accounts = (data ?? []) as Acct[];
@@ -138,16 +140,26 @@ export async function lightCheck(admin: boolean) {
   }
 
   // Movements on the Watchlist: events a hot alert already covered are marked as sent; then the other checks and one grouped email.
-  const moved = { competitor: 0, mentions: 0, contacts: 0, jobs: 0, emailed: 0 };
+  const moved = { competitor: 0, market: 0, visits: 0, mentions: 0, contacts: 0, jobs: 0, emailed: 0 };
   try {
     if (alertedIds.length) await sb.from("cp_watch_events").update({ emailed_at: new Date().toISOString() }).in("account_id", alertedIds).is("emailed_at", null);
     moved.competitor = await competitorEvents();
+    moved.market = await marketSignals();
+    moved.visits = await hubspotVisits();
     moved.mentions = await personMentions(8);
     moved.contacts = await watchedPeopleHubspot();
     moved.jobs = await titleRecheck(2);
     moved.emailed = await sendMovementEmail();
   } catch (e) { await log("warn", "movements_failed", { message: (e as Error).message }); }
 
+  // Judge the companies whose facts changed (and the people at them), and read the industry of a few new ones from their websites.
+  const judged = { companies: 0, people: 0, industries: 0 };
+  try {
+    const r = await aiRefresh({ maxCompanies: 20, maxPeopleCompanies: 8 });
+    judged.companies = r.companies; judged.people = r.people;
+    judged.industries = (await industryCheckMany(await needIndustry(8))).set;
+  } catch (e) { await log("warn", "ai_refresh_failed", { message: (e as Error).message }); }
+
   await log("info", "watch_done", { detail: { accounts: accounts.length, new_signals: newSignals, candidates: candidates.length, alerted, failed, predictleads: pl } });
-  return json({ accounts: accounts.length, new_signals: newSignals, alert_candidates: candidates.length, alerted, failed, predictleads: pl, movements: moved });
+  return json({ accounts: accounts.length, new_signals: newSignals, alert_candidates: candidates.length, alerted, failed, predictleads: pl, movements: moved, ai: judged });
 }

@@ -101,10 +101,10 @@ export async function saveFirmo(accountId: string, f: Firmo) {
 export type FitRow = {
   employees?: number | null; stage?: string | null; country?: string | null; firmo_at?: string | null;
   tech?: string[] | null; industry?: string | null; tags?: string[] | null; blurb?: string | null; sales_motion?: string | null;
-  domain?: string | null; name?: string | null; known_as?: string | null; last_round_date?: string | null;
+  domain?: string | null; name?: string | null; known_as?: string | null; last_round_date?: string | null; industry_ai?: string | null;
 };
 /** The columns to select wherever fit is computed, so a new criterion takes effect everywhere. */
-export const FIT_COLS = "employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date,watched_at";
+export const FIT_COLS = "employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date,watched_at,industry_ai";
 
 /** Is this funding stage one of the stages we target? Each stage the owner picked has its own pattern (see lists.ts). */
 const stageWanted = (s: string) => icp.company.stages.some((w) => (STAGE_OPTIONS.find((o) => o.name === w)?.re ?? new RegExp(w.toLowerCase().replace(/[^a-z0-9 ]/g, ""))).test(s));
@@ -129,6 +129,10 @@ const normTool = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /** 1 = in one of your industries, 0 = not, 0.5 = we have no industry data yet. */
 export function industryScore(a: FitRow): number {
+  if (a.industry_ai) { // an industry read from the company's own website beats Hunter's label
+    const own = industryWords(a.industry_ai);
+    return icp.company.industries.some((ind) => ind === a.industry_ai || industryWords(ind).some((w) => own.includes(w))) ? 1 : 0;
+  }
   const text = textOf(a);
   if (!text.trim()) return 0.5;
   return icp.company.industries.some((ind) => industryWords(ind).some((w) => text.includes(w))) ? 1 : 0;

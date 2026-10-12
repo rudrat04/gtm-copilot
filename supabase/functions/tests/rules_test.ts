@@ -11,7 +11,7 @@ const { redact } = await import("../_shared/log.ts");
 const { isNotFitReason, notFitLabel, NOT_FIT_REASONS } = await import("../_shared/notfit.ts");
 const { exclusion, extraFacts, fitBreakdown, fitReasons, industryScore, industryWords, motionScore, toolsScore } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, isFundingSignal, priorityScore, roundTiming, scoreAccount, tierOf } = await import("../_shared/score.ts");
-const { buildHiring, isEventHeadline, isListing, usesTool, jobInsights, rolesFromSnippet, salesMotion, toolsFromHiring } = await import("../_shared/signals.ts");
+const { buildHiring, hiringTrend, isEventHeadline, isListing, siteTools, toolDiff, usesTool, jobInsights, rolesFromSnippet, salesMotion, toolsFromHiring } = await import("../_shared/signals.ts");
 const { USEFUL_NEWS } = await import("../_shared/relevance.ts");
 const { dedupeRounds, roundKey } = await import("../_shared/predictleads.ts");
 const { classify, normalizeEvents, plAllowed, toSignal } = await import("../_shared/predictleads.ts");
@@ -28,6 +28,8 @@ const { meetsFit, worthShowing } = await import("../_shared/fitgate.ts");
 const { alertEmail, digestEmail, noContactText } = await import("../_shared/templates.ts");
 const { creditsLeft, worthASearch } = await import("../_shared/autosearch.ts");
 const { changeLines, emptyChanges, hasChanges } = await import("../_shared/changes.ts");
+const { summarise } = await import("../_shared/customers.ts");
+const { validIndustry } = await import("../_shared/industry.ts");
 const { buyerFit, scorePerson } = await import("../_shared/leadscore.ts");
 const { eventsFromSignals, eventLine, hashStr, KIND_LABEL } = await import("../_shared/movements.ts");
 const { cleanBrand, DEFAULT_BRAND } = await import("../_shared/brand.ts");
@@ -610,7 +612,7 @@ Deno.test("job posts: seniority, founding roles, tools and problems are read fro
   assertEquals(i.leader, true);
   assertEquals(i.founding, true);
   assertEquals(i.tools, ["salesforce", "gong"]);
-  assertEquals(i.pains, ["forecasting", "pipeline"]);
+  assertEquals(i.pains, ["pipeline", "forecasting"]); // in the order of your pain words in Setup
   const plain = jobInsights([job("Account Executive", "Close deals.")]);
   assertEquals([plain.leader, plain.founding, plain.tools, plain.pains], [false, false, [], []]);
   assertEquals(jobInsights([job("Sales Rep", "We hold a close relationship with customers and do outreach and segment our market")]).tools, []); // everyday words are not tools
@@ -864,4 +866,32 @@ Deno.test("lead temperature for a person: buyer match, company fit and heat, job
   assertEquals(scorePerson({ ...base, emailStatus: "invalid" }).score, 70); // 90, minus 20 for an email that would bounce
   assertEquals(scorePerson({ ...base, hsStatus: "opted_out" }).label, "blocked");
   assertEquals([buyerFit(95), buyerFit(75), buyerFit(55), buyerFit(10)], ["strong", "good", "partial", "none"]);
+});
+
+Deno.test("intent: tools on a website, changes between looks, and the hiring trend", () => {
+  const html = '<script src="https://js.hs-scripts.com/123.js"></script><script src="https://widget.intercom.io/widget/abc"></script><link href="/wp-content/x.css">';
+  assertEquals(siteTools(html), ["hubspot", "intercom", "wordpress"]);
+  assertEquals(siteTools("<html>nothing here</html>"), []);
+  assertEquals(toolDiff(["hubspot", "intercom"], ["hubspot", "gong"]), { added: ["gong"], removed: ["intercom"] });
+  const day = 86_400_000, now = Date.now();
+  const rows = [{ detail: { salesOpenings: 4 }, detected_at: new Date(now - 1 * day).toISOString() }, { detail: { salesOpenings: 1 }, detected_at: new Date(now - 30 * day).toISOString() }, { detail: { salesOpenings: 2 }, detected_at: new Date(now - 10 * day).toISOString() }, { detail: null, detected_at: new Date(now).toISOString() }];
+  assertEquals(hiringTrend(rows, now), { now: 4, before: 1, days: 30 }); // 4 roles now against 1 a month ago
+  assertEquals(hiringTrend([{ detail: { salesOpenings: 3 }, detected_at: new Date(now - 2 * day).toISOString() }], now), { now: 3, before: null, days: null });
+  assertEquals(hiringTrend([], now), null);
+  assertEquals(clean({ painWords: ["CRM", "data quality", "CRM"] }).painWords, ["CRM", "data quality"]);
+});
+
+Deno.test("customers: the profile is compared with who your customers really are", () => {
+  const cs = [20, 25, 30, 40, 45, 60].map((n) => ({ employees: n, industry: "Software", country: "US" }));
+  const wide = summarise(cs, { min: 10, max: 500 });
+  assertEquals(wide.enough, true);
+  assertEquals(wide.size!.median >= 30 && wide.size!.median <= 40, true);
+  assertEquals(wide.suggestions[0].apply !== undefined, true); // 500 is far above what customers look like: narrow it
+  assertEquals((wide.suggestions[0].apply?.employeesMax ?? 999) < 200, true);
+  const fine = summarise(cs, { min: 15, max: 100 });
+  assertEquals(fine.suggestions[0].apply, undefined); // already about right: just say so
+  assertEquals(summarise([{ employees: 50, industry: null, country: null }], { min: 10, max: 200 }).enough, false);
+  assertEquals(summarise(cs).industries[0], { name: "Software", count: 6 });
+  assertEquals(validIndustry("fintech"), "Fintech");
+  assertEquals(validIndustry("Made-up industry"), null);
 });

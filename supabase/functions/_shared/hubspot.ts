@@ -404,6 +404,29 @@ export async function readCustomerCompanies(limit = 100): Promise<{ id: string; 
   return (r.body.results ?? []).map((c: { id: string; properties?: { domain?: string } }) => ({ id: c.id, domain: c.properties?.domain?.toLowerCase().replace(/^www\./, "") ?? null }));
 }
 
+/** Facts about the companies HubSpot knows as customers, for "what your customers look like". Read-only. */
+export async function readCustomerFacts(limit = 100): Promise<{ domain: string | null; name: string | null; employees: number | null; industry: string | null; country: string | null }[]> {
+  const r = await hs("/crm/v3/objects/companies/search", {
+    method: "POST",
+    body: JSON.stringify({ filterGroups: [{ filters: [{ propertyName: "lifecyclestage", operator: "EQ", value: "customer" }] }], properties: ["domain", "name", "numberofemployees", "industry", "country"], limit }),
+  });
+  if (!r.ok) return [];
+  // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
+  return (r.body.results ?? []).map((c: any) => ({ domain: c.properties?.domain?.toLowerCase().replace(/^www\./, "") ?? null, name: c.properties?.name ?? null, employees: c.properties?.numberofemployees ? Number(c.properties.numberofemployees) : null, industry: c.properties?.industry ?? null, country: c.properties?.country ?? null }));
+}
+
+/** What HubSpot's own website tracking says about these contacts: their last visit and the last page. Empty if tracking is not installed. */
+export async function readContactVisits(ids: string[]): Promise<Map<string, { lastVisit: string | null; lastUrl: string | null; pages: number }>> {
+  const out = new Map<string, { lastVisit: string | null; lastUrl: string | null; pages: number }>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const r = await hs("/crm/v3/objects/contacts/batch/read", { method: "POST", body: JSON.stringify({ properties: ["hs_analytics_last_visit_timestamp", "hs_analytics_last_url", "hs_analytics_num_page_views"], inputs: ids.slice(i, i + 100).map((id) => ({ id })) }) });
+    if (!r.ok) continue;
+    // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
+    for (const c of r.body.results ?? [] as any[]) out.set(c.id, { lastVisit: c.properties?.hs_analytics_last_visit_timestamp ?? null, lastUrl: c.properties?.hs_analytics_last_url ?? null, pages: Number(c.properties?.hs_analytics_num_page_views ?? 0) });
+  }
+  return out;
+}
+
 /** The dropdown options of a HubSpot property, for the Setup page. */
 export async function getPropertyOptions(object: "contacts" | "companies", name: string): Promise<{ value: string; label: string }[]> {
   const r = await hs(`/crm/v3/properties/${object}/${name}`, {}, [404]);

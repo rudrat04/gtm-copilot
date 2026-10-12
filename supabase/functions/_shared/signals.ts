@@ -154,7 +154,7 @@ export function jobInsights(matched: Job[]): JobInsights {
   const leader = matched.some((j) => /\b(head of|vp|vice president|chief|director)\b/i.test(j.title));
   const founding = matched.some((j) => /\b(founding|first|1st)\b/i.test(j.title) || /\bfirst (sales|sdr|ae|account executive|revenue)\b|\bbuild (out )?(our|the) (sales|revenue) (team|function|motion)|\bfounding (ae|sdr|sales)/i.test(j.desc ?? ""));
   const text = matched.map((j) => `${j.title} ${j.desc ?? ""}`).join(" \n ");
-  return { leader, founding, tools: TOOLS.filter(([, re]) => re.test(text)).map(([name]) => name).slice(0, 8), pains: PAINS.filter((p) => hasWord(text, p)).slice(0, 6) };
+  return { leader, founding, tools: TOOLS.filter(([, re]) => re.test(text)).map(([name]) => name).slice(0, 8), pains: ((icp.signals as { painWords?: string[] }).painWords ?? PAINS).filter((p) => hasWord(text, p)).slice(0, 6) };
 }
 
 // ---- Sales-led or self-serve, from the company's own homepage ----
@@ -356,6 +356,50 @@ export async function ruleSignals(name: string, domain: string, segment: string,
   return out;
 }
 
+// ---- Tools seen on a company's own website, and when they change ----
+
+const SITE_TOOLS: [string, RegExp][] = [
+  ["hubspot", /js\.hs-scripts\.com|hs-analytics\.net|js\.hsforms\.net|hubspot\.com\/hs-fs/i], ["pardot", /pi\.pardot\.com|pardot\.com/i], ["marketo", /munchkin\.marketo|marketo\.net|marketo\.com\/js/i],
+  ["salesforce", /force\.com\/|salesforce\.com\/(embed|servlet)|exacttarget/i], ["intercom", /widget\.intercom\.io|intercomcdn\.com/i], ["drift", /js\.driftt\.com|drift\.com\/include/i],
+  ["zendesk", /static\.zdassets\.com|zopim\.com/i], ["segment", /cdn\.segment\.(com|io)/i], ["mixpanel", /cdn\.mxpnl\.com|mixpanel\.com\/libs/i], ["amplitude", /cdn\.amplitude\.com/i],
+  ["posthog", /posthog\.com|us\.i\.posthog|app\.posthog/i], ["hotjar", /static\.hotjar\.com/i], ["fullstory", /fullstory\.com\/s\/fs\.js|edge\.fullstory/i], ["heap", /cdn\.heapanalytics\.com/i],
+  ["gong", /gong\.io\/|gong\.app/i], ["6sense", /6sc\.co|6sense\.com/i], ["clearbit", /clearbit\.com\/|tag\.clearbitscripts\.com/i], ["zoominfo", /ws\.zoominfo\.com|zoominfo\.com\/|zi-scripts/i],
+  ["apollo", /assets\.apollo\.io|apollo\.io\/(js|tracking)/i], ["outreach", /outreach\.io\/(js|track)/i], ["salesloft", /salesloft\.com\/(js|track)|sl-?tracker/i], ["chili piper", /chilipiper\.com/i],
+  ["calendly", /assets\.calendly\.com|calendly\.com\/(assets|embed)/i], ["qualified", /js\.qualified\.com|qualified\.com\/js/i], ["commonroom", /commonroom\.io|cdn\.cr-relay/i], ["optimizely", /cdn\.optimizely\.com/i],
+  ["stripe", /js\.stripe\.com/i], ["webflow", /webflow\.com|assets\.website-files/i], ["wordpress", /wp-content\/|wp-includes\//i], ["g2", /\bg2\.com\/(.*)(track|badge)|g2crowd\.com/i], ["rb2b", /rb2b\.com/i], ["warmly", /warmly\.ai/i],
+];
+/** Pure: the known tools a page's HTML loads. */
+export const siteTools = (html: string): string[] => SITE_TOOLS.filter(([, re]) => re.test(html)).map(([n]) => n);
+
+/** Pure: what changed between two tool lists. */
+export function toolDiff(before: string[], after: string[]): { added: string[]; removed: string[] } {
+  const b = new Set(before), a = new Set(after);
+  return { added: after.filter((t) => !b.has(t)), removed: before.filter((t) => !a.has(t)) };
+}
+
+/** Remembers the tools on the website and returns a signal for each one added or dropped since the last look. The first look only records. */
+async function siteToolChanges(domain: string, html: string): Promise<Signal[]> {
+  if (!html) return [];
+  const now = siteTools(html);
+  const { data: row } = await sb.from("cp_accounts").select("id,site_tools").eq("domain", domain).maybeSingle();
+  if (!row) return [];
+  await sb.from("cp_accounts").update({ site_tools: now, site_tools_at: new Date().toISOString() }).eq("id", row.id);
+  if (!row.site_tools) return [];
+  const { added, removed } = toolDiff(row.site_tools, now);
+  return [
+    ...added.slice(0, 3).map((t) => ({ kind: "tech" as const, title: `Added ${t} (seen on their website)`, detail: { ruleType: "change", change: "added", tool: t, published: new Date().toISOString() } })),
+    ...removed.slice(0, 3).map((t) => ({ kind: "tech" as const, title: `No longer uses ${t} (seen on their website)`, detail: { ruleType: "change", change: "removed", tool: t, published: new Date().toISOString() } })),
+  ];
+}
+
+/** Pure: how the number of open sales roles has moved. Reads the stored "N open roles" rows, newest first or not. */
+export function hiringTrend(rows: { detail?: Record<string, unknown> | null; detected_at: string }[], now = Date.now()): { now: number; before: number | null; days: number | null } | null {
+  const pts = rows.filter((r) => r.detail && "salesOpenings" in r.detail).map((r) => ({ n: Number(r.detail!.salesOpenings), t: Date.parse(r.detected_at) })).filter((p) => !Number.isNaN(p.t)).sort((a, b) => b.t - a.t);
+  if (!pts.length) return null;
+  const old = pts.find((p) => now - p.t >= 21 * 86_400_000 && now - p.t <= 60 * 86_400_000);
+  return { now: pts[0].n, before: old ? old.n : null, days: old ? Math.round((now - old.t) / 86_400_000) : null };
+}
+
 export async function collectSignals(name: string, domain: string, segment = "") {
   const site = await fetchSite(domain);
   const [hiring, news, hn] = await Promise.all([
@@ -386,6 +430,10 @@ export async function collectSignals(name: string, domain: string, segment = "")
     // Only a post that actually names a sales or go-to-market role counts as a hiring signal; engineering or content roles do not.
     if (roles) signals.push({ kind: "hiring", title: `Hiring: ${roles} (Hacker News Who is hiring)`, url: found.source_url ?? undefined, detail: { source: "hn_hiring", published: found.found_at } });
   }
+  // Tool changes on their website, and the problems their job posts mention (your pain words).
+  for (const s of await siteToolChanges(domain, site?.html ?? "").catch(() => [] as Signal[])) if (!have.has(s.title)) signals.push(s);
+  const pains = (hiring.signals.find((s) => s.kind === "hiring" && s.detail && "salesOpenings" in s.detail)?.detail?.pains ?? []) as string[];
+  if (pains.length && rel.jobsOk) signals.push({ kind: "tech", title: `Job posts mention: ${pains.slice(0, 4).join(", ")}`, detail: { ruleType: "pain", rule: "pain" } });
   await log("info", "signals_collected", {
     account: domain,
     detail: {

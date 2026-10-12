@@ -472,6 +472,7 @@ function actionsHtml({ outreach, hasContacts, hasDraft, primary: custom, compact
     compact ? `<button data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>` : "",
     `<button data-act="dossier">View dossier</button>`,
     `<button data-act="plnews" title="Uses 1 of the monthly PredictLeads calls">Check company news</button>`,
+    compact ? `<button data-act="aiscore" title="About 0.3 cent of AI">Score again with AI</button>` : "",
     parked ? "" : `<hr>${touched ? `<button data-life="reopen">Clear status (reopen)</button>` : ""}<button data-life="replied">They replied</button><button data-life="meeting">Meeting booked</button>
       <button data-life="snooze" data-days="7">Snooze 1 week</button><button data-life="snooze" data-days="14">Snooze 2 weeks</button><button data-life="snooze" data-days="30">Snooze 1 month</button>
       <hr><button data-life="not_now">Not now</button><button data-act="notfit">Not a fit…</button>`,
@@ -662,6 +663,7 @@ function aCard(a) {
     ${a.not_fit_reason ? `<div class="status-line">Not a fit: ${esc(NOT_FIT[a.not_fit_reason] || a.not_fit_reason)}</div>` : ""}
     ${a.lost_at ? `<div class="status-line">Closed-lost in HubSpot ${esc(ago(a.lost_at))}${a.lost_reason ? `: ${esc(a.lost_reason)}` : ""}</div>` : ""}
     ${reason ? `<section class="blk"><p class="label">Why now</p><div class="why">${reason}</div></section>` : ""}
+    ${a.ai ? `<section class="blk"><p class="label">AI view <span class="badge ${a.heat}" title="The AI's judgement of timing, from everything we know">${HEAT[a.heat]} · ${esc(a.ai.score)}</span></p><div class="why">${a.ai.reasons.map(esc).join(" · ") || "No reason given."}${a.ai.risks.length ? `<div class="meta" style="margin-top:6px">Watch out: ${a.ai.risks.map(esc).join(" · ")}</div>` : ""}<div class="meta" style="margin-top:4px">Judged ${esc(ago(a.ai.at))}</div></div></section>` : ""}
     <section class="blk"><p class="label">Signals</p>${sigList(a.signals, 2) || `<p class="meta" style="margin:0"><span class="unk">No signals yet</span></p>`}</section>
     <section class="blk"><p class="label">Best contact</p>${contact || `<div class="contact meta"><span class="unk">No contact yet</span></div>`}</section>
     ${a.removed ? `<div class="actions">${nextStep(a)}</div>` : actionsHtml({ outreach: a.outreach_status, hasContacts: a.contacts.length > 0, hasDraft: false, primary: nextStep(a), compact: true, removable: !progressS(a), extra: !a.firmo_known && a.contacts.length ? `<button data-act="firmo" title="Uses 0.2 search credit">Check size and stage</button>` : "" })}</article>`;
@@ -688,7 +690,7 @@ function drawAccounts() {
       ${d.admin ? `<form class="wadd" data-wadd><input type="text" id="wdomain" placeholder="Follow a company: type its website, for example example.com" aria-label="Website of a company to follow" maxlength="80"><button type="submit" class="btn ghost">Follow</button></form>` : ""}
       <input id="asearch" class="fsearch" type="search" placeholder="Search by name, website or what they do" aria-label="Search companies" value="${esc(AF.q)}">
       <div class="fbar"><span>Showing <b>${list.length}</b> of ${base.length} in ${esc(view[1])}</span>
-        <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin && AF.view === "low" && list.length ? `<button class="btn ghost sm" data-bulkremove title="Removes low-fit companies nobody has touched">Remove all low fit</button>` : ""}${d.admin && unchecked ? `<button class="btn ghost sm" data-bulkfacts title="Looks up company size and stage. 0.2 search credit each">Check size and stage (${unchecked})</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
+        <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin && AF.view === "low" && list.length ? `<button class="btn ghost sm" data-bulkremove title="Removes low-fit companies nobody has touched">Remove all low fit</button>` : ""}${d.admin && d.ai_missing ? `<button class="btn ghost sm" data-bulkai title="The AI judges how hot each company is, from everything we know. About 0.3 cent each">Score with AI (${d.ai_missing})</button>` : ""}${d.admin && d.industry_missing ? `<button class="btn ghost sm" data-bulkind title="Reads each company's website to find its industry. About 0.15 cent each">Check industry (${d.industry_missing})</button>` : ""}${d.admin && unchecked ? `<button class="btn ghost sm" data-bulkfacts title="Looks up company size and stage. 0.2 search credit each">Check size and stage (${unchecked})</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
     </div>`;
   $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${filtersOn() ? "No companies match these filters." : AF.view === "open" ? "Nothing to work right now." : "No companies in this view."}${filtersOn() ? `<br><button class="btn link" data-clear>Clear filters</button>` : `<div class="actions" style="justify-content:center;margin-top:12px"><button type="button" class="btn ghost sm" data-do="discover">Find new companies</button><button type="button" class="btn ghost sm" data-do="follow">Follow a company</button></div>`}</div>`;
   if (PENDING_CLICK) { const el = document.querySelector(PENDING_CLICK); PENDING_CLICK = null; el?.click(); }
@@ -714,6 +716,21 @@ $("ahead").addEventListener("click", async (e) => {
       const r = await api("queue", { action: "remove_low", dry: false });
       say(`Removed ${r.removed}.`); ACC = null; loadAccounts(true);
     } catch (err) { say(err.message); } finally { br.disabled = false; }
+    return;
+  }
+  if (e.target.closest("[data-bulkai]")) { runBulkAi(e.target.closest("button")); return; }
+  const bi = e.target.closest("[data-bulkind]");
+  if (bi) {
+    bi.disabled = true;
+    try {
+      const p = await api("queue", { action: "industry_check", dry: true });
+      if (p.mode === "dry_run") { say(p.message); return; }
+      if (!p.companies) { say("Every company already has its industry."); return; }
+      if (!(await ask({ title: `Check the industry of ${p.companies} compan${p.companies === 1 ? "y" : "ies"}?`, body: `Reads each company's website with the AI and saves its industry. Fit is then worked out again.\n\nCost: about ${(p.cost_usd * 100).toFixed(1)} cents of AI, no search credits.`, ok: "Check" }))) return;
+      say("Reading websites…");
+      const r = await api("queue", { action: "industry_check", dry: false });
+      say(`Industry found for ${r.set} of ${r.done} companies.${r.stopped ? ` Stopped: ${r.stopped}.` : ""}`); ACC = null; loadAccounts(true);
+    } catch (err) { say(err.message); } finally { bi.disabled = false; }
     return;
   }
   const bk = e.target.closest("[data-bulkfacts]");
@@ -808,6 +825,12 @@ function wireCards(root, reload) {
       const reasons = Object.entries(NOT_FIT);
       card.querySelector(".nfbox").innerHTML = `<p class="label">Why is ${esc(card.dataset.name)} not a fit?</p><div class="chips" style="margin:0">${reasons.map(([k, l]) => `<button type="button" class="chip" data-nfreason="${esc(k)}">${esc(l)}</button>`).join("")}</div>
         <p class="meta" style="margin:8px 0 0">It moves to Parked. The reason is saved so the fit settings can be tuned later.</p>`;
+      return;
+    }
+    if (act === "aiscore") {
+      btn.disabled = true; say("Asking the AI…");
+      try { const r = await api("queue", { action: "ai_rescore", account_id: card.dataset.id }); if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; } say("Scored."); reload(); }
+      catch (err) { say(err.message); btn.disabled = false; }
       return;
     }
     if (act === "plnews") {
@@ -1283,7 +1306,7 @@ const WATCH_ROWS = [
 ];
 /* Setup is long, so it is split into sections with their own addresses (#/setup/alerts) and a short checklist for a first run. */
 const SETUP_SECS = [["start", "Getting started"], ["sell", "What you sell"], ["look", "Who we look for"], ["contact", "Who we contact"], ["signals", "Signals"], ["fit", "Fit and score"], ["alerts", "Alerts and email"], ["find", "Finding companies"], ["conn", "HubSpot, name and health"]];
-const SEC_OF = [["What you sell", "sell"], ["Who we look for", "look"], ["Who we contact", "contact"], ["What counts as a buying signal", "signals"], ["Which companies to show", "fit"], ["Alerts, daily email", "alerts"], ["Finding new companies", "find"], ["Credits and costs", "find"], ["Skipped by discovery", "find"], ["Search history", "conn"], ["HubSpot columns", "conn"], ["Name and logo", "conn"], ["Health", "conn"]];
+const SEC_OF = [["What you sell", "sell"], ["Who we look for", "look"], ["What your customers look like", "look"], ["Who we contact", "contact"], ["What counts as a buying signal", "signals"], ["Which companies to show", "fit"], ["Alerts, daily email", "alerts"], ["Finding new companies", "find"], ["Credits and costs", "find"], ["Skipped by discovery", "find"], ["Search history", "conn"], ["HubSpot columns", "conn"], ["Name and logo", "conn"], ["Health", "conn"]];
 function setupSteps() {
   const d = SETUP;
   return [
@@ -1332,6 +1355,7 @@ function drawSetup() {
       <details style="margin-top:14px"><summary class="meta">Fine-tune: tools, competitors and exclusions</summary><div style="margin-top:12px">
         ${tagField("toolsGood", "Tools that are a good sign", "Software a good customer probably uses, for example hubspot, salesforce.")}
         ${tagField("toolsAvoid", "Tools that are a poor sign", "A company using one scores zero on tools. For example a rival's product.")}
+        ${tagField("painWords", "Problems that show a company needs you", "If a job post mentions one of these (for example crm, data quality), it counts as a signal.")}
         ${tagField("competitors", "Your competitors", "Names or domains. Domains are never shown as prospects.")}
         <div class="field"><label for="motion">Sales style you want</label><select id="motion" data-sel="motion">${[["any", "No preference"], ["sales_led", "Sales-led (demo and contact-sales pages)"], ["self_serve", "Self-serve (start free, sign up)"]].map(([v, t]) => `<option value="${v}"${P.motion === v ? " selected" : ""}>${t}</option>`).join("")}</select></div>
         ${tagField("excludeWords", "Never show companies whose industry, tags, description or name contain", "For example: agency, consultancy, staffing.")}
@@ -1345,6 +1369,7 @@ function drawSetup() {
       ${msField("stages", "Funding stage", d.options.stages, "Pick every stage you would sell to.")}
       ${msField("regions", "Where they are based", d.options.regions, "Regions and single countries. Companies elsewhere show as Outside range and are hidden under Low fit.", d.options.region_groups)}
     </article>
+    <article class="card" id="icpcard"><p class="label">What your customers look like</p><p class="meta" style="margin:0">${own ? "Loading…" : "Unlock to read your HubSpot customers."}</p></article>
     <article class="card"><p class="label">Who we contact</p>
       <p class="help" style="margin:0 0 12px">The kinds of buyer you want to reach, <b>best first</b>: the order is the priority. A person is matched when their job title contains one of the title words, and, if you set them, their department and seniority fit. Contacts you already have are re-ranked when you save. The HubSpot "Scored persona" value is set up for you.</p>
       ${P.personas.map((x, i) => `<div class="persona" data-pi="${i}">
@@ -1448,6 +1473,18 @@ function drawSetup() {
   msDrawAll();
   applySetupSection();
   loadSkipped();
+  loadInsights();
+}
+async function loadInsights() {
+  const el = $("icpcard"); if (!el || !SETUP?.admin) return;
+  try {
+    const d = await api("queue", { action: "icp_insights" });
+    const top = (xs) => xs.map((x) => `${esc(x.name)} (${x.count})`).join(", ");
+    el.innerHTML = `<p class="label">What your customers look like</p><p class="help" style="margin:0 0 8px">Read from the companies HubSpot marks as customers. Free.</p>
+      ${d.count ? `<p class="meta" style="margin:0 0 6px">${d.count} customer${d.count === 1 ? "" : "s"}${d.size ? ` · middle half have ${esc(d.size.p25)} to ${esc(d.size.p75)} people (median ${esc(d.size.median)})` : ""}${d.industries.length ? ` · industries: ${top(d.industries)}` : ""}${d.countries.length ? ` · countries: ${top(d.countries)}` : ""}</p>` : `<p class="meta" style="margin:0 0 6px">HubSpot has no companies marked as customers yet.</p>`}
+      ${d.suggestions.map((s, i) => `<div class="why" style="margin-top:8px">${esc(s.text)}${s.apply ? ` <button type="button" class="btn ghost sm" data-icpapply="${i}">Use ${esc(s.apply.employeesMin)} to ${esc(s.apply.employeesMax)}</button>` : ""}</div>`).join("")}`;
+    el.dataset.s = JSON.stringify(d.suggestions);
+  } catch (e) { el.innerHTML = `<p class="label">What your customers look like</p><p class="err">${esc(e.message)}</p>`; }
 }
 async function loadSkipped() {
   const el = $("skipcard"); if (!el) return;
@@ -1464,6 +1501,8 @@ $("setupbody").addEventListener("click", async (e) => {
     catch (err) { say(err.message); a.disabled = false; }
     return;
   }
+  const ap = e.target.closest("[data-icpapply]");
+  if (ap) { const s = JSON.parse($("icpcard").dataset.s || "[]")[Number(ap.dataset.icpapply)]; if (s?.apply) { P.employeesMin = s.apply.employeesMin; P.employeesMax = s.apply.employeesMax; drawSetup(); say("Range filled in. Press Save to keep it."); } return; }
   const u = e.target.closest("[data-usage]");
   if (u) {
     u.disabled = true;
@@ -1806,6 +1845,19 @@ function logoFromFile(file) {
 }
 
 /* ============ People: everyone we have searched or added, so nothing is searched twice ============ */
+async function runBulkAi(btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const p = await api("queue", { action: "ai_rescore", dry: true });
+    if (p.mode === "dry_run") { say(p.message); return; }
+    if (!p.companies) { say("Everything has been scored already."); return; }
+    if (!(await ask({ title: `Score ${p.companies} compan${p.companies === 1 ? "y" : "ies"} with AI?`, body: `The AI reads everything we know about each company (fit, signals, hiring trend, tool changes, movements) and the people at it, and says how hot they are, with reasons.\n\nCost: about ${(p.cost_usd * 100).toFixed(1)} cents of AI, no search credits. Scores update by themselves after this when facts change.`, ok: "Score" }))) return;
+    say("Scoring with AI…");
+    const r = await api("queue", { action: "ai_rescore", dry: false });
+    say(`Scored ${r.companies} companies and ${r.people} people.${r.stopped ? ` Stopped: ${r.stopped}.` : ""}`); ACC = null; PPL = null;
+    if (CUR.view === "people") loadPeople(true); else loadAccounts(true);
+  } catch (err) { say(err.message); } finally { if (btn) btn.disabled = false; }
+}
 let PPL = null, PF = { q: "", lead: "", persona: "", email: "", hub: "", company: null };
 const LEAD = { hot: ["hot", "Hot lead"], warm: ["warm", "Warm lead"], cold: ["watching", "Cold"], blocked: ["bad", "Do not contact"] };
 const BUYER = { strong: "Strong buyer match", good: "Good buyer match", partial: "Partial match", none: "Not a buyer" };
@@ -1830,8 +1882,8 @@ function drawPeople() {
     <div class="fgrid">${sel("lead", "Lead", [["", "Any"], ["hot", "Hot"], ["warm", "Warm"], ["cold", "Cold"], ["blocked", "Do not contact"]])}${sel("persona", "Buyer type", [["", "Any"], ...d.personas.map((t) => [t, t]), ["__none", "Does not match any"]])}${sel("email", "Email", [["", "Any"], ["found", "Found, not revealed"], ["revealed", "Revealed"], ["none", "No email"]])}${sel("hub", "HubSpot", [["", "Any"], ["yes", "In HubSpot"], ["no", "Not in HubSpot"]])}</div>
     <input id="psearch" class="fsearch" type="search" placeholder="Search by name, title or company" aria-label="Search people" value="${esc(PF.q)}" style="margin-top:10px">
     <div class="fbar"><span>Showing <b>${list.length}</b> of ${d.people.length} saved people${co ? ` at <b>${esc(co)}</b> <a href="#/people">(all companies)</a>` : ""}</span>
-      <span class="acts">${(PF.lead || PF.persona || PF.email || PF.hub || PF.q) ? `<button class="btn link sm" data-pclear>Clear filters</button>` : ""}${own && d.people.length ? `<button class="btn ghost sm" data-pexport title="Downloads this list as a spreadsheet file. Only emails you have revealed are included">Export (.csv)</button>` : ""}</span></div></div>`;
-  const row = (p) => `<div class="wrow" data-pid="${esc(p.id)}"><div class="wmain"><b>${esc(p.name)}</b> <span class="badge ${LEAD[p.lead.label][0]}" title="Lead score ${p.lead.score} of 100">${LEAD[p.lead.label][1]}</span> <span class="badge">${esc(BUYER[p.lead.buyer])}</span> <span class="meta">${esc(p.title)} at <a class="clink" href="#/company/${esc(p.account_id)}">${esc(p.company)}</a></span>
+      <span class="acts">${(PF.lead || PF.persona || PF.email || PF.hub || PF.q) ? `<button class="btn link sm" data-pclear>Clear filters</button>` : ""}${own && d.people.length ? `<button class="btn ghost sm" data-bulkai title="The AI judges each lead from everything we know">Score with AI</button><button class="btn ghost sm" data-pexport title="Downloads this list as a spreadsheet file. Only emails you have revealed are included">Export (.csv)</button>` : ""}</span></div></div>`;
+  const row = (p) => `<div class="wrow" data-pid="${esc(p.id)}"><div class="wmain"><b>${esc(p.name)}</b> <span class="badge ${LEAD[p.lead.label][0]}" title="${p.lead.ai ? "Judged by the AI. " : ""}Lead score ${p.lead.score} of 100">${LEAD[p.lead.label][1]}${p.lead.ai ? " · AI" : ""}</span> <span class="badge">${esc(BUYER[p.lead.buyer])}</span> <span class="meta">${esc(p.title)} at <a class="clink" href="#/company/${esc(p.account_id)}">${esc(p.company)}</a></span>
       <div class="meta">${p.persona ? `<span class="ptag">${esc(p.persona)}</span> ` : `<span class="meta">Not one of your buyer types</span> `}${p.revealed ? `<b>${esc(p.email)}</b>${p.email_status ? ` <span class="pill ${(STATUS[p.email_status] || [0, ""])[1]}">${esc((STATUS[p.email_status] || ["Unverified"])[0])}</span>` : ""}` : p.has_email ? "email found, not revealed" : "no email"}${p.in_hubspot ? ` · <span class="pill ok">In HubSpot</span>` : ""}${p.hs_status === "opted_out" ? ` · <span class="pill bad">Opted out</span>` : p.hs_status === "bounced" ? ` · <span class="pill bad">Bounced</span>` : p.hs_status === "known" ? ` · <span class="pill warn" title="${esc(p.hs_note || "")}">Already in your HubSpot</span>` : ""}${p.manual ? " · added by you" : ""} · saved ${esc(day(p.added))}</div><div class="meta" style="margin-top:3px">Why: ${esc(p.lead.reasons.slice(0, 4).join(" · "))}</div></div>
       <div class="wside">${own && p.has_email && !p.revealed && !["opted_out", "bounced"].includes(p.hs_status) ? `<button class="btn ghost sm" data-penrich>Enrich</button>` : ""}${watchBtn("person", p.id, p.watched)}</div></div>`;
   const nobody = !PF.company && !PF.persona && !PF.email && !PF.hub && !q && d.nobody.length
@@ -1843,6 +1895,7 @@ $("phead").addEventListener("input", (e) => { if (e.target.id === "psearch") { P
 $("phead").addEventListener("change", (e) => { const k = e.target.dataset?.pf; if (k) { PF[k] = e.target.value; drawPeople(); } });
 $("phead").addEventListener("click", (e) => {
   if (e.target.closest("[data-pclear]")) { PF = { q: "", lead: "", persona: "", email: "", hub: "", company: PF.company }; drawPeople(); return; }
+  if (e.target.closest("[data-bulkai]")) { runBulkAi(e.target.closest("button")); return; }
   if (e.target.closest("[data-pexport]")) {
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const rows = [["Name", "Title", "Company", "Website", "Lead", "Score", "Buyer type", "Email (revealed only)", "In HubSpot", "Saved"], ...PPL.people.map((p) => [p.name, p.title, p.company, p.domain, p.lead.label, p.lead.score, p.persona || "", p.email || "", p.in_hubspot ? "yes" : "no", (p.added || "").slice(0, 10)])];
