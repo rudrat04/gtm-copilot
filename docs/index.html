@@ -126,11 +126,13 @@
   .pcard .eyebrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
   .pcard { border-left: 4px solid var(--pc, var(--line)); }
   .pcard.pr-hi { --pc: var(--bad); } .pcard.pr-mid { --pc: #d98a1f; } .pcard.pr-lo { --pc: #9aa3b5; }
-  .pcard .prio { --pc: var(--muted); margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 4px 11px 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--pt) 13%, transparent); color: var(--pt); }
-  .pcard .prio.hi { --pt: var(--bad); } .pcard .prio.mid { --pt: var(--warn); } .pcard .prio.lo { --pt: #5d6678; }
-  .pcard .prio b { font-size: 15px; color: inherit; }
-  .pcard .prio .pbar { width: 34px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--pt) 22%, transparent); overflow: hidden; display: block; }
-  .pcard .prio .pbar u { display: block; height: 100%; background: var(--pt); text-decoration: none; border-radius: 3px; }
+  .pcard .prio { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .02em; background: color-mix(in srgb, var(--pt) 13%, transparent); color: var(--pt); }
+  .pcard .prio .pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--pt); }
+  .pcard .prio.hi { --pt: var(--bad); } .pcard .prio.mid { --pt: var(--warn); } .pcard .prio.lo { --pt: #5d6678; } .pcard .prio.wait { --pt: var(--accent); }
+  .pcard.pr-wait { --pc: var(--accent); }
+  .pgroup { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; margin: 10px 0 0; font-size: 15px; }
+  .pgroup span { font-weight: 400; font-size: 12.5px; color: var(--muted); }
+  .pgroup.hi { color: var(--bad); } .pgroup.mid { color: var(--warn); } .pgroup.lo { color: #5d6678; }
   .pcard .title { margin: 0 0 4px; font-size: 22px; }
   .pcard .sub { color: var(--soft); margin-bottom: 4px; }
   .pcard .phead { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
@@ -743,7 +745,7 @@ function drawBoard() {
     ${d.attention.items.map((f) => `<div class="flag" data-flag="${esc(f.key)}"><div><b class="${f.severity === "urgent" ? "bad" : ""}">${esc(f.title)}</b>${f.detail ? `<div class="meta">${esc(f.detail)} · ${esc(ago(f.since))}</div>` : ""}</div>
       <div class="actions" style="margin:0"><button class="btn ghost sm" data-flagdo="snooze">Snooze 3 days</button><button class="btn ghost sm" data-flagdo="dismiss">Dismiss</button></div></div>`).join("")}</article>` : "";
   const card = (i) => i.person
-    ? personCard(i.person, { own: !!d.admin, board: true, label: i.label, badge: TODAY_BADGE[i.type] || "", headline: i.type === "follow_up" || i.type === "waiting" ? i.headline : "", due: i.type === "follow_up", why_line: i.why_line, outreach: i.account?.outreach })
+    ? personCard(i.person, { own: !!d.admin, board: true, label: i.label, badge: TODAY_BADGE[i.type] || "", headline: i.type === "follow_up" || i.type === "waiting" ? i.headline : "", due: i.type === "follow_up", why_line: i.why_line, outreach: i.account?.outreach, lane: i.lane })
     : tCard(i);
   const lane = ([k, title, help]) => {
     const items = d.items.filter((i) => i.lane === k).sort(sort);
@@ -2315,13 +2317,13 @@ function personCard(p, o = {}) {
   const unpin = own && p.todo_state === "pinned" ? `<button class="btn ghost sm" data-act="todo" data-state="" title="Takes this person off the board unless something new happens">Unpin</button>` : "";
   const notnow = own && o.board ? `<button class="btn ghost sm" data-act="todo" data-state="dismissed" title="Hides this person from your to-do">Not now</button>` : "";
   const needsReveal = p.preview || (own && p.has_email && !p.revealed && !blocked);
-  const pr = Number(p.priority) || 0, tier = pr >= 70 ? ["hi", "High"] : pr >= 45 ? ["mid", "Medium"] : ["lo", "Low"];
+  const pr = Number(p.priority) || 0, band = o.lane === "now" || o.lane === "week" || o.lane === "later" ? o.lane : pr >= 70 ? "now" : pr >= 45 ? "week" : "later", tier = o.lane === "waiting" ? ["wait", "Waiting"] : { now: ["hi", "Contact now"], week: ["mid", "This week"], later: ["lo", "Later"] }[band];
   const keep = own && o.research && !p.kept && p.todo_state !== "pinned" ? `<button class="btn primary sm" data-act="pkeep" title="Saves this person to your People list. Their company is already saved.">Add to my people</button>` : "";
   const lead = needsReveal ? revealBtn(p) : `<button class="btn primary sm" data-life="contacted">${o.outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>`;
   const hsBtn = canPush ? `<button class="btn ghost sm" data-act="ppush" data-pid="${esc(p.id)}" title="Adds the company and this person to HubSpot">Push to HubSpot</button>` : "";
   const suggest = !o.board && p.priority >= 45 && p.todo_state !== "pinned" ? `<div class="meta" style="margin-top:6px">Suggested for your to-do: ${esc(p.priority >= 70 ? "contact now" : "this week")} (${esc((p.lead.reasons || []).slice(0, 2).join(", ").toLowerCase() || "good fit")}).</div>` : "";
-  return `<article class="card pcard pr-${tier[0]}${o.board ? " board" : ""}" data-id="${esc(p.account_id)}" data-name="${esc(p.company)}" data-domain="${esc(p.domain)}" data-pid="${esc(p.id)}" data-hsn="${p.hs_company?.contacts ?? ""}" data-o="${esc(JSON.stringify({ board: !!o.board, label: o.label || "", badge: o.badge || "", headline: o.headline || "", due: !!o.due, outreach: o.outreach || "", own, why_line: o.why_line || null, research: !!o.research }))}">
-    <div class="eyebrow">${o.label ? `<span class="badge ${esc(o.badge || "")}">${esc(o.label)}</span>` : ""}${p.todo_state === "pinned" ? `<span class="badge accent">Pinned</span>` : ""}${o.research && (p.kept || p.todo_state === "pinned") ? `<span class="badge good">In your people</span>` : ""}<span class="prio ${tier[0]}" title="How soon to act: lead score, company fit and anything that just happened. 70 and up: contact now. 45 to 69: this week."><i class="pbar"><u style="width:${Math.min(100, Math.max(4, Number(p.priority) || 0))}%"></u></i><b>${esc(p.priority)}</b><span>${tier[1]} priority</span></span></div>
+  return `<article class="card pcard pr-${tier[0]}${o.board ? " board" : ""}" data-id="${esc(p.account_id)}" data-name="${esc(p.company)}" data-domain="${esc(p.domain)}" data-pid="${esc(p.id)}" data-hsn="${p.hs_company?.contacts ?? ""}" data-o="${esc(JSON.stringify({ board: !!o.board, label: o.label || "", badge: o.badge || "", headline: o.headline || "", due: !!o.due, outreach: o.outreach || "", own, why_line: o.why_line || null, research: !!o.research, lane: o.lane || "" }))}">
+    <div class="eyebrow">${o.label ? `<span class="badge ${esc(o.badge || "")}">${esc(o.label)}</span>` : ""}${p.todo_state === "pinned" ? `<span class="badge accent">Pinned</span>` : ""}${o.research && (p.kept || p.todo_state === "pinned") ? `<span class="badge good">In your people</span>` : ""}<span class="prio ${tier[0]}" title="Priority ${esc(pr)}: lead score, company fit and anything that just happened. 70 and up is contact now, 45 to 69 this week."><i class="pdot"></i>${tier[1]}</span></div>
     <div class="phead">
       <div class="pid">
         <h3 class="title">${esc(p.name)}</h3>
@@ -2417,7 +2419,7 @@ function drawPeople() {
   const nobody = !PF.company && !active && d.nobody.length
     ? `<article class="card"><p class="label">Searched, nobody found (${d.nobody.length})</p><p class="help" style="margin:0 0 6px">These companies were searched. No need to search them again for a while.</p>${d.nobody.slice(0, 30).map((n) => `<div class="wrow"><div class="wmain"><b><a class="clink" href="#/company/${esc(n.id)}">${esc(n.name)}</a></b> <span class="meta">${esc(n.domain)} · searched ${esc(day(n.at))}${n.by === "auto" ? " (automatic)" : ""}</span></div></div>`).join("")}</article>` : "";
   const shown = list.slice(0, PF.limit);
-  $("plist").innerHTML = (shown.length ? `<div class="pgrid">${shown.map((p) => personCard(p, { own })).join("")}</div>${list.length > shown.length ? `<div class="actions" style="justify-content:center;margin:14px 0"><button class="btn ghost" data-pmore>Show ${Math.min(30, list.length - shown.length)} more</button></div>` : ""}`
+  $("plist").innerHTML = (shown.length ? `<div class="pgrid">${shown.map((p, i) => { const g = PF.sort === "priority" ? (p.priority >= 70 ? ["hi", "Contact now"] : p.priority >= 45 ? ["mid", "This week"] : ["lo", "Later"]) : null; const prev = i ? shown[i - 1].priority : null; const pg = prev == null ? null : prev >= 70 ? "hi" : prev >= 45 ? "mid" : "lo"; return (g && g[0] !== pg ? `<h3 class="pgroup ${g[0]}">${g[1]} <span>${list.filter((x) => (x.priority >= 70 ? "hi" : x.priority >= 45 ? "mid" : "lo") === g[0]).length}</span></h3>` : "") + personCard(p, { own }); }).join("")}</div>${list.length > shown.length ? `<div class="actions" style="justify-content:center;margin:14px 0"><button class="btn ghost" data-pmore>Show ${Math.min(30, list.length - shown.length)} more</button></div>` : ""}`
     : `<div class="card empty">${d.people.length ? "No people match these filters." : "No people yet. Press <b>List people at my best companies</b> above (free), or run discovery, and the people who work at the companies that fit appear here."}${d.people.length ? "" : `<div class="actions" style="justify-content:center;margin-top:12px"><a class="btn ghost sm" href="#/discover">Open Discover</a></div>`}</div>`) + nobody;
   const s = $("psearch"); if (PF.q && document.activeElement?.id === "psearch") { s.focus(); s.setSelectionRange(PF.q.length, PF.q.length); }
 }
