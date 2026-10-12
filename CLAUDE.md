@@ -156,6 +156,8 @@ Other ideas, held: territories and multiple profiles, Ask Copilot, Listen to you
 
 - **Page polish (13 Oct 2026):** Signals cards are lighter (company, fit and heat as plain coloured text, one kind label, the text, up to 2 person chips). Watchlist opens on People, then Companies, then What moved; limits and the email rule are in an "i" tooltip. Research is a centred home screen (`.rhero`, one rounded input with a send button, example chips) that moves to the top once a result is shown (`#research.has-out`). Setup sections are a sticky left list next to the content on desktop and underlined tabs on a phone (`.subnav`).
 
+- **Setup layout (13 Oct 2026):** Setup uses a wider page (`body.v-setup main`, 1320px) with the section list at the left and the settings filling the rest; under 1180px the list becomes tabs. The one Save changes button is a sticky bar at the bottom (`.savebar`), shown for every section that the profile Save covers (not Finding companies or HubSpot). In demo mode, buttons that need the owner key are rendered by `lockBtn`: disabled, with a dark pill on hover that says what unlocking does.
+
 ## Handoff: open items (as of 13 Oct 2026)
 Everything above is built, deployed and pushed (UI work through the sidebar, Research tab, priority labels and Setup side list). What is still open:
 - **Not yet tried with a real run (the AI budget was used up on 13 Oct):** Research on a live domain with the owner key (free people list, Add to my people, Add to to-do, Add all, Search with credits); the new Events and Product launch signal types (first news searches); a city typed into the location list (fit matches on the HQ city; Hunter and YC discovery still filter by country only).

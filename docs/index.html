@@ -423,21 +423,28 @@
   a.clink { color: inherit; text-decoration: none; } a.clink:hover { text-decoration: underline; }
   #convseg { margin-bottom: 14px; display: flex; gap: 4px; } #convseg i { font-style: normal; background: var(--accent); color: #fff; border-radius: 99px; font-size: 11px; padding: 1px 7px; margin-left: 6px; }
   .credits { text-decoration: none; font-size: 13px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--ink); } .credits.low { color: #8a5a00; border-color: #d9b24a; background: #fbf1d3; } .credits.out { color: #a3261c; border-color: #e3a29d; background: #fbe9e7; }
-  #setupbody { display: grid; grid-template-columns: 210px minmax(0, 1fr); column-gap: 28px; align-items: start; }
+  .lockwrap { position: relative; display: inline-flex; }
+  .lockwrap .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .lockpill { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 40; display: none; align-items: center; gap: 7px; white-space: nowrap; padding: 7px 13px 7px 10px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow); }
+  .lockpill .ico { width: 14px; height: 14px; }
+  .lockwrap:hover .lockpill, .lockwrap:focus .lockpill, .lockwrap:focus-within .lockpill { display: inline-flex; }
+  .savebar { position: sticky; bottom: 0; z-index: 20; display: flex; align-items: center; gap: 14px; margin: 18px 0 0; padding: 12px 18px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(8px); box-shadow: 0 -6px 20px rgba(90, 66, 20, .08); }
+  body.v-setup main { max-width: 1320px; }
+  #setupbody { display: grid; grid-template-columns: 220px minmax(0, 1fr); column-gap: 28px; align-items: start; }
   #setupbody > * { grid-column: 2; min-width: 0; }
   #setupbody > .subnav { grid-column: 1; grid-row: 1 / span 60; position: sticky; top: 92px; display: flex; flex-direction: column; gap: 2px; margin: 0; }
   .subnav button { display: flex; align-items: center; width: 100%; border: 0; background: none; color: var(--soft); border-radius: 10px; padding: 9px 14px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; text-align: left; position: relative; }
   .subnav button:hover { background: var(--raised); color: var(--ink); }
   .subnav button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line), var(--card-shadow); }
   .subnav button[aria-selected="true"]::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--accent); }
-  @media (max-width: 900px) {
+  @media (max-width: 1180px) {
     #setupbody { display: block; }
     #setupbody > .subnav { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid var(--line); }
     .subnav button { width: auto; white-space: nowrap; border-radius: 9px 9px 0 0; padding: 9px 14px; }
     .subnav button[aria-selected="true"] { background: none; box-shadow: none; color: var(--accent); }
     .subnav button[aria-selected="true"]::before { left: 10px; right: 10px; top: auto; bottom: -1px; width: auto; height: 2px; }
-    .rhero { padding-top: 5vh; } .rhero h2 { font-size: 24px; }
   }
+  @media (max-width: 900px) { .rhero { padding-top: 5vh; } .rhero h2 { font-size: 24px; } }
   .check { display: flex; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); } .check:first-of-type { border-top: 0; } .check .tick { width: 24px; height: 24px; border-radius: 99px; border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; flex: none; } .check.done .tick { background: var(--green, #1f7a3d); border-color: var(--green, #1f7a3d); } .check .ct { flex: 1; }
   .pal-bg { position: fixed; inset: 0; z-index: 85; background: rgba(40, 35, 27, .45); display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; } .pal { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); width: 100%; max-width: 560px; overflow: hidden; }
   .pal input { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid var(--line); padding: 16px 18px; font: inherit; font-size: 17px; color: var(--ink); background: transparent; outline: 0; } .pal-list { max-height: 50vh; overflow: auto; padding: 6px; }
@@ -1775,6 +1782,9 @@ const MAIL_OPEN = new Set();
 const mailBox = (key, name, when, trigger, contents, settings) => `<details class="mail" data-mk="${key}"${MAIL_OPEN.has(key) ? " open" : ""}><summary><span class="mn">${esc(name)}</span><span class="mw">${esc(when)}</span></summary>
   <div class="mbody"><p class="mt"><b>When:</b> ${esc(trigger)}</p><p class="mt"><b>What is in it:</b> ${esc(contents)}</p><div class="msets">${settings}</div></div></details>`;
 document.addEventListener("toggle", (e) => { const d = e.target; if (d.matches?.("details.mail")) { if (d.open) MAIL_OPEN.add(d.dataset.mk); else MAIL_OPEN.delete(d.dataset.mk); } }, true);
+/** A button that is disabled in demo mode and says why on hover, in a small pill. */
+const lockBtn = (own, attrs, cls, label, why) => own ? `<button type="button" class="btn ${cls}" ${attrs}>${label}</button>`
+  : `<span class="lockwrap" tabindex="0"><button type="button" class="btn ${cls}" ${attrs} disabled aria-disabled="true">${label}</button><span class="lockpill" role="tooltip"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>${esc(why)}</span></span>`;
 const SIG_GROUPS = ["Events", "Tools and competitors", "Company changes", "Press and announcements", "New launches", "Your own"];
 const WATCH_ROWS = [
   ["hotUntouched", "A hot account with a contact is still untouched after", "hours", ""],
@@ -1820,7 +1830,7 @@ function applySetupSection() {
       sec = hit ? hit[1] : el.matches("details.how") ? "fit" : "*";
       el.dataset.sec = sec;
     }
-    el.style.display = sec === "*" || sec === "nav" || sec === sub ? "" : "none";
+    el.style.display = sec === "*" || sec === "nav" || sec === sub || (sec === "save" && !["find", "conn", "start"].includes(sub)) ? "" : "none";
   }
   box.querySelectorAll("[data-ssec]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.ssec === sub)));
 }
@@ -1834,7 +1844,7 @@ function drawSetup() {
       <div class="field"><label for="pdesc">What do you sell, and to whom?</label><textarea id="pdesc" class="big" maxlength="1500" data-text="product.description" placeholder="Example: A tool that cleans up CRM data for sales teams at B2B software companies with 20 to 200 people.">${esc(P.product.description)}</textarea></div>
       <div class="field"><label for="pname">Your product's name (optional)</label><input id="pname" type="text" class="tin" data-text="product.name" value="${esc(P.product.name)}" placeholder="Used in drafts, briefs and deal names" maxlength="40"></div>
       <div class="field"><label for="psite">Your website (optional)</label><input id="psite" type="text" class="tin" data-text="product.website" value="${esc(P.product.website)}" placeholder="yourcompany.com" maxlength="80"></div>
-      <div class="actions" style="margin:0"><button type="button" class="btn primary" data-suggest${own ? "" : " disabled"}>Suggest my settings</button><span class="meta">${own ? "About 1 to 2 cents of AI. Nothing is saved until you press Save." : "Demo mode: unlock to use this."}</span></div>
+      <div class="actions" style="margin:0">${lockBtn(own, "data-suggest", "primary", "Suggest my settings", "Unlock to use this")}${own ? `<span class="meta">About 1 to 2 cents of AI. Nothing is saved until you press Save.</span>` : ""}</div>
       ${SUGGEST_NOTE ? `<div class="why" style="margin-top:12px"><b>Suggestion applied below.</b> ${esc(SUGGEST_NOTE)} Review it, then press Save.</div>` : ""}
       <details style="margin-top:14px"><summary class="meta">Fine-tune: tools, competitors and exclusions</summary><div style="margin-top:12px">
         ${tagField("toolsGood", "Tools that are a good sign", "Software a good customer probably uses, for example hubspot, salesforce.")}
@@ -1932,7 +1942,6 @@ function drawSetup() {
           <li><b>New lead</b> <span>when someone fills in your form: who, why now and a reply target; plus one reminder if it goes unanswered</span></li>
           <li><b>Why was it lost?</b> <span>once, when a deal we opened is closed lost without a reason</span></li></ul></div>
     </article>
-    <div class="actions" style="margin:0 0 18px"><button class="btn primary" data-save>Save changes</button><span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : "Demo mode: unlock to save changes."}</span></div>
 
     <article class="card"><p class="label">Finding new companies</p>
       <label class="toggle" style="margin-bottom:12px"><input type="checkbox" data-disc ${P.discovery ? "checked" : ""}><span>Search for new companies every week<small>${esc(d.discovery.schedule)}. Reads Hacker News hiring and launch posts and searches the public web (recent funding, new sales leaders, sales hiring, launches), and keeps companies that match the profile above.</small></span></label>
@@ -1960,14 +1969,15 @@ function drawSetup() {
         <div><input type="file" id="logofile" accept="image/png,image/jpeg,image/webp,image/svg+xml" ${own ? "" : "disabled"} aria-label="Upload a logo">${BRAND_DRAFT.logo ? ` <button type="button" class="btn ghost sm" data-logorm>Remove logo</button>` : ""}<p class="help" style="margin:6px 0 0">PNG, JPG, WebP or SVG. It is shrunk to fit.</p></div></div>
       <div class="field"><label for="bname">Name</label><input id="bname" type="text" class="tin" maxlength="40" value="${esc(BRAND_DRAFT.name)}" data-brand="name"></div>
       <div class="field"><label for="btag">Tagline</label><input id="btag" type="text" class="tin" style="max-width:520px" maxlength="80" value="${esc(BRAND_DRAFT.tagline)}" data-brand="tagline"></div>
-      <div class="actions" style="margin:0"><button type="button" class="btn ghost" data-brandsave${own ? "" : " disabled"}>Save name and logo</button><span class="meta">${own ? "Applies right away. Separate from the Save button above." : "Demo mode: unlock to change."}</span></div>
+      <div class="actions" style="margin:0">${lockBtn(own, "data-brandsave", "ghost", "Save name and logo", "Unlock to change")}${own ? `<span class="meta">Applies right away. Separate from Save changes.</span>` : ""}</div>
     </article>
 
     ${own ? `<article class="card" id="healthcard"><p class="label">Health</p><p class="meta" style="margin:0">Loading…</p></article>
     <article class="card" id="suppcard"><p class="label">Never contact list</p><p class="meta" style="margin:0">Loading…</p></article>
     <article class="card" id="usagecard"><p class="label">Search history</p><p class="help" style="margin:0 0 8px">Every search that used credits, so you can see what was spent and where.</p><div class="actions" style="margin:0"><button type="button" class="btn ghost" data-usage>Show the last 25 searches</button></div><div id="usageout"></div></article>` : ""}
 
-    <details class="how"><summary>How scoring and signals work</summary><div id="icpbody"></div></details>`;
+    <details class="how"><summary>How scoring and signals work</summary><div id="icpbody"></div></details>
+    <div class="savebar" data-sec="save">${lockBtn(own, "data-save", "primary", "Save changes", "Unlock to save changes")}<span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : ""}</span></div>`;
   msDrawAll();
   applySetupSection();
   loadSkipped();
@@ -2751,7 +2761,7 @@ function showView(r, { push = true, force = false } = {}) {
   if (location.hash !== h) (push ? history.pushState : history.replaceState).call(history, null, "", h);
   if (lastView !== view || force) window.scrollTo(0, 0);
   lastView = view;
-  setPageHead(view === "accounts" ? "accounts" : view); drawer(false);
+  setPageHead(view === "accounts" ? "accounts" : view); drawer(false); document.body.classList.toggle("v-setup", view === "setup");
   if (view === "conversations") {
     const sub = next.sub === "meetings" ? "meetings" : "leads";
     $("inbound").hidden = sub !== "leads"; $("meetings").hidden = sub !== "meetings";
