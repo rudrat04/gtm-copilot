@@ -15,7 +15,7 @@ import { activeFlags, flagAction } from "../_shared/flags.ts";
 import { meetsFit, queueThreshold, worthShowing } from "../_shared/fitgate.ts";
 import { clean, DEPARTMENTS, INDUSTRIES, loadProfile, REGIONS, saveProfile, SENIORITIES, STAGES } from "../_shared/profile.ts";
 import { REGION_GROUPS, RULE_TYPES } from "../_shared/lists.ts";
-import { addToWatchlist, setWatched } from "../_shared/watchlist.ts";
+import { addPersonToWatchlist, addToWatchlist, markSeen, setNotify, setPersonWatched, setWatched, watchlistView } from "../_shared/watchlist.ts";
 import { cleanBrand, loadBrand, saveBrand } from "../_shared/brand.ts";
 import { suggestProfile } from "../_shared/suggest.ts";
 import { rerankPeople } from "../_shared/people.ts";
@@ -470,10 +470,26 @@ serve("queue", async (req) => {
     await log("info", restoring ? "account_restored" : "account_removed", { account: a.domain });
     return json({ mode: "live", ok: true });
   }
-  if (body.action === "watch_toggle" && typeof body.account_id === "string") {
-    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to follow companies." });
-    const r = await setWatched(body.account_id, body.on !== false);
-    return "error" in r ? json({ error: r.error }, 404) : json({ mode: "live", ok: true });
+  if (body.action === "watchlist") return json({ ...(await watchlistView(admin)), admin });
+  if (body.action === "watch_toggle" && (typeof body.account_id === "string" || typeof body.person_id === "string")) {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to follow companies and people." });
+    const r = typeof body.person_id === "string" ? await setPersonWatched(body.person_id, body.on !== false) : await setWatched(body.account_id as string, body.on !== false);
+    return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", ok: true });
+  }
+  if (body.action === "watch_notify") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to change this." });
+    const ok = (body.kind === "company" || body.kind === "person") && typeof body.id === "string" && (await setNotify(body.kind, body.id, String(body.notify)));
+    return ok ? json({ mode: "live", ok: true }) : json({ error: "Could not save that." }, 400);
+  }
+  if (body.action === "watch_seen") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode." });
+    await markSeen();
+    return json({ mode: "live", ok: true });
+  }
+  if (body.action === "watch_add_person") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to follow people." });
+    const r = await addPersonToWatchlist({ name: String(body.name ?? ""), domain: String(body.domain ?? ""), title: typeof body.title === "string" ? body.title : "" });
+    return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", ...r });
   }
   if (body.action === "watch_add") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to add companies." });

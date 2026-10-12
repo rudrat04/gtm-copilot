@@ -1,3 +1,4 @@
+import { recordIfWatched } from "./movements.ts";
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import { askClaude } from "./claude.ts";
@@ -146,6 +147,7 @@ export async function processLead(l: LeadInput): Promise<{ id: string; label: La
   }
 
   const label = labelFor({ business, disposable, intent: l.intent, fit, heat });
+  if (accountId) await recordIfWatched(accountId, { key: `lead:${accountId}:${l.email.toLowerCase()}:${new Date().toISOString().slice(0, 10)}`, kind: "lead", importance: "big", title: `Inbound lead from ${l.name}${companyName ? ` (${companyName})` : ""}: ${INTENT_TEXT[l.intent]}` }).catch(() => {});
   const why = label === "not_fit" ? "" : await whyLine(l, { company: companyName, facts, fit, heat, signals: signalLines });
 
   let contactId: string | null = null, taskId: string | null = null;

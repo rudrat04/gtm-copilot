@@ -1,6 +1,7 @@
 import { json, sb } from "./db.ts";
 import { log } from "./log.ts";
-import { collectSignals, saveSiteFacts, type Signal, storedHiringSignals } from "./signals.ts";
+import { collectSignals, eventSignals, saveSiteFacts, type Signal, storedHiringSignals } from "./signals.ts";
+import { competitorEvents, eventsFromSignals, personMentions, recordEvent, sendMovementEmail, titleRecheck, watchedPeopleHubspot } from "./movements.ts";
 import { scoreAccount, tierOf } from "./score.ts";
 import { generateWhy, hash } from "./today.ts";
 import { alertEmail } from "./templates.ts";
@@ -51,7 +52,9 @@ export async function lightCheck(admin: boolean) {
   const one = async (a: Acct) => {
     const { data: existing } = await sb.from("cp_signals").select("kind,title").eq("account_id", a.id);
     const known = new Set((existing ?? []).map((e) => `${e.kind}|${e.title}`));
-    const { signals, hiringUnknown, motion, jobTools } = await collectSignals(a.name, a.domain, a.segment ?? "");
+    const col = await collectSignals(a.name, a.domain, a.segment ?? "");
+    const { hiringUnknown, motion, jobTools } = col;
+    const signals = [...col.signals, ...(a.watched_at ? await eventSignals(a.name, a.domain).catch(() => [] as Signal[]) : [])]; // followed companies are also checked for events they host
     await saveSiteFacts(a.id, { motion, jobTools });
     const fresh = signals.filter((s) => !known.has(`${s.kind}|${s.title.slice(0, 300)}`));
 
@@ -62,6 +65,7 @@ export async function lightCheck(admin: boolean) {
       );
       newSignals += fresh.length;
     }
+    if (a.watched_at) for (const ev of eventsFromSignals(a, fresh)) await recordEvent(ev); // every movement on a followed company is kept for the Watchlist tab
     const score = scoreAccount([...signals, ...(await storedPlSignals(a.id)), ...(hiringUnknown ? await storedHiringSignals(a.id) : [])], a).score; // PredictLeads events stored earlier still count
     if (score !== a.priority_score) await sb.from("cp_accounts").update({ priority_score: score }).eq("id", a.id);
 
@@ -85,6 +89,7 @@ export async function lightCheck(admin: boolean) {
 
   // Instant alerts, best first, capped per day, never repeated for the same signals.
   let alerted = 0;
+  const alertedIds: string[] = [];
   if (candidates.length && googleConfigured()) {
     const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
     // Followed companies have an allowance of their own, so a busy day on the watchlist cannot crowd out the rest (or the other way round).
@@ -123,7 +128,7 @@ export async function lightCheck(admin: boolean) {
       );
       try {
         await sendMail(ownerEmail(), mail.subject, mail.body, mail.html);
-        alerted++; left[lane]--;
+        alerted++; left[lane]--; alertedIds.push(c.a.id);
         await log("info", "hot_alert_sent", { account: c.a.domain, detail: { fresh: c.fresh, score: c.score } });
       } catch (e) {
         await sb.from("cp_alerts").delete().eq("account_id", c.a.id).eq("signal_hash", c.hash); // retry next run
@@ -132,6 +137,17 @@ export async function lightCheck(admin: boolean) {
     }
   }
 
+  // Movements on the Watchlist: events a hot alert already covered are marked as sent; then the other checks and one grouped email.
+  const moved = { competitor: 0, mentions: 0, contacts: 0, jobs: 0, emailed: 0 };
+  try {
+    if (alertedIds.length) await sb.from("cp_watch_events").update({ emailed_at: new Date().toISOString() }).in("account_id", alertedIds).is("emailed_at", null);
+    moved.competitor = await competitorEvents();
+    moved.mentions = await personMentions(8);
+    moved.contacts = await watchedPeopleHubspot();
+    moved.jobs = await titleRecheck(2);
+    moved.emailed = await sendMovementEmail();
+  } catch (e) { await log("warn", "movements_failed", { message: (e as Error).message }); }
+
   await log("info", "watch_done", { detail: { accounts: accounts.length, new_signals: newSignals, candidates: candidates.length, alerted, failed, predictleads: pl } });
-  return json({ accounts: accounts.length, new_signals: newSignals, alert_candidates: candidates.length, alerted, failed, predictleads: pl });
+  return json({ accounts: accounts.length, new_signals: newSignals, alert_candidates: candidates.length, alerted, failed, predictleads: pl, movements: moved });
 }

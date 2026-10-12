@@ -1,3 +1,4 @@
+import { recordIfWatched } from "./movements.ts";
 import { normalizeDomain, sb } from "./db.ts";
 import { log } from "./log.ts";
 import { readCustomerCompanies, readDeals, readTaskStatuses, searchLostDeals } from "./hubspot.ts";
@@ -68,6 +69,7 @@ export async function syncFromHubSpot(): Promise<BackSummary> {
       }
       await sb.from("cp_accounts").update(upd).eq("id", a.id);
       await sb.from("cp_outcomes").insert({ account_id: a.id, kind: d.stage === "closedlost" ? "not_now" : "meeting", note, priority: null, tier: null, signals: [] });
+      await recordIfWatched(a.id, { key: `deal:${a.id}:${d.stage}`, kind: "deal", importance: ["closedwon", "closedlost"].includes(d.stage) ? "big" : "small", title: note });
       out.deals_changed++;
       await log("info", "crm_deal_changed", { account: a.domain, message: note });
     }

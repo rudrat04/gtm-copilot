@@ -236,6 +236,10 @@
   @media (prefers-reduced-motion: reduce) { .bar::before { animation: none; width: 100%; opacity: .5; } .spin { animation-duration: 2s; } }
   .brand { display: flex; align-items: center; gap: 12px; } .brand img { height: 38px; max-width: 120px; object-fit: contain; border-radius: 8px; }
   .logoprev { display: flex; align-items: center; gap: 14px; margin: 0 0 10px; } .logoprev .lp { width: 64px; height: 64px; border: 1px dashed var(--line); border-radius: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--bg); font-size: 11px; color: var(--muted); } .logoprev img { max-width: 100%; max-height: 100%; }
+  .wrow { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--line); flex-wrap: wrap; } .wrow:first-child { border-top: 0; }
+  .wrow .wmain { flex: 1 1 320px; min-width: 0; } .wrow .wmain b { font-size: 16px; } .wrow .wside { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .wrow .dd { width: 150px; }
+  .wev { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); } .wev:first-child { border-top: 0; } .wev .dot { width: 10px; height: 10px; border-radius: 99px; margin-top: 7px; background: transparent; flex: none; } .wev.unseen .dot { background: var(--accent); }
+  .wev .wt { font-size: 15px; } .wev .wm { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .modal-bg { position: fixed; inset: 0; z-index: 80; background: rgba(40, 35, 27, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
   .modal { background: var(--surface); border: 1px solid var(--line, #e3dcc8); border-radius: 14px; box-shadow: var(--shadow); max-width: 440px; width: 100%; padding: 20px 22px; }
   .modal h3 { margin: 0 0 8px; font-size: 17px; }
@@ -280,6 +284,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="today">Today<span class="count" id="c-today" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="accounts">Accounts<span class="count" id="c-accounts" hidden></span></button>
+    <button role="tab" aria-selected="false" data-tab="watchlist">Watchlist<span class="count" id="c-watchlist" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="inbound">Inbound<span class="count" id="c-inbound" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="meetings">Meetings<span class="count" id="c-meetings" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="research">Research</button>
@@ -298,6 +303,8 @@
     <p class="hint">Try <a data-d="linear.app">linear.app</a><a data-d="posthog.com">posthog.com</a><a data-d="attio.com">attio.com</a></p>
     <div id="out" aria-live="polite"></div>
   </section>
+
+  <section id="watchlist" hidden><div id="wlbody" aria-live="polite"></div></section>
 
   <section id="inbound" hidden><div id="inbody" aria-live="polite"></div></section>
 
@@ -481,7 +488,7 @@ function tCard(i) {
   const note = fu ? `<div class="status-line due">${esc(i.headline)}</div>` : i.type === "revive" ? `<div class="status-line">${esc(i.headline)}</div>${why}` : why;
   return `<article class="card" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}">
     <div class="card-head"><div>
-      <div class="eyebrow"><span class="badge ${TODAY_BADGE[i.type] || ""}">${esc(i.label)}</span></div>
+      <div class="eyebrow"><span class="badge ${TODAY_BADGE[i.type] || ""}">${esc(i.label)}</span>${watchBtn("company", a.id, !!a.watched)}${c?.id ? watchBtn("person", c.id, !!c.watched) : ""}</div>
       <h3 class="title">${title}</h3><div class="sub">${sub}</div>${whoWhy}
       ${mail ? `<div class="meta">${mail}</div>` : ""}${facts}
     </div></div>
@@ -629,7 +636,7 @@ function aCard(a) {
       <h3 class="title">${esc(a.name)}<a class="domain" href="https://${esc(a.domain)}" target="_blank" rel="noopener noreferrer">${esc(a.domain)}</a></h3>
       <p class="what">${a.segment ? esc(a.segment) : `<span class="unk">No description yet</span>`}</p>
     </div>
-    <div class="tags">${a.removed ? "" : `<button type="button" class="star${a.watched ? " on" : ""}" data-act="watch" aria-pressed="${a.watched ? "true" : "false"}" title="${a.watched ? "Following. Click to stop" : "Follow this company: never hidden, with alerts of its own"}">${a.watched ? "★ Following" : "☆ Follow"}</button>`}<span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
+    <div class="tags">${a.removed ? "" : watchBtn("company", a.id, a.watched)}<span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
     ${aFacts(a)}
     <div class="fitrow"><span class="badge ${fit[1] || ""}">${fit[0]}</span>${fitWhy(a).replace('<div class="fitwhy" aria-label="Why this fit">', '<span class="fitwhy" aria-label="Why this fit" style="margin:0">').replace(/<\/div>$/, "</span>")}</div>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
@@ -747,15 +754,6 @@ function wireCards(root, reload) {
     }
     const btn = e.target.closest("button[data-act]"); if (!btn) return;
     const card = btn.closest(".card"), act = btn.dataset.act;
-    if (act === "watch") {
-      const on = card.dataset.watched !== "1"; btn.disabled = true;
-      try {
-        const r = await api("queue", { action: "watch_toggle", account_id: card.dataset.id, on });
-        if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
-        say(on ? `Following ${card.dataset.name}. It is never hidden and you get alerts for it.` : `Stopped following ${card.dataset.name}.`); reload();
-      } catch (err) { say(err.message); btn.disabled = false; }
-      return;
-    }
     if (act === "people") { mountPeople(card.querySelector(".pbox"), card.dataset.name, card.dataset.domain, true); return; }
     if (act === "morepeople") {
       if (!(await ask({ title: `Search again for people at ${card.dataset.name}?`, body: "Looks for more relevant people. Uses 1 to 2 search credits. People you already have are kept.", ok: "Search" }))) return;
@@ -891,7 +889,7 @@ function mountPeople(box, accountName, domain, autoload, refresh = false) {
     return `<div class="person${p.persona ? "" : " dim"}" data-pid="${esc(p.id)}"><div>
       <div><span class="pn">${esc(p.name)}</span>${p.persona ? `<span class="ptag">${esc(p.persona)} · ${esc(p.persona_score)}</span>` : ""}</div>
       <div class="pt">${esc(p.title)} at ${esc(accountName)}${p.department ? ` · ${esc(p.department)}` : ""}</div>${p.hs_status === "known" ? `<div class="pt warnx">${esc(p.hs_note || "Already in your HubSpot.")}</div>` : ""}
-      <div class="pe">${email}</div></div><div class="pact">${action}</div></div>`;
+      <div class="pe">${email}</div></div><div class="pact">${watchBtn("person", p.id, !!p.watched)}${action}</div></div>`;
   };
 
   const draw = () => {
@@ -954,7 +952,7 @@ function dossierHtml(d) {
   const tracks = (x.talk_tracks || []).map((t) => `<p class="quote"><b>${esc(t.angle)}</b>${esc(t.opener)}</p>`).join("");
   return `
     <article class="card"><div class="card-head"><div>
-      <div class="eyebrow"><span>Account research</span>${d.cached ? "<span>· saved result</span>" : ""}</div>
+      <div class="eyebrow"><span>Account research</span>${d.cached ? "<span>· saved result</span>" : ""}${a.id ? watchBtn("company", a.id, !!a.watched_at) : ""}</div>
       <h3 class="title">${esc(a.name)}</h3><div class="sub">${esc(a.domain)}</div>${firmoText(a) ? `<div class="meta">${esc(firmoText(a))}</div>` : ""}
     </div><div class="score" title="ICP fit: how well this company matches your target profile"><b style="color:${scoreColor(fit)}">${esc(fit ?? "–")}</b><span>ICP fit</span></div></div>
     <p style="margin:14px 0 0">${esc(x.summary)}</p><div class="why"><b>Why now.</b> ${esc(x.why_now)}</div></article>
@@ -1042,7 +1040,7 @@ function leadCard(l, own, sla) {
     : `<span class="badge good">${l.status === "closed" ? "Closed" : l.status === "replied" ? "Replied" : "Contacted"}${l.response_seconds != null ? ` · ${dur(l.response_seconds)}` : ""}</span>`;
   const sigs = (l.signals || []).map((t) => `<li><span class="k hiring">Signal</span><span class="t">${esc(t)}</span><span class="when"></span></li>`).join("");
   return `<article class="card" data-lid="${esc(l.id)}">
-    <div class="eyebrow"><span class="badge ${LEAD_BADGE[l.label] || ""}">${esc(INB.labels[l.label] || "Processing")}</span><span>${esc(INTENT_LABEL[l.intent])}</span><span>${esc(ago(l.created_at))}</span>${state}</div>
+    <div class="eyebrow"><span class="badge ${LEAD_BADGE[l.label] || ""}">${esc(INB.labels[l.label] || "Processing")}</span><span>${esc(INTENT_LABEL[l.intent])}</span><span>${esc(ago(l.created_at))}</span>${state}${l.account_id ? watchBtn("company", l.account_id, !!l.watched) : ""}</div>
     <h3 class="title">${esc(l.name)}${l.company ? ` <span class="sub" style="font-weight:400">· ${esc(l.company)}</span>` : ""}</h3>
     <div class="meta">${l.role ? `${esc(l.role)} · ` : ""}${own ? `<a href="mailto:${esc(l.email)}">${esc(l.email)}</a>` : esc(l.email)}</div>
     ${l.label !== "not_fit" ? fitLine(l.fit, l.facts) : ""}
@@ -1321,6 +1319,7 @@ function drawSetup() {
       <div class="field" style="margin-bottom:10px"><div class="numrow">Always keep <input type="number" min="0" max="45" data-num="watch.alertReserve" value="${esc(P.watch.alertReserve)}" aria-label="Search credits to keep" style="width:72px"> search credits for my own searches<span class="help" style="margin:0">Automatic searches stop when only this many are left this month.</span></div></div>
       <div class="toggles">
         <label class="toggle"><input type="checkbox" data-chk="watch.autoFix" ${P.watch.autoFix ? "checked" : ""}><span>Fix a running-dry list automatically<small>When Today is about to run out, search the best 3 companies without a contact and list who was found in the email. Uses 3 to 6 credits when it happens. Off by default.</small></span></label>
+        <label class="toggle"><input type="checkbox" data-chk="watch.titleCheck" ${P.watch.titleCheck ? "checked" : ""}><span>Check job titles of the people I follow, monthly<small>Catches a job change. Uses 1 search credit per company a month, inside your reserve. Off by default.</small></span></label>
         <label class="toggle"><input type="checkbox" data-chk="watch.watchlistAlerts" ${P.watch.watchlistAlerts ? "checked" : ""}><span>Alert me about companies I follow<small>Up to 5 a day, separate from the number above. Any new signal counts, whatever the score.</small></span></label>
         <label class="toggle"><input type="checkbox" data-chk="watch.urgent" ${P.watch.urgent ? "checked" : ""}><span>Check for urgent problems every 3 hours<small>A hot company left untouched, or a lead past its reply target. Everything else is checked once a day.</small></span></label>
         <label class="toggle"><input type="checkbox" data-chk="watch.todoForUrgent" ${P.watch.todoForUrgent ? "checked" : ""}><span>Add a HubSpot to-do for urgent problems<small>Only for companies already in HubSpot, at most 3 a run.</small></span></label>
@@ -1554,6 +1553,82 @@ async function loadSetup() {
   box.addEventListener("toggle", (e) => { if (e.target.matches?.("details.how") && e.target.open && !$("icpbody").dataset.done) { $("icpbody").dataset.done = "1"; loadIcp(); } }, true);
 })();
 
+/* ============ Watchlist: follow companies and people, and see what moved ============ */
+const watchBtn = (kind, id, on) => `<button type="button" class="star${on ? " on" : ""}" data-watch data-kind="${kind}" data-id="${esc(id)}" data-on="${on ? 1 : 0}" title="${on ? "Following. Click to stop" : kind === "person" ? "Follow this person: you are told about news, HubSpot changes and job changes" : "Follow this company: never hidden, and you are told when something moves"}">${on ? "★ Watching" : "☆ Watch"}</button>`;
+let WL = null, WLV = "moved";
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-watch]"); if (!b) return;
+  const on = b.dataset.on !== "1", kind = b.dataset.kind, id = b.dataset.id; b.disabled = true;
+  try {
+    const r = await api("queue", { action: "watch_toggle", [kind === "person" ? "person_id" : "account_id"]: id, on });
+    if (r.mode === "dry_run") { say(r.message); return; }
+    document.querySelectorAll(`[data-watch][data-kind="${kind}"][data-id="${id}"]`).forEach((x) => { x.dataset.on = on ? "1" : "0"; x.classList.toggle("on", on); x.textContent = on ? "★ Watching" : "☆ Watch"; });
+    ACC = null; WL = null; say(on ? "Added to your Watchlist." : "Removed from your Watchlist.", on ? { label: "Open", run: () => document.querySelector('[data-tab="watchlist"]').click() } : undefined);
+    if (!$("watchlist").hidden) loadWatchlist(true);
+  } catch (err) { say(err.message); } finally { b.disabled = false; }
+});
+
+const WL_VIEWS = [["moved", "What moved"], ["companies", "Companies"], ["people", "People"]];
+const NOTIFY = [["instant", "Email me at once"], ["daily", "In the daily email"], ["off", "No email"]];
+function drawWatchlist() {
+  const d = WL, own = !!d.admin;
+  const view = WLV;
+  const counts = { moved: d.unseen, companies: d.companies.length, people: d.people.length };
+  const dd = (kind, id, v) => `<select data-wnotify data-kind="${kind}" data-id="${esc(id)}" aria-label="When to email">${NOTIFY.map(([k, t]) => `<option value="${k}"${v === k ? " selected" : ""}>${t}</option>`).join("")}</select>`;
+  const lastLine = (l) => (l ? `<div class="meta">Last: ${esc(l.label)}. ${esc(l.title.slice(0, 120))} · ${esc(ago(l.detected_at))}</div>` : `<div class="meta">Nothing has moved yet.</div>`);
+  let body = "";
+  if (view === "moved") {
+    body = d.events.length ? d.events.map((e) => `<div class="wev${e.unseen ? " unseen" : ""}"><span class="dot"></span><div><div class="wt"><b>${esc(e.who)}</b>${e.person ? ` · ${esc(e.person)}` : ""} <span class="badge ${e.importance === "big" ? "accent" : ""}">${esc(e.label)}</span></div>
+      <div class="wt">${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a>` : esc(e.title)}</div><div class="wm">${esc(ago(e.detected_at))}</div></div></div>`).join("")
+      : `<p class="meta" style="margin:0">Nothing has moved yet. Follow a company or a person and their news, hiring, events, HubSpot changes and more show up here.</p>`;
+  } else if (view === "companies") {
+    body = d.companies.length ? d.companies.map((c) => `<div class="wrow"><div class="wmain"><b>${esc(c.name)}</b> <span class="meta">${esc(c.domain)}</span> <span class="badge ${c.heat}">${esc(HEAT[c.heat])}</span>${c.unseen ? ` <span class="badge accent">${c.unseen} new</span>` : ""}${lastLine(c.last)}</div>
+      <div class="wside">${own ? dd("company", c.id, c.notify) : ""}${watchBtn("company", c.id, true)}</div></div>`).join("")
+      : `<p class="meta" style="margin:0">No companies yet. Use "☆ Watch" on any company, or follow one by website above.</p>`;
+  } else {
+    body = d.people.length ? d.people.map((p) => `<div class="wrow"><div class="wmain"><b>${esc(p.name)}</b> <span class="meta">${esc(p.title)} at ${esc(p.company)}</span>${p.persona ? ` <span class="ptag">${esc(p.persona)}</span>` : ""}${p.unseen ? ` <span class="badge accent">${p.unseen} new</span>` : ""}${lastLine(p.last)}</div>
+      <div class="wside">${own ? dd("person", p.id, p.notify) : ""}${watchBtn("person", p.id, true)}</div></div>`).join("")
+      : `<p class="meta" style="margin:0">No people yet. Use "☆ Watch" on a person, or add one above.</p>`;
+  }
+  $("wlbody").innerHTML = `<div class="fpanel">
+      <div class="seg" role="tablist" aria-label="Watchlist">${WL_VIEWS.map(([k, l]) => `<button role="tab" aria-selected="${k === view}" class="${k === view ? "on" : ""}" data-wview="${k}">${l}<i>${counts[k]}</i></button>`).join("")}</div>
+      ${own ? `<details class="fdet" style="margin-top:12px"><summary>Follow someone or something new</summary>
+        <form class="wadd" data-wlcompany style="margin-top:10px"><input type="text" id="wlsite" placeholder="A company website, for example example.com" maxlength="80" aria-label="Company website"><button type="submit" class="btn ghost">Follow company</button></form>
+        <form class="wadd" data-wlperson><input type="text" id="wlpname" placeholder="Their name" maxlength="60" aria-label="Person's name"><input type="text" id="wlpsite" placeholder="Their company website" maxlength="80" aria-label="Their company website"><input type="text" id="wlptitle" placeholder="Job title (optional)" maxlength="60" aria-label="Job title"><button type="submit" class="btn ghost">Follow person</button></form></details>` : ""}
+      <div class="fbar"><span>${d.companies.length} of ${d.limits.companies} companies · ${d.people.length} of ${d.limits.people} people${d.competitors.length ? ` · competitors: ${esc(d.competitors.slice(0, 5).join(", "))}` : ""}</span>${own && view === "moved" && d.unseen ? `<span class="acts"><button class="btn link sm" data-wseen>Mark all as seen</button></span>` : ""}</div>
+    </div><article class="card">${body}</article>
+    <p class="foot">You are told at once about big movements (funding, leadership, an event, a competitor in use, a job change, a reply or a deal change), at most 3 emails a day, grouped. Everything else comes in the daily email. Free sources only, except the optional job-title check in Setup.</p>`;
+}
+async function loadWatchlist(quiet) {
+  if (!quiet) $("wlbody").innerHTML = skeleton(3);
+  try { WL = await api("queue", { action: "watchlist" }); drawWatchlist(); const c = $("c-watchlist"); c.textContent = WL.unseen; c.hidden = !WL.unseen; }
+  catch (e) { $("wlbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+}
+$("wlbody").addEventListener("click", async (e) => {
+  const v = e.target.closest("[data-wview]"); if (v) { WLV = v.dataset.wview; drawWatchlist(); return; }
+  if (e.target.closest("[data-wseen]")) { const r = await api("queue", { action: "watch_seen" }); if (r.mode === "dry_run") { say(r.message); return; } await loadWatchlist(true); }
+});
+$("wlbody").addEventListener("change", async (e) => {
+  const sel = e.target.closest("[data-wnotify]"); if (!sel) return;
+  try { const r = await api("queue", { action: "watch_notify", kind: sel.dataset.kind, id: sel.dataset.id, notify: sel.value }); say(r.mode === "dry_run" ? r.message : "Saved."); } catch (err) { say(err.message); }
+});
+$("wlbody").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const comp = e.target.closest("[data-wlcompany]"), per = e.target.closest("[data-wlperson]");
+  try {
+    if (comp) {
+      const v = $("wlsite").value.trim(); if (!v) return; say("Adding and reading its public signals…");
+      const r = await api("queue", { action: "watch_add", domain: v }); if (r.mode === "dry_run") { say(r.message); return; }
+      say(`Following ${r.name}.`);
+    } else if (per) {
+      const name = $("wlpname").value.trim(), domain = $("wlpsite").value.trim(); if (!name || !domain) { say("Add their name and their company's website."); return; }
+      say("Adding…"); const r = await api("queue", { action: "watch_add_person", name, domain, title: $("wlptitle").value.trim() }); if (r.mode === "dry_run") { say(r.message); return; }
+      say(`Following ${r.name}.`); WLV = "people";
+    }
+    ACC = null; await loadWatchlist(true);
+  } catch (err) { say(err.message); }
+});
+
 /* ============ custom dropdowns: every <select> gets our own list (the browser's looks different on every system) ============ */
 let DD_OPEN = null;
 function ddClose() { if (!DD_OPEN) return; DD_OPEN.list.hidden = true; DD_OPEN.btn.setAttribute("aria-expanded", "false"); DD_OPEN = null; }
@@ -1631,13 +1706,15 @@ function logoFromFile(file) {
 /* ============ tabs and start ============ */
 document.querySelectorAll("nav.tabs [data-tab]").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll("nav.tabs [data-tab]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  for (const t of ["today", "research", "accounts", "inbound", "meetings", "setup"]) $(t).hidden = b.dataset.tab !== t;
-  ({ today: loadToday, accounts: loadAccounts, inbound: loadInbound, meetings: loadMeetings, setup: loadSetup }[b.dataset.tab] || (() => {}))();
+  for (const t of ["today", "research", "accounts", "watchlist", "inbound", "meetings", "setup"]) $(t).hidden = b.dataset.tab !== t;
+  ({ today: loadToday, accounts: loadAccounts, watchlist: loadWatchlist, inbound: loadInbound, meetings: loadMeetings, setup: loadSetup }[b.dataset.tab] || (() => {}))();
 }));
 
 drawMode(false);
 refreshMode();
 loadToday();
+if (location.hash === "#watchlist") setTimeout(() => document.querySelector('[data-tab="watchlist"]').click(), 300);
+api("queue", { action: "watchlist" }).then((d) => { const c = $("c-watchlist"); c.textContent = d.unseen; c.hidden = !d.unseen; }).catch(() => {});
 handleLossLink().then((lost) => lost || handleDebriefLink()).then((handled) => { if (!handled) api("queue", { action: "meetings" }).then((d) => { MT = d; const c = $("c-meetings"); c.textContent = d.needs.length; c.hidden = !d.needs.length; }).catch(() => {}); });
 api("inbound", { action: "list" }).then((d) => { const c = $("c-inbound"); c.textContent = d.stats.waiting; c.hidden = !d.stats.waiting; }).catch(() => {});
 api("queue", { action: "accounts" }).then((d) => { ACC = d; const c = $("c-accounts"), n = d.accounts.filter((a) => !a.low && a.outreach_status === "open").length; c.textContent = n; c.hidden = !n; }).catch(() => {});

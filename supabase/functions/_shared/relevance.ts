@@ -3,7 +3,7 @@ import { log } from "./log.ts";
 import type { Signal } from "./signals.ts";
 
 /** The kinds of news that say something about buying intent. Opinion pieces, directory pages and partnerships do not. */
-export const USEFUL_NEWS = new Set(["funding", "leadership", "expansion", "product", "customer"]);
+export const USEFUL_NEWS = new Set(["funding", "leadership", "expansion", "product", "customer", "event"]);
 
 /**
  * Names like "Knock", "Linear" or "Axiom" collide with unrelated companies and headlines.
@@ -39,6 +39,7 @@ For every headline decide (a) whether it is clearly about THIS company and not a
 - "expansion": a new office, market, team or large hiring push
 - "product": the company launched a product or feature
 - "customer": a notable customer win
+- "event": the company is hosting, sponsoring or speaking at an event (webinar, conference, summit, launch event)
 - "partnership": an integration or partnership
 - "opinion": an interview, podcast, column or commentary about the company or its founder
 - "listing": a data page about the company (revenue estimate, funding list, profile, comparison)

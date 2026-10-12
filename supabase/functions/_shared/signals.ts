@@ -260,6 +260,30 @@ export async function newsSignals(name: string, segment = ""): Promise<Signal[]>
   return newsItems(await res.text(), name, segment).map((it) => ({ kind: "news" as const, title: it.title, url: it.url, detail: { published: it.published } })).slice(0, 5);
 }
 
+/** Any dated Google News results for a query (free). The caller decides what counts, so this only drops undated items and data pages. */
+export async function newsRaw(query: string, days = 30): Promise<{ title: string; url?: string; published: string }[]> {
+  const res = await get(`https://news.google.com/rss/search?q=${encodeURIComponent(`${query} when:${days}d`)}&hl=en-US&gl=US&ceid=US:en`);
+  if (!res) return [];
+  const xml = await res.text();
+  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map((m) => ({
+    title: (/<title>([\s\S]*?)<\/title>/.exec(m[1])?.[1] ?? "").replace(/<!\[CDATA\[|\]\]>/g, "").replace(/&amp;/g, "&").trim(),
+    url: /<link>([\s\S]*?)<\/link>/.exec(m[1])?.[1],
+    published: /<pubDate>([\s\S]*?)<\/pubDate>/.exec(m[1])?.[1] ?? "",
+  })).filter((s) => s.title && s.published && !isListing(s.title));
+}
+
+export const EVENT_WORDS = /\b(webinar|conference|summit|keynote|meetup|roadshow|workshop|expo|hosts?|hosting|hosted|launch event|annual event|user conference|event)\b/i;
+/** Pure: does this headline say the company is hosting, sponsoring or speaking at an event, and is it about that company? */
+export function isEventHeadline(title: string, name: string): boolean {
+  return title.toLowerCase().includes(name.toLowerCase()) && EVENT_WORDS.test(title);
+}
+
+/** News about a company hosting or joining an event (webinar, conference, summit). Free. Used for followed companies. */
+export async function eventSignals(name: string, domain: string): Promise<Signal[]> {
+  const items = await newsRaw(`"${name}" (webinar OR conference OR summit OR keynote OR "launch event" OR meetup OR hosts OR hosting)`, 30);
+  return items.filter((i) => isEventHeadline(i.title, name)).slice(0, 2).map((i) => ({ kind: "news" as const, title: i.title, url: i.url, detail: { published: i.published, newsType: "event", source: "events", domain } }));
+}
+
 /** Dated news items from a Google News feed that are about this company: the name is in the title and the title is on topic. */
 function newsItems(xml: string, name: string, segment: string): { title: string; url?: string; published: string }[] {
   const segWords = segment.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 3);

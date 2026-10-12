@@ -65,6 +65,7 @@ serve("daily-digest", async (req) => {
   try {
     await sendMail(ownerEmail(), mail.subject, mail.body, mail.html);
     emailed = true;
+    if (changes.watch.length) await sb.from("cp_watch_events").update({ emailed_at: new Date().toISOString() }).in("id", changes.watch.map((w) => w.id)); // listed in the email, so they are not sent again
   } catch (e) {
     await log("error", "digest_email_failed", { message: (e as Error).message });
   }

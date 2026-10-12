@@ -19,7 +19,7 @@ type Row = {
   department: string | null; persona: string | null; relevance: number; email: string | null;
   email_status: string | null; email_confidence: number | null; email_revealed: boolean;
   phone_revealed: boolean; hubspot_contact_id: string | null; account_id: string;
-  hs_status?: "known" | "opted_out" | "bounced" | null; hs_note?: string | null;
+  hs_status?: "known" | "opted_out" | "bounced" | null; hs_note?: string | null; watched_at?: string | null;
 };
 
 const maskEmail = (e: string | null) => (e ? `***@${e.split("@")[1]}` : null);
@@ -40,6 +40,7 @@ function view(r: Row, admin: boolean) {
     email: admin && r.email_revealed ? r.email : maskEmail(r.email),
     email_revealed: admin && r.email_revealed,
     pushed: !!r.hubspot_contact_id,
+    watched: !!r.watched_at,
     hs_status: r.hs_status ?? null,
     hs_note: r.hs_note ?? null,
   };

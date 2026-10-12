@@ -2,6 +2,7 @@ import { sb } from "./db.ts";
 import { worthShowing } from "./fitgate.ts";
 import { FIT_COLS } from "./firmo.ts";
 import { searchStates } from "./autosearch.ts";
+import { type EventKind, KIND_LABEL } from "./movements.ts";
 
 // "What changed since yesterday" for the morning email: new signals, new people, replies and new leads, plus the alerts that were
 // held back (no fit and nobody to contact) and the companies waiting for a contact. Read-only, no credits.
@@ -11,10 +12,11 @@ export type Changes = {
   people: { name: string; who: string }[];
   moves: string[];
   held: { name: string; title: string }[];
+  watch: { name: string; text: string; id: string }[];
   waiting: { name: string; state: "none" | "searched" | "never" }[];
 };
-export const emptyChanges = (): Changes => ({ signals: [], people: [], moves: [], held: [], waiting: [] });
-export const hasChanges = (c: Changes) => !!(c.signals.length || c.people.length || c.moves.length || c.held.length);
+export const emptyChanges = (): Changes => ({ signals: [], people: [], moves: [], held: [], watch: [], waiting: [] });
+export const hasChanges = (c: Changes) => !!(c.signals.length || c.people.length || c.moves.length || c.held.length || c.watch.length);
 
 const MOVE_LABEL: Record<string, string> = { replied: "replied", meeting: "booked a meeting", debrief_went_well: "had a meeting that went well", debrief_follow_up: "needs a follow-up after a meeting" };
 
@@ -24,6 +26,7 @@ export function changeLines(c: Changes): string[] {
   for (const s of c.signals) out.push(`New signal: ${s.name}, ${s.title.slice(0, 90)}${s.more ? ` (+${s.more} more)` : ""}`);
   for (const p of c.people) out.push(`New people found: ${p.name}, ${p.who}`);
   for (const m of c.moves) out.push(m);
+  for (const w of c.watch) out.push(`Watchlist: ${w.name}, ${w.text}`);
   for (const h of c.held) out.push(`Held back (no fit, nobody to contact): ${h.name}, ${h.title.slice(0, 80)}`);
   return out;
 }
@@ -61,6 +64,12 @@ export async function changesSince(sinceIso: string, needs: { id: string; name: 
     if (byId.has(h.account_id)) c.held.push({ name: byId.get(h.account_id)!.name, title: s?.title ?? "a new signal" });
   }
 
+  // Watchlist movements that were not emailed at once (small ones, or followed items set to "daily").
+  const { data: wev } = await sb.from("cp_watch_events").select("id,kind,title,account_id,subject,person_id").is("emailed_at", null).gt("detected_at", sinceIso).order("detected_at", { ascending: false }).limit(15);
+  for (const e of wev ?? []) {
+    const who = e.account_id ? byId.get(e.account_id)?.name : e.subject;
+    if (who) c.watch.push({ id: e.id, name: who, text: `${KIND_LABEL[e.kind as EventKind] ?? e.kind}: ${e.title.slice(0, 100)}` });
+  }
   const states = await searchStates(needs.map((n) => n.id));
   c.waiting = needs.map((n) => ({ name: n.name, state: states.get(n.id) ?? "never" }));
   return c;

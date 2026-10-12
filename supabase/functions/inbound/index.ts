@@ -27,6 +27,8 @@ serve("inbound", async (req) => {
     const month = Date.now() - 30 * 86_400_000;
     const all = data ?? [];
     const answered = all.filter((l) => l.first_response_at && Date.parse(l.created_at) > month);
+    const { data: wa } = await sb.from("cp_accounts").select("id").in("id", [...new Set(all.map((l) => l.account_id).filter(Boolean))]).not("watched_at", "is", null);
+    const watchedIds = new Set((wa ?? []).map((a) => a.id));
     const secs = answered.map((l) => (Date.parse(l.first_response_at) - Date.parse(l.alerted_at ?? l.created_at)) / 1000).sort((a, b) => a - b);
     return json({
       admin, sla_minutes: icp.inbound.slaMinutes, labels: LABEL_TEXT,
@@ -34,7 +36,7 @@ serve("inbound", async (req) => {
       leads: all.filter((l) => admin || l.label !== "not_fit").map((l) => ({
         id: l.id, created_at: l.created_at, name: admin ? l.name : shortName(l.name), email: admin ? l.email : mask(l.email), company: l.company ?? (l.domain ? l.domain.split(".")[0] : null), role: admin ? l.role : null,
         message: admin ? l.message : null, context: admin ? contextLine({ utm_source: l.utm_source, utm_medium: l.utm_medium, utm_campaign: l.utm_campaign, referrer_host: l.referrer_host, landing_path: l.landing_path }) : "", intent: l.intent, source: l.source, label: l.label, fit: l.fit, heat: l.heat, why: admin ? l.why : null, facts: l.facts, signals: l.top_signals,
-        status: l.status, in_hubspot: !!l.hubspot_task_id, account_id: l.account_id, alerted_at: l.alerted_at,
+        status: l.status, in_hubspot: !!l.hubspot_task_id, account_id: l.account_id, watched: l.account_id ? watchedIds.has(l.account_id) : false, alerted_at: l.alerted_at,
         response_seconds: l.first_response_at ? Math.round((Date.parse(l.first_response_at) - Date.parse(l.alerted_at ?? l.created_at)) / 1000) : null,
       })),
     });

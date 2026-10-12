@@ -99,7 +99,7 @@ export function digestEmail(items: TodayItem[], hidden: number, links: Links, at
   ].filter(Boolean).join("\n");
   const subject = items.length
     ? `Today: ${items.length} prospect${items.length === 1 ? "" : "s"} to focus on (${parts})${attention.total ? ` · ${attention.total} need attention` : ""}`
-    : attention.total ? `${attention.total} thing${attention.total === 1 ? " needs" : "s need"} attention` : `Since yesterday: ${changeLines(changes ?? ({ signals: [], people: [], moves: [], held: [], waiting: [] } as Changes)).length} change${changeLines(changes ?? ({ signals: [], people: [], moves: [], held: [], waiting: [] } as Changes)).length === 1 ? "" : "s"}`;
+    : attention.total ? `${attention.total} thing${attention.total === 1 ? " needs" : "s need"} attention` : `Since yesterday: ${changeLines(changes ?? ({ signals: [], people: [], moves: [], held: [], watch: [], waiting: [] } as Changes)).length} change${changeLines(changes ?? ({ signals: [], people: [], moves: [], held: [], watch: [], waiting: [] } as Changes)).length === 1 ? "" : "s"}`;
   return { subject, body, html: digestHtml(items, hidden, links, attention, changes) };
 }
 

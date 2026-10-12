@@ -11,7 +11,7 @@ const { redact } = await import("../_shared/log.ts");
 const { isNotFitReason, notFitLabel, NOT_FIT_REASONS } = await import("../_shared/notfit.ts");
 const { exclusion, extraFacts, fitBreakdown, fitReasons, industryScore, industryWords, motionScore, toolsScore } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, isFundingSignal, priorityScore, roundTiming, scoreAccount, tierOf } = await import("../_shared/score.ts");
-const { buildHiring, isListing, usesTool, jobInsights, rolesFromSnippet, salesMotion, toolsFromHiring } = await import("../_shared/signals.ts");
+const { buildHiring, isEventHeadline, isListing, usesTool, jobInsights, rolesFromSnippet, salesMotion, toolsFromHiring } = await import("../_shared/signals.ts");
 const { USEFUL_NEWS } = await import("../_shared/relevance.ts");
 const { dedupeRounds, roundKey } = await import("../_shared/predictleads.ts");
 const { classify, normalizeEvents, plAllowed, toSignal } = await import("../_shared/predictleads.ts");
@@ -28,6 +28,7 @@ const { meetsFit, worthShowing } = await import("../_shared/fitgate.ts");
 const { alertEmail, digestEmail, noContactText } = await import("../_shared/templates.ts");
 const { creditsLeft, worthASearch } = await import("../_shared/autosearch.ts");
 const { changeLines, emptyChanges, hasChanges } = await import("../_shared/changes.ts");
+const { eventsFromSignals, eventLine, hashStr, KIND_LABEL } = await import("../_shared/movements.ts");
 const { cleanBrand, DEFAULT_BRAND } = await import("../_shared/brand.ts");
 
 const DAY = 86_400_000;
@@ -780,7 +781,7 @@ Deno.test("automatic searches: only worthwhile companies, and a reserve of credi
 });
 
 Deno.test("hot alert: names up to two people with their buyer type, and is honest when nobody was found", () => {
-  const person = (n: string, persona: string | null, known = false) => ({ id: n, name: n, title: "VP Sales", persona, email: null, email_status: null, revealed: false, pushed: false, known, note: null });
+  const person = (n: string, persona: string | null, known = false) => ({ id: n, name: n, title: "VP Sales", persona, email: null, email_status: null, revealed: false, pushed: false, known, watched: false, note: null });
   const a = { name: "Acme", tier: "tier_2", domain: "acme.com" };
   const withTwo = alertEmail(a, { title: "Acme raises $10M" }, "why", [person("Maya Chen", "Head of Sales", false), person("Dev Patel", null, true)]);
   assertEquals(withTwo.body.includes("Maya Chen, VP Sales [Head of Sales]"), true);
@@ -801,4 +802,33 @@ Deno.test("daily email: leads with what changed and lists who is waiting for a c
   assertEquals(mail.body.includes("Beta: not searched yet"), true);
   assertEquals(mail.subject, "Since yesterday: 4 changes");
   assertEquals(mail.html.includes("Waiting for a contact"), true);
+});
+
+Deno.test("watchlist movements: signals on a followed company become the right events", () => {
+  const acct = { id: "a1" };
+  const ev = eventsFromSignals(acct, [
+    { kind: "news", title: "Acme raises $14M Series A", detail: { newsType: "funding" } },
+    { kind: "news", title: "Acme appoints a new CRO", detail: { newsType: "leadership" } },
+    { kind: "news", title: "Acme to host its user conference in Austin", detail: { newsType: "event" } },
+    { kind: "news", title: "Acme launches a feature", detail: { newsType: "product" } },
+    { kind: "hiring", title: "Hiring: Head of Sales" },
+    { kind: "hiring", title: "Hiring: SDR" },
+    { kind: "hiring", title: "Hiring: 4 open roles", detail: { salesOpenings: 4 } }, // a count, not a movement
+    { kind: "tech", title: "Uses a competitor: gong", detail: { ruleType: "competitor", rule: "r1" } },
+    { kind: "tech", title: "Uses hubspot", detail: { ruleType: "tool", rule: "r2" } },
+    { kind: "hn", title: "Hacker News: Acme" }, // not a movement
+  ]);
+  assertEquals(ev.map((e) => `${e.kind}:${e.importance}`), ["funding:big", "leadership:big", "event:big", "news:small", "hiring:big", "hiring:small", "competitor_tool:big", "tool:small"]);
+  assertEquals(new Set(ev.map((e) => e.key)).size, ev.length); // every key is different, so the same movement is stored once
+  assertEquals(eventsFromSignals(acct, [{ kind: "news", title: "Acme raises $14M Series A", detail: { newsType: "funding" } }])[0].key, ev[0].key); // and the same signal gives the same key on the next day
+  assertEquals(hashStr("a") === hashStr("a") && hashStr("a") !== hashStr("b"), true);
+  assertEquals(eventLine({ kind: "funding", title: "Acme raises", detected_at: new Date().toISOString() }, "Acme"), "Acme: Funding. Acme raises (today)");
+  assertEquals(KIND_LABEL.competitor_event, "Competitor event");
+});
+
+Deno.test("events: a headline counts only if it is about the company and says it is hosting something", () => {
+  assertEquals(isEventHeadline("Gong hosts its annual Celebrate conference in Las Vegas", "Gong"), true);
+  assertEquals(isEventHeadline("Webinar: how Outreach changes sales", "Gong"), false); // another company
+  assertEquals(isEventHeadline("Gong raises a new round", "Gong"), false); // no event
+  assertEquals(isEventHeadline("Acme to host a summit for revenue leaders", "acme"), true);
 });

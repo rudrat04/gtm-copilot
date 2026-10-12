@@ -2,6 +2,7 @@ import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import icp from "./icp.json" with { type: "json" };
 import { guardPeople } from "./guard.ts";
+import { hashStr, recordIfWatched } from "./movements.ts";
 
 /** A person as returned by any provider, before ranking. */
 export type FoundPerson = {
@@ -254,6 +255,7 @@ export async function searchAndStore(account: { id: string; domain: string }, op
     const { error } = await sb.from("cp_people").upsert(rows, { onConflict: "account_id,email", ignoreDuplicates: true });
     if (error) await log("error", "people_store_failed", { account: account.domain, message: error.message });
     await guardPeople({ accountId: account.id }); // opted out, bounced or already in HubSpot? (read-only, never throws)
+    await recordIfWatched(account.id, { key: `people:${account.id}:${hashStr(rows.map((r) => r.email).join(","))}`, kind: "people", importance: "small", title: `${rows.length} people found: ${rows.slice(0, 2).map((r) => `${r.first_name} ${r.last_name} (${r.title})`).join(", ")}` }).catch(() => {});
   }
   return { stored: rows.length, credits: found.credits };
 }
