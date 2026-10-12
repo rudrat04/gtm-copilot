@@ -657,6 +657,7 @@ function drawAccounts() {
   const base = d.accounts.filter(view[3]);
   const list = base.filter((a) => SELECTS.every(([k, , , fn]) => !AF[k] || fn(a, AF[k])))
     .filter((a) => !q || a.name.toLowerCase().includes(q) || a.domain.includes(q) || (a.segment || "").toLowerCase().includes(q)).sort(sort);
+  const unchecked = d.accounts.filter((a) => !a.removed && !a.firmo_known).length; // companies whose size and stage were never looked up
   const c = $("c-accounts"); const open = counts.open; c.textContent = open; c.hidden = !open;
   const sel = ([k, label, opts]) => `<label>${label}<select data-f="${k}" class="${AF[k] && AF[k] !== "best" ? "set" : ""}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${AF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
   $("ahead").innerHTML = `<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""}</span>
@@ -668,7 +669,7 @@ function drawAccounts() {
       ${d.admin ? `<form class="wadd" data-wadd><input type="text" id="wdomain" placeholder="Follow a company: type its website, for example example.com" aria-label="Website of a company to follow" maxlength="80"><button type="submit" class="btn ghost">Follow</button></form>` : ""}
       <input id="asearch" class="fsearch" type="search" placeholder="Search by name, website or what they do" aria-label="Search companies" value="${esc(AF.q)}">
       <div class="fbar"><span>Showing <b>${list.length}</b> of ${base.length} in ${esc(view[1])}</span>
-        <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin && AF.view === "low" && list.length ? `<button class="btn ghost sm" data-bulkremove title="Removes low-fit companies nobody has touched">Remove all low fit</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
+        <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin && AF.view === "low" && list.length ? `<button class="btn ghost sm" data-bulkremove title="Removes low-fit companies nobody has touched">Remove all low fit</button>` : ""}${d.admin && unchecked ? `<button class="btn ghost sm" data-bulkfacts title="Looks up company size and stage. 0.2 search credit each">Check size and stage (${unchecked})</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
     </div>`;
   $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${filtersOn() ? "No companies match these filters." : AF.view === "open" ? "Nothing to work right now." : "No companies in this view."}${filtersOn() ? `<br><button class="btn link" data-clear>Clear filters</button>` : ""}</div>`;
   const s = $("asearch"); if (AF.q && document.activeElement?.id === "asearch") { s.focus(); s.setSelectionRange(AF.q.length, AF.q.length); }
@@ -693,6 +694,18 @@ $("ahead").addEventListener("click", async (e) => {
       const r = await api("queue", { action: "remove_low", dry: false });
       say(`Removed ${r.removed}.`); ACC = null; loadAccounts(true);
     } catch (err) { say(err.message); } finally { br.disabled = false; }
+    return;
+  }
+  const bk = e.target.closest("[data-bulkfacts]");
+  if (bk) {
+    const n = ACC.accounts.filter((a) => !a.removed && !a.firmo_known).length;
+    if (!(await ask({ title: `Check size and stage for ${n} compan${n === 1 ? "y" : "ies"}?`, body: `Looks up headcount, funding stage and location.\n\nCost: about ${(n * 0.2).toFixed(1)} search credits (0.2 each).`, ok: "Check" }))) return;
+    bk.disabled = true; say("Checking size and stage…");
+    try {
+      const r = await api("queue", { action: "enrich_companies" });
+      if (r.mode === "dry_run") { say(r.message); return; }
+      say(`Looked up ${r.looked_up} compan${r.looked_up === 1 ? "y" : "ies"}${r.no_data ? `, ${r.no_data} had no data` : ""}.`); ACC = null; loadAccounts(true);
+    } catch (err) { say(err.message); } finally { bk.disabled = false; }
     return;
   }
   const bf = e.target.closest("[data-bulkfind]"); if (!bf) return;
