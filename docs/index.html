@@ -199,6 +199,8 @@
   .mail .msets { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
   .srow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; font-size: 14px; }
   .mlist { list-style: none; margin: 0; padding: 0; font-size: 13.5px; } .mlist li { padding: 6px 0; border-top: 1px solid var(--line); } .mlist li span { color: var(--muted); }
+  .rshead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 10px; }
+  .rshead .acts { display: flex; gap: 8px; }
   .lane { margin: 0 0 26px; }
   .lane > h3 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px; font-size: 15px; letter-spacing: .02em; }
   .lane > h3 span { font-weight: 400; font-size: 12.5px; color: var(--muted); }
@@ -391,6 +393,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="today">To-do<span class="count" id="c-today" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="accounts">People<span class="count" id="c-accounts" hidden></span></button>
+    <button role="tab" aria-selected="false" data-tab="research">Research</button>
     <button role="tab" aria-selected="false" data-tab="signals">Signals<span class="count" id="c-signals" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="watchlist">Watchlist<span class="count" id="c-watchlist" hidden></span></button>
     <button role="tab" aria-selected="false" data-tab="discover">Discover</button>
@@ -1146,6 +1149,12 @@ function wireCards(root, reload) {
       catch (err) { say(err.message); }
       return;
     }
+    if (act === "pkeep") {
+      card.classList.add("busy");
+      try { const r = await api("queue", { action: "people_keep", ids: [card.dataset.pid] }); if (r.mode === "dry_run") { say(r.message); unbusy(); return; } say("Added to your people."); PPL = null; refreshPerson(card).catch(() => reload()); }
+      catch (err) { say(err.message); unbusy(); }
+      return;
+    }
     if (act === "pbuyer") {
       const opts = [...(PERSONAS || []).map((t) => ({ key: t, label: t })), { key: "__none", label: "Not a buyer" }, ...(card.querySelector(".ptag") ? [{ key: "__auto", label: "Back to automatic" }] : [])];
       const pick = await choose({ title: "Buyer type for this person", body: "It is matched automatically from their job title. Choose one to set it by hand.", options: opts });
@@ -1332,17 +1341,45 @@ function dossierHtml(d) {
     <article class="card"><div class="cols"><div><p class="label">Why it fits</p>${bullets(x.icp_fit?.reasons)}</div><div><p class="label">Watch out for</p>${bullets(x.risks)}</div></div></article>
     <article class="card"><div class="cols"><div><p class="label">Likely pains</p>${bullets(x.pains)}</div><div><p class="label">Ways in</p>${tracks || '<p class="meta">None.</p>'}</div></div></article>
     <article class="card"><p class="label">Signals (${(d.signals || []).length})</p>${sigList(d.signals, 5) || '<p class="meta">No public signals found.</p>'}</article>
-    <article class="card" id="peoplebox"></article>
-    <p class="foot">Saved to Accounts under <b>Looked up</b>. Public sources only. Nothing is sent to anyone.</p>`;
+    <div id="peoplebox" style="margin-top:6px"></div>
+    <p class="foot">The company is saved under Companies, Looked up. Public sources only. Nothing is sent to anyone.</p>`;
 }
 
+let RS = null; // the company being researched: { id, name, domain }
+async function loadResearchPeople(opts = {}) {
+  const box = $("peoplebox"); if (!box || !RS) return;
+  box.innerHTML = `<p class="label">People at ${esc(RS.name)}</p>${skeleton(2)}`;
+  try {
+    if (opts.paid) await api("people", { action: "find", domain: RS.domain });
+    else if (!opts.skipPeek) { const r = await api("people", { action: "peek", account_id: RS.id }); if (r.mode === "dry_run") { box.innerHTML = `<p class="label">People at ${esc(RS.name)}</p><p class="meta" style="margin:0">${esc(r.message)}</p>`; return; } }
+    const d = await api("queue", { action: "person_rows", account_id: RS.id });
+    const list = (d.people || []).sort((x, y) => y.priority - x.priority);
+    const loose = list.filter((p) => !p.kept && p.todo_state !== "pinned");
+    box.innerHTML = `<div class="rshead"><p class="label" style="margin:0">People at ${esc(RS.name)}${list.length ? ` · ${list.length}` : ""}${info("Listed free from Hunter: names are shortened and there are no emails until you reveal someone (1 credit). A person only joins your People list when you add them; adding someone to your to-do adds them too.")}</p>
+      <span class="acts">${loose.length > 1 ? `<button class="btn ghost sm" data-keepall>Add all to my people</button>` : ""}<button class="btn ghost sm" data-paidfind title="Searches by your buyer types and returns full names. Uses 1 search credit, sometimes 2">Search with credits</button></span></div>
+      ${list.length ? `<div class="pgrid">${list.map((p) => personCard(p, { own: !!d.admin, research: true })).join("")}</div>` : `<p class="meta" style="margin:10px 0 0">Nobody was listed for this company. You can try a paid search, which finds people by your buyer types.</p>`}`;
+  } catch (e) { box.innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+}
+wireCards($("out"), () => loadResearchPeople({ skipPeek: true }));
+$("out").addEventListener("click", async (e) => {
+  if (e.target.closest("[data-keepall]")) {
+    const d = await api("queue", { action: "person_rows", account_id: RS.id }).catch(() => null);
+    const ids = (d?.people || []).filter((p) => !p.kept && p.todo_state !== "pinned").map((p) => p.id);
+    try { const r = await api("queue", { action: "people_keep", ids }); if (r.mode === "dry_run") { say(r.message); return; } say(`Added ${ids.length} people.`); PPL = null; loadResearchPeople({ skipPeek: true }); } catch (err) { say(err.message); }
+  }
+  if (e.target.closest("[data-paidfind]")) {
+    if (!(await ask({ title: "Search with credits?", body: "Finds people by your buyer types with full names. Uses 1 search credit, sometimes 2. Finding nobody is free.", ok: "Search" }))) return;
+    loadResearchPeople({ paid: true });
+  }
+});
 async function run(domain) {
   $("go").disabled = true;
   $("out").innerHTML = skeleton(3) + `<p class="meta" style="text-align:center">Collecting signals and writing the dossier. About 10 seconds.</p>`;
   try {
     const d = await api("research-account", { domain });
+    RS = { id: d.account.id, name: d.account.name, domain: d.account.domain };
     $("out").innerHTML = dossierHtml(d);
-    mountPeople($("peoplebox"), d.account.name, d.account.domain, false);
+    loadResearchPeople();
   } catch (e) { $("out").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
   finally { $("go").disabled = false; }
 }
@@ -2273,11 +2310,12 @@ function personCard(p, o = {}) {
   const unpin = own && p.todo_state === "pinned" ? `<button class="btn ghost sm" data-act="todo" data-state="" title="Takes this person off the board unless something new happens">Unpin</button>` : "";
   const notnow = own && o.board ? `<button class="btn ghost sm" data-act="todo" data-state="dismissed" title="Hides this person from your to-do">Not now</button>` : "";
   const needsReveal = p.preview || (own && p.has_email && !p.revealed && !blocked);
+  const keep = own && o.research && !p.kept && p.todo_state !== "pinned" ? `<button class="btn primary sm" data-act="pkeep" title="Saves this person to your People list. Their company is already saved.">Add to my people</button>` : "";
   const lead = needsReveal ? revealBtn(p) : `<button class="btn primary sm" data-life="contacted">${o.outreach === "contacted" ? "Contacted again" : "Mark contacted"}</button>`;
   const hsBtn = canPush ? `<button class="btn ghost sm" data-act="ppush" data-pid="${esc(p.id)}" title="Adds the company and this person to HubSpot">Push to HubSpot</button>` : "";
   const suggest = !o.board && p.priority >= 45 && p.todo_state !== "pinned" ? `<div class="meta" style="margin-top:6px">Suggested for your to-do: ${esc(p.priority >= 70 ? "contact now" : "this week")} (${esc((p.lead.reasons || []).slice(0, 2).join(", ").toLowerCase() || "good fit")}).</div>` : "";
-  return `<article class="card pcard${o.board ? " board" : ""}" data-id="${esc(p.account_id)}" data-name="${esc(p.company)}" data-domain="${esc(p.domain)}" data-pid="${esc(p.id)}" data-hsn="${p.hs_company?.contacts ?? ""}" data-o="${esc(JSON.stringify({ board: !!o.board, label: o.label || "", badge: o.badge || "", headline: o.headline || "", due: !!o.due, outreach: o.outreach || "", own, why_line: o.why_line || null }))}">
-    <div class="eyebrow">${o.label ? `<span class="badge ${esc(o.badge || "")}">${esc(o.label)}</span>` : ""}${p.todo_state === "pinned" ? `<span class="badge accent">Pinned</span>` : ""}<span class="prio" title="How soon to act: lead score, company fit and anything that just happened">Priority <b>${esc(p.priority)}</b></span></div>
+  return `<article class="card pcard${o.board ? " board" : ""}" data-id="${esc(p.account_id)}" data-name="${esc(p.company)}" data-domain="${esc(p.domain)}" data-pid="${esc(p.id)}" data-hsn="${p.hs_company?.contacts ?? ""}" data-o="${esc(JSON.stringify({ board: !!o.board, label: o.label || "", badge: o.badge || "", headline: o.headline || "", due: !!o.due, outreach: o.outreach || "", own, why_line: o.why_line || null, research: !!o.research }))}">
+    <div class="eyebrow">${o.label ? `<span class="badge ${esc(o.badge || "")}">${esc(o.label)}</span>` : ""}${p.todo_state === "pinned" ? `<span class="badge accent">Pinned</span>` : ""}${o.research && (p.kept || p.todo_state === "pinned") ? `<span class="badge good">In your people</span>` : ""}<span class="prio" title="How soon to act: lead score, company fit and anything that just happened">Priority <b>${esc(p.priority)}</b></span></div>
     <div class="phead">
       <div class="pid">
         <h3 class="title">${esc(p.name)}</h3>
@@ -2312,7 +2350,7 @@ function personCard(p, o = {}) {
     ${own ? personLookups(p) : ""}
     ${suggest}
     ${own ? `<details class="notes" data-notes="${esc(p.id)}"><summary>Notes and history</summary><div class="notebody"><p class="meta">Loading…</p></div></details>` : ""}
-    ${own ? actionsHtml({ outreach: o.outreach ?? p.co.outreach ?? "open", hasContacts: true, hasDraft: false, primary: `${lead}${hsBtn}${add}${unpin}${notnow}`, compact: true, removable: false, extra: `<button data-act="pbuyer">Change buyer type…</button><button data-act="pexport">Download their data (JSON)</button><button data-act="psuppress">Never contact this person…</button>` }) : ""}
+    ${own ? actionsHtml({ outreach: o.outreach ?? p.co.outreach ?? "open", hasContacts: true, hasDraft: false, primary: `${keep}${lead}${hsBtn}${add}${unpin}${notnow}`, compact: true, removable: false, extra: `<button data-act="pbuyer">Change buyer type…</button><button data-act="pexport">Download their data (JSON)</button><button data-act="psuppress">Never contact this person…</button>` }) : ""}
   </article>`;
 }
 
@@ -2532,7 +2570,7 @@ $("dbody").addEventListener("click", async (e) => {
 
 /* ============ navigation: every view has its own address, so Back, bookmarks and email links work ============ */
 const SECTIONS = ["today", "accounts", "people", "company", "research", "watchlist", "signals", "discover", "conversations", "setup"];
-const NAV_OF = { today: "today", accounts: "accounts", people: "accounts", company: "accounts", research: "accounts", watchlist: "watchlist", signals: "signals", discover: "discover", conversations: "conversations", setup: "setup" };
+const NAV_OF = { today: "today", accounts: "accounts", people: "accounts", company: "accounts", research: "research", watchlist: "watchlist", signals: "signals", discover: "discover", conversations: "conversations", setup: "setup" };
 let CUR = { view: "today" }, CO = null, PENDING_CLICK = null;
 function parseRoute(h = location.hash) {
   const [v, a] = h.replace(/^#\/?/, "").split("?")[0].split("/");

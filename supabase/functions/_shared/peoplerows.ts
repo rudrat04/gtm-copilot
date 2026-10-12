@@ -12,7 +12,7 @@ import { COUNTRIES } from "./lists.ts";
 // Used by the People tab, the To-do board and the company page, so a person looks the same everywhere.
 
 const DAY = 86_400_000;
-const COLS = "id,account_id,first_name,last_name,title,persona,relevance,seniority,department,email,email_status,email_confidence,email_revealed,linkedin_url,hubspot_contact_id,persona_manual,hs_status,hs_note,watched_at,watch_notify,watch_checked_at,activity_checked_at,created_at,provider,preview,decision_maker,todo_state,todo_at";
+const COLS = "id,account_id,kept_at,first_name,last_name,title,persona,relevance,seniority,department,email,email_status,email_confidence,email_revealed,linkedin_url,hubspot_contact_id,persona_manual,hs_status,hs_note,watched_at,watch_notify,watch_checked_at,activity_checked_at,created_at,provider,preview,decision_maker,todo_state,todo_at";
 
 const age = (iso: string | null | undefined) => { const d = Math.floor((Date.now() - Date.parse(iso ?? "")) / DAY); return Number.isNaN(d) ? "" : d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };
 
@@ -37,7 +37,11 @@ export async function peopleRows(admin: boolean, opts: { accountId?: string; per
   const daysSince = (kind: string, pid: string) => { const e = (evs ?? []).find((x) => x.person_id === pid && x.kind === kind); return e ? Math.floor((Date.now() - Date.parse(e.detected_at)) / DAY) : null; };
   const isSummary = (s: { kind: string; detail?: unknown }) => s.kind === "hiring" && !!s.detail && typeof s.detail === "object" && "salesOpenings" in (s.detail as object);
 
-  const people = (rows ?? []).filter((p) => a.has(p.account_id) && !a.get(p.account_id)!.removed_at).map((p) => {
+  // People found by researching a company stay out of the general lists until the owner adds them (add, pin, follow, reveal or push).
+  const general = !opts.accountId && !opts.personIds;
+  const hidden = (p: { account_id: string; kept_at?: string | null; watched_at?: string | null; email_revealed?: boolean | null; hubspot_contact_id?: string | null; todo_state?: string | null }) =>
+    general && a.get(p.account_id)?.source === "research" && !p.kept_at && !p.watched_at && !p.email_revealed && !p.hubspot_contact_id && !p.todo_state;
+  const people = (rows ?? []).filter((p) => a.has(p.account_id) && !a.get(p.account_id)!.removed_at && !hidden(p)).map((p) => {
     const c = a.get(p.account_id)!;
     const fit = fitState(c as never), heat = heatOfAcct.get(p.account_id) ?? "watching";
     const mine = (sigs ?? []).filter((s) => s.account_id === p.account_id);
@@ -54,7 +58,7 @@ export async function peopleRows(admin: boolean, opts: { accountId?: string; per
       linkedin: admin && p.linkedin_url ? p.linkedin_url : null,
       in_hubspot: !!p.hubspot_contact_id, hs_status: p.hs_status, hs_note: p.hs_note,
       hs_company: c.hubspot_company_id || c.hs_seen_id ? { contacts: c.hs_contacts ?? null, ours: !!c.hubspot_company_id } : null,
-      watched: !!p.watched_at, added: p.created_at, manual: p.provider === "manual", todo_state: p.todo_state ?? null,
+      kept: !!p.kept_at, watched: !!p.watched_at, added: p.created_at, manual: p.provider === "manual", todo_state: p.todo_state ?? null,
       company_fit: fit, company_heat: heat,
       co: {
         stage: c.stage ?? null, industry: c.industry_ai ?? c.industry ?? null, location: place || null, city: c.hq_city ?? null, country: c.country ?? null, country_name: c.country ? (COUNTRIES.find(([k]) => k === String(c.country).toUpperCase())?.[1] ?? String(c.country)) : null, size: c.employee_band ? `${c.employee_band} people` : c.employees ? `${c.employees} people` : null,

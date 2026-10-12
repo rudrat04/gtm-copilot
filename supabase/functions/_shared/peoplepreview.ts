@@ -105,7 +105,7 @@ export async function peekPeople(accounts: { id: string; name: string; domain: s
     const picked = pickPeople(rows, new Set(chunk.map((a) => a.domain)), (d) => emp.get(d));
     const ids = chunk.map((a) => a.id);
     // Replace the earlier preview rows, but never one you follow, revealed or pushed.
-    await sb.from("cp_people").delete().in("account_id", ids).eq("preview", true).is("watched_at", null).is("hubspot_contact_id", null);
+    await sb.from("cp_people").delete().in("account_id", ids).eq("preview", true).is("watched_at", null).is("hubspot_contact_id", null).is("kept_at", null);
     const { data: have } = await sb.from("cp_people").select("account_id,first_name,last_name,title").in("account_id", ids);
     const seen = new Set((have ?? []).map((p) => `${p.account_id}|${(p.first_name ?? "").toLowerCase()}|${(p.last_name ?? "").charAt(0).toLowerCase()}|${(p.title ?? "").toLowerCase()}`));
     const blocked = await suppressedSet();

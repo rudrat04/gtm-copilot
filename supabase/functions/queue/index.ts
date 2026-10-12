@@ -525,6 +525,12 @@ serve("queue", async (req) => {
   }
   if (body.action === "company" && typeof body.account_id === "string") return json(await companyView(body.account_id, admin) ?? { error: "Company not found" }, 200);
   if (body.action === "person_rows" && Array.isArray(body.ids)) return json({ admin, people: await peopleRows(admin, { personIds: body.ids.map(String).slice(0, 10) }) });
+  if (body.action === "person_rows" && typeof body.account_id === "string") return json({ admin, people: await peopleRows(admin, { accountId: body.account_id, limit: 60 }) });
+  if (body.action === "people_keep" && Array.isArray(body.ids)) { // add researched people to your People list (their company is already saved)
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to add people." });
+    await sb.from("cp_people").update({ kept_at: new Date().toISOString() }).in("id", body.ids.map(String).slice(0, 20));
+    return json({ mode: "live", ok: true });
+  }
   if (body.action === "people_list") {
     const { people } = await peopleList(admin);
     // Companies we searched that returned nobody: shown so they are not searched again by mistake.
@@ -699,7 +705,7 @@ serve("queue", async (req) => {
   if (body.action === "todo_set" && typeof body.person_id === "string") { // pin a person to the board, set them aside, or clear it
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to change your to-do." });
     const state = body.state === "pinned" || body.state === "dismissed" ? body.state : null;
-    await sb.from("cp_people").update({ todo_state: state, todo_at: state ? new Date().toISOString() : null }).eq("id", body.person_id);
+    await sb.from("cp_people").update({ todo_state: state, todo_at: state ? new Date().toISOString() : null, ...(state === "pinned" ? { kept_at: new Date().toISOString() } : {}) }).eq("id", body.person_id);
     return json({ mode: "live", ok: true });
   }
   if (body.action === "signals_feed") return json(await signalsFeed(admin, typeof body.days === "number" ? Math.min(90, Math.max(1, body.days)) : 30));
