@@ -929,7 +929,8 @@ Deno.test("Hunter filters: size buckets, locations and searches match Hunter's o
   const { headcountBuckets, searches, fromResponse } = await import("../_shared/hunterdiscover.ts");
   const { INDUSTRIES, migrateIndustries, _legacyCheck, REGION_GROUPS } = await import("../_shared/lists.ts");
   assertEquals(headcountBuckets(20, 200), ["11-50", "51-200"]);
-  assertEquals(headcountBuckets(10, 12), ["1-10", "11-50"]);
+  assertEquals(headcountBuckets(10, 200), ["11-50", "51-200"]); // 1-10 only touches a minimum of 10
+  assertEquals(headcountBuckets(5, 30), ["1-10", "11-50"]);
   const s = searches({ industries: ["Software Development"], keywords: ["crm", "sales"], employeesMin: 20, employeesMax: 200, regions: ["US"] }, 0, 3);
   assertEquals(s.length, 4); // two keywords, each asked once per size bucket (11-50 and 51-200)
   assertEquals(s.map((b) => (b.headcount as string[])[0]), ["11-50", "51-200", "11-50", "51-200"]);

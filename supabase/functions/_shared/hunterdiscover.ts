@@ -15,8 +15,11 @@ export const HEADCOUNTS: [string, number, number][] = [
   ["1001-5000", 1001, 5000], ["5001-10000", 5001, 10000], ["10001+", 10001, Infinity],
 ];
 
-/** Pure: the Hunter size buckets that overlap the owner's range. */
-export const headcountBuckets = (min: number, max: number) => HEADCOUNTS.filter(([, lo, hi]) => hi >= min && lo <= max).map(([k]) => k);
+/** Pure: the Hunter size buckets that mostly sit inside the owner's range (a bucket that only touches it, like 1-10 for a minimum of 10, is left out). */
+export const headcountBuckets = (min: number, max: number) => HEADCOUNTS.filter(([, lo, hi]) => {
+  const overlap = Math.min(hi, max) - Math.max(lo, min) + 1;
+  return overlap > 0 && overlap / (Number.isFinite(hi) ? hi - lo + 1 : lo) >= 0.2;
+}).map(([k]) => k);
 
 type Body = Record<string, unknown>;
 type Company = { industries: string[]; keywords?: string[]; employeesMin: number; employeesMax: number; regions: string[] };
