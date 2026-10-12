@@ -428,7 +428,9 @@
   .lockpill { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 40; display: none; align-items: center; gap: 7px; white-space: nowrap; padding: 7px 13px 7px 10px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: 12.5px; font-weight: 600; box-shadow: var(--shadow); }
   .lockpill .ico { width: 14px; height: 14px; }
   .lockwrap:hover .lockpill, .lockwrap:focus .lockpill, .lockwrap:focus-within .lockpill { display: inline-flex; }
-  .savebar { position: sticky; bottom: 0; z-index: 20; display: flex; align-items: center; gap: 14px; margin: 18px 0 0; padding: 12px 18px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(8px); box-shadow: 0 -6px 20px rgba(90, 66, 20, .08); }
+  :root { --sbw: 252px; } body.sb-collapsed { --sbw: 72px; }
+  .savebar { position: fixed; left: var(--sbw); right: 0; bottom: 0; z-index: 35; display: flex; align-items: center; gap: 14px; margin: 0; padding: 12px 28px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(10px); transition: left .2s ease; }
+  @media (max-width: 900px) { :root, body.sb-collapsed { --sbw: 0px; } .savebar { padding: 10px 14px; } }
   body.v-setup main { max-width: 1320px; }
   #setupbody { display: grid; grid-template-columns: 220px minmax(0, 1fr); column-gap: 28px; align-items: start; }
   #setupbody > * { grid-column: 2; min-width: 0; }
@@ -1830,7 +1832,7 @@ function applySetupSection() {
       sec = hit ? hit[1] : el.matches("details.how") ? "fit" : "*";
       el.dataset.sec = sec;
     }
-    el.style.display = sec === "*" || sec === "nav" || sec === sub || (sec === "save" && !["find", "conn", "start"].includes(sub)) ? "" : "none";
+    el.style.display = sec === "*" || sec === "nav" || sec === sub || (sec === "save" && !["conn", "start"].includes(sub)) ? "" : "none";
   }
   box.querySelectorAll("[data-ssec]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.ssec === sub)));
 }
@@ -1969,7 +1971,6 @@ function drawSetup() {
         <div><input type="file" id="logofile" accept="image/png,image/jpeg,image/webp,image/svg+xml" ${own ? "" : "disabled"} aria-label="Upload a logo">${BRAND_DRAFT.logo ? ` <button type="button" class="btn ghost sm" data-logorm>Remove logo</button>` : ""}<p class="help" style="margin:6px 0 0">PNG, JPG, WebP or SVG. It is shrunk to fit.</p></div></div>
       <div class="field"><label for="bname">Name</label><input id="bname" type="text" class="tin" maxlength="40" value="${esc(BRAND_DRAFT.name)}" data-brand="name"></div>
       <div class="field"><label for="btag">Tagline</label><input id="btag" type="text" class="tin" style="max-width:520px" maxlength="80" value="${esc(BRAND_DRAFT.tagline)}" data-brand="tagline"></div>
-      <div class="actions" style="margin:0">${lockBtn(own, "data-brandsave", "ghost", "Save name and logo", "Unlock to change")}${own ? `<span class="meta">Applies right away. Separate from Save changes.</span>` : ""}</div>
     </article>
 
     ${own ? `<article class="card" id="healthcard"><p class="label">Health</p><p class="meta" style="margin:0">Loading…</p></article>
@@ -1977,7 +1978,8 @@ function drawSetup() {
     <article class="card" id="usagecard"><p class="label">Search history</p><p class="help" style="margin:0 0 8px">Every search that used credits, so you can see what was spent and where.</p><div class="actions" style="margin:0"><button type="button" class="btn ghost" data-usage>Show the last 25 searches</button></div><div id="usageout"></div></article>` : ""}
 
     <details class="how"><summary>How scoring and signals work</summary><div id="icpbody"></div></details>
-    <div class="savebar" data-sec="save">${lockBtn(own, "data-save", "primary", "Save changes", "Unlock to save changes")}<span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : ""}</span></div>`;
+    <div class="savebar" data-sec="save">${lockBtn(own, "data-save", "primary", "Save changes", "Unlock to save changes")}<span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : ""}</span></div>
+    <div class="savebar" data-sec="conn">${lockBtn(own, "data-brandsave", "primary", "Save name and logo", "Unlock to change")}<span class="meta">${own ? "Applies right away." : ""}</span></div>`;
   msDrawAll();
   applySetupSection();
   loadSkipped();
