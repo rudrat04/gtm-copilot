@@ -25,7 +25,7 @@ Owner: Rudra (rudrat04 on GitHub). Public repo: https://github.com/rudrat04/gtm-
 
 ## Structure
 ```
-docs/index.html            The whole UI (static, GitHub Pages). Tabs: Today, Accounts, Inbound, Meetings, Research, Setup (Setup holds the editable profile; "How scoring and signals work" is a collapsible at its bottom)
+docs/index.html            The whole UI (static, GitHub Pages). Tabs: To-do (priority board), People (main; Companies is a switch inside), Signals, Watchlist, Discover, Conversations (inbound leads and meetings), Setup (the editable profile). Research is reached with Ctrl or Cmd + K
 supabase/functions/
   research-account/        Domain in, dossier out (cached 24h)
   signal-scan/             Weekly scan: signals, score, AI draft for accounts scoring 30+
@@ -90,6 +90,7 @@ Database changes go through migrations in `supabase/migrations/` and are applied
 - Emails are multipart (plain text + HTML) via `sendMail(to, subject, text, html)`; HTML blocks live in `_shared/emailhtml.ts`, templates in `_shared/templates.ts` and `_shared/brief.ts`. Preview with `scripts/preview-emails.ts`. They only ever go to the owner.
 
 ## UI rules (docs/index.html, one static file)
+Note: the "Today" and "Accounts" wording below is older. Today is now the **To-do** board and Accounts is **People** / **Companies**; the P0 and P1 paragraphs in "Next steps" describe the current screens. The rules about escaping text, one primary action, no raw scores on company cards and the cream theme still hold.
 - **Today is people-only** for new signals: an account with no contact (relevance 50+) is not shown as a card; it goes to `needs` (footer line, links to Accounts "No contact yet" filter). Follow-ups and meetings always show. `buildToday(admin, {autoFind})` runs the capped Hunter lookup (digest only). Signal ages are coloured: green <14 days, amber 14-30, red older. Follow-up cards show the due line instead of the "Why today" box.
 - **No raw score on screen.** Cards show Fit (Fits / Partly fits / Fit unknown / Outside range, from company facts) and a heat label (Hot / Warm / Watching) from `fitState` and `heatOf` in `_shared/score.ts`. Hot = fits, and a signal under 7 days old, funding under 30 days, or 2+ open sales roles. The 0-100 priority still exists behind the scenes for sorting, HubSpot fields, emails and the 30+ threshold. Unknown fit -> primary button "Check size" (0.2 credit, `queue` -> `enrich_company`) before "Find people".
 - One primary action per card, chosen from what we know: no contact -> "Find relevant people"; contact known -> "Mark contacted"; parked -> "Reopen". Everything else is in the "More" menu. Never show a button for something the card already shows.
@@ -103,7 +104,7 @@ Every function run logs to `cp_logs` with a `run_id`; failed requests return tha
 
 The `signal-scan` cron runs **weekly: Mondays 06:00-06:55 UTC** (every 5 minutes in that hour, 6 companies per run). It costs about $0.05 a week. To pause or resume: `select cron.alter_job((select jobid from cron.job where jobname = 'signal-scan'), active := false);` (true to resume).
 
-## Current state (as of 11 Oct 2026)
+## Current state (older notes from 11 Oct 2026; the current state is in the paragraphs below and in the Handoff section)
 - Everything in "DONE" below is built, tested live and pushed. CI (GitHub Actions) passes; the live smoke test is 39/39. AI spend for the whole project so far is about $0.20; Hunter about 14 of 50 monthly credits used (resets monthly).
 - Packaging exists: `README.md` (diagrams, costs), `DEMO.md` (2-minute script), `CASE_STUDY.md`, `API.md` (permissions, inbound webhook).
 - HubSpot test records (the Attio deal, its notes and to-dos, and the Rootly company, "Alex Test" contact, notes and to-do) were deleted on 12 Oct 2026 at the owner's request (HubSpot keeps deleted records in its recycle bin for 90 days). The Attio and Clay companies and Drew Peterson (Attio) remain as sample records. The user's inbox still holds some test emails.
