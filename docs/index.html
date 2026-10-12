@@ -1254,6 +1254,7 @@ function drawSetup() {
     <article class="card"><p class="label">What you sell</p>
       <p class="help" style="margin:0 0 10px">Describe your product or service in a sentence or two, and add your website if you like. One click turns it into suggestions for everything below, which you can edit. You decide what is saved.</p>
       <div class="field"><label for="pdesc">What do you sell, and to whom?</label><textarea id="pdesc" class="big" maxlength="1500" data-text="product.description" placeholder="Example: A tool that cleans up CRM data for sales teams at B2B software companies with 20 to 200 people.">${esc(P.product.description)}</textarea></div>
+      <div class="field"><label for="pname">Your product's name (optional)</label><input id="pname" type="text" class="tin" data-text="product.name" value="${esc(P.product.name)}" placeholder="Used in drafts, briefs and deal names" maxlength="40"></div>
       <div class="field"><label for="psite">Your website (optional)</label><input id="psite" type="text" class="tin" data-text="product.website" value="${esc(P.product.website)}" placeholder="yourcompany.com" maxlength="80"></div>
       <div class="actions" style="margin:0"><button type="button" class="btn primary" data-suggest${own ? "" : " disabled"}>Suggest my settings</button><span class="meta">${own ? "About 1 to 2 cents of AI. Nothing is saved until you press Save." : "Demo mode: unlock to use this."}</span></div>
       ${SUGGEST_NOTE ? `<div class="why" style="margin-top:12px"><b>Suggestion applied below.</b> ${esc(SUGGEST_NOTE)} Review it, then press Save.</div>` : ""}
@@ -1535,8 +1536,9 @@ async function loadSetup() {
         const r = await api("queue", { action: "run_discovery", dry });
         if (r.mode === "dry_run") { say(r.message); $("runout").innerHTML = ""; }
         else $("runout").innerHTML = dry
-          ? `<p class="meta">${esc(r.collected)} candidates found, ${esc(r.already_known)} already known. Would check: ${esc((r.would_check || []).join(", ") || "nothing new")}.</p>`
-          : `<p class="meta">Checked ${esc(r.checked)}. Added ${esc(r.added.length)}${r.added.length ? `: ${esc(r.added.join(", "))}` : ""}. ${esc(r.rejected)} did not fit.</p>`;
+          ? `<p class="meta">${esc(r.collected)} candidates found, ${esc(r.already_known)} already seen before. Would check: ${esc((r.would_check || []).join(", ") || "nothing new")}.</p>`
+          : r.checked === 0 ? `<p class="meta">Looked at ${esc(r.collected)} companies from Hacker News (hiring posts and Launch HN). ${r.already_known === r.collected ? "All of them were seen in earlier runs, so there was nothing new to check." : "None could be checked this time."} New hiring posts and launches appear every few days; try again later.</p>`
+          : `<p class="meta">Looked at ${esc(r.collected)} companies, ${esc(r.already_known)} already seen. Checked ${esc(r.checked)} new: added ${esc(r.added.length)}${r.added.length ? ` (${esc(r.added.join(", "))})` : ""}, ${esc(r.rejected)} did not fit (not B2B software, or outside your size and stage).</p>`;
       } catch (err) { $("runout").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
       btn.disabled = false;
     }

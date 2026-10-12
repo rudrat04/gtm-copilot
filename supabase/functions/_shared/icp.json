@@ -163,7 +163,9 @@
     "note": "Automatic contact lookups only for Tier 1 and Tier 2 accounts, at most this many a day, to protect the free search credits."
   },
   "discovery": {
-    "threads": 2,
+    "threads": 4,
+    "postAgeDays": 120,
+    "launchHn": true,
     "maxAgeDays": 45,
     "maxCandidates": 40,
     "maxAiPerRun": 15,

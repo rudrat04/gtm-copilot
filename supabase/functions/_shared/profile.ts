@@ -34,7 +34,7 @@ export const MAX_RULES = 12;
 export const MAX_PERSONAS = 8;
 
 export type Profile = {
-  product: { description: string; website: string }; // what the owner sells: the suggestion for everything else is made from this
+  product: { name: string; description: string; website: string }; // what the owner sells: the suggestion for everything else is made from this
   signalRules: SignalRule[];                // extra signals: tools, competitors, press, changes, watch phrases
   competitors: string[];                    // competitor names or domains, for the "uses a competitor" signal and the never-show list
   industries: string[];
@@ -60,9 +60,10 @@ export type Profile = {
 };
 
 // Snapshot of the defaults, taken before anything is applied.
+const BASE_SELLER = { name: icp.seller.name, pitch: icp.seller.pitch };
 const BASE_WEIGHTS = { ...icp.signals.weights };
 const DEFAULT: Profile = {
-  product: { description: "", website: "" },
+  product: { name: "", description: "", website: "" },
   competitors: [],
   signalRules: [],
   industries: [...icp.company.industries],
@@ -179,7 +180,7 @@ export function clean(input: unknown): Profile {
   const motion = (["any", "sales_led", "self_serve"] as const).find((m) => m === i.motion) ?? "any";
   const industriesOut = industries.length ? industries : DEFAULT.industries;
   return {
-    product: { description: String(pr.description ?? "").trim().slice(0, PRODUCT_MAX), website: cleanSite(pr.website) },
+    product: { name: String(pr.name ?? "").replace(/[<>\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40), description: String(pr.description ?? "").trim().slice(0, PRODUCT_MAX), website: cleanSite(pr.website) },
     competitors: list(i.competitors, [], 15, true),
     signalRules: cleanRules(i.signalRules),
     industries: industriesOut,
@@ -212,6 +213,8 @@ export function apply(p: Profile) {
   icp.company.employeesMax = p.employeesMax;
   icp.company.stages = p.stages;
   icp.company.regions = p.regions;
+  icp.seller.name = p.product.name || BASE_SELLER.name; // what you sell (Setup) is what the dossiers, drafts and screening are written for
+  icp.seller.pitch = p.product.description || BASE_SELLER.pitch;
   icp.signals.hiringRoles = p.hiringRoles;
   (icp.signals as { rules: SignalRule[] }).rules = p.signalRules.map((r) => ({ ...r, words: [...r.words] }));
   icp.signals.weights.hiring = p.signals.hiring ? BASE_WEIGHTS.hiring : 0;

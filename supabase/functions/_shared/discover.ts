@@ -67,18 +67,42 @@ async function getJson(url: string) {
 export async function collectHiring(): Promise<Candidate[]> {
   const threads = await getJson(`https://hn.algolia.com/api/v1/search_by_date?query=${encodeURIComponent('"Ask HN: Who is hiring"')}&tags=story,author_whoishiring&hitsPerPage=${cfg.threads + 2}`);
   const ids: string[] = (threads?.hits ?? []).filter((h: { title: string }) => /who is hiring/i.test(h.title)).slice(0, cfg.threads).map((h: { objectID: string }) => h.objectID);
-  const since = Date.now() - cfg.maxAgeDays * 86_400_000;
+  const since = Date.now() - ((cfg as { postAgeDays?: number }).postAgeDays ?? cfg.maxAgeDays) * 86_400_000; // a company is worth finding long after its post; the hiring signal itself still fades after maxAgeDays
   const out = new Map<string, Candidate>();
   for (const id of ids) {
     const page = await getJson(`https://hn.algolia.com/api/v1/search?tags=comment,story_${id}&hitsPerPage=1000`);
     for (const h of page?.hits ?? []) {
       if (String(h.parent_id) !== String(h.story_id)) continue; // replies are not job posts
-      if (Date.parse(h.created_at) < since) continue;
+      if (Date.parse(h.created_at) < since) continue; // older posts are likely filled
       const c = parsePost(h.comment_text ?? "", h.objectID);
       if (c && !out.has(c.domain)) out.set(c.domain, c);
     }
   }
   await log("info", "discover_collected", { detail: { threads: ids.length, candidates: out.size } });
+  return [...out.values()];
+}
+
+/** Pure: a "Launch HN" title to a company name, or null. "Launch HN: Acme (YC S24) – CRM that fixes itself" gives "Acme". */
+export function launchName(title: string): string | null {
+  const m = /^Launch HN:\s*([^(–—:|-]{2,60}?)\s*(\(|–|—|:|\||-|$)/i.exec(title.trim());
+  return m ? m[1].trim() : null;
+}
+
+/** Startups that launched on Hacker News ("Launch HN") in the last few months: another place to find B2B companies, free. */
+export async function collectLaunches(): Promise<Candidate[]> {
+  if ((cfg as { launchHn?: boolean }).launchHn === false) return [];
+  const since = Math.floor((Date.now() - 120 * 86_400_000) / 1000);
+  const page = await getJson(`https://hn.algolia.com/api/v1/search_by_date?query=${encodeURIComponent('"Launch HN"')}&tags=story&numericFilters=created_at_i>${since}&hitsPerPage=100`);
+  const out = new Map<string, Candidate>();
+  for (const h of page?.hits ?? []) {
+    const name = launchName(String(h.title ?? ""));
+    if (!name || !h.url) continue;
+    let host = "";
+    try { host = new URL(h.url).hostname.replace(/^www\./, "").toLowerCase(); } catch { continue; }
+    if (NOT_COMPANY.test(host) || !normalizeDomain(host) || out.has(host)) continue;
+    out.set(host, { name, domain: host, source: "launch_hn", sourceUrl: `https://news.ycombinator.com/item?id=${h.objectID}`, snippet: String(h.title).slice(0, 220) });
+  }
+  await log("info", "discover_launches", { detail: { candidates: out.size } });
   return [...out.values()];
 }
 
@@ -97,7 +121,7 @@ async function qualify(c: Candidate): Promise<Verdict | null> {
 Target: ${icp.company.industries.join(", ")}; ${icp.company.employeesMin}-${icp.company.employeesMax} employees.
 
 Company: ${c.name} (${c.domain})
-Job post: ${c.snippet}
+${c.source === "launch_hn" ? "Launch post" : "Job post"}: ${c.snippet}
 Website title: ${site.title.slice(0, 120)}
 Website description: ${site.description.slice(0, 250)}
 Website text: ${site.text.slice(0, 600)}
@@ -113,13 +137,17 @@ JSON: {"fit": true|false, "name": "proper company name", "segment": "2-4 word de
 }
 
 export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean } = {}) {
-  const found = await collectHiring();
+  const hiring = await collectHiring();
+  const seenDomains = new Set(hiring.map((c) => c.domain));
+  const found = [...hiring, ...(await collectLaunches()).filter((c) => !seenDomains.has(c.domain))]; // hiring posts first: they are the stronger signal
   const domains = found.map((c) => c.domain);
   const [{ data: have }, { data: seen }] = await Promise.all([
     sb.from("cp_accounts").select("domain").in("domain", domains.length ? domains : ["-"]),
-    sb.from("cp_discovered").select("domain").in("domain", domains.length ? domains : ["-"]),
+    sb.from("cp_discovered").select("domain,status,reason,found_at").in("domain", domains.length ? domains : ["-"]),
   ]);
-  const known = new Set([...(have ?? []), ...(seen ?? [])].map((r) => r.domain));
+  // A company turned down only for its size or stage gets another look after two weeks, in case you have widened the profile since.
+  const retry = (r: { status: string; reason: string | null; found_at: string }) => r.status === "rejected" && /^Below the fit bar/.test(r.reason ?? "") && Date.now() - Date.parse(r.found_at) > 14 * 86_400_000;
+  const known = new Set([...(have ?? []), ...(seen ?? []).filter((r) => !retry(r))].map((r) => r.domain));
   const fresh = found.filter((c) => !known.has(c.domain)).slice(0, cfg.maxCandidates);
   const summary = { collected: found.length, already_known: found.length - fresh.length, checked: 0, added: [] as string[], rejected: 0, dry: !!opts.dry };
   if (opts.dry) return { ...summary, would_check: fresh.slice(0, cfg.maxAiPerRun).map((c) => `${c.name} (${c.domain})`) };

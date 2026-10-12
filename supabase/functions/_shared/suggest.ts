@@ -52,7 +52,7 @@ Return JSON with these keys:
     competitors: r.competitors ?? current.competitors,
     excludeWords: r.excludeWords ?? current.excludeWords,
     motion: r.motion ?? current.motion,
-    product: { description, website },
+    product: { name: current.product.name, description, website },
   };
   return { proposal: clean(merged), summary: String(r.summary ?? "").slice(0, 300) };
 }

@@ -18,7 +18,7 @@ const { classify, normalizeEvents, plAllowed, toSignal } = await import("../_sha
 const { briefNoteHtml, draftNoteHtml } = await import("../_shared/hsnotes.ts");
 const { isLossReason, LOSS_LABEL, LOSS_REASONS } = await import("../_shared/lossreason.ts");
 const { cleanContext, contextLine, labelFor, validate } = await import("../_shared/inbound.ts");
-const { companyDomain, parsePost } = await import("../_shared/discover.ts");
+const { companyDomain, launchName, parsePost } = await import("../_shared/discover.ts");
 const { personaTitles, rank } = await import("../_shared/people.ts");
 const { guardStatus } = await import("../_shared/guard.ts");
 const { pickTop } = await import("../_shared/bulkfind.ts");
@@ -581,7 +581,7 @@ Deno.test("fit model: settings from the page are cleaned", () => {
   assertEquals(clean({ fitWeights: { size: 0 } }).fitWeights.size, 10); // weights are no longer settable
   assertEquals(clean({ industries: ["Fintech", "Not a real industry"] }).industries, ["Fintech"]);
   assertEquals(clean({ stages: ["Series E or later", "Nope"], regions: ["Germany", "Nordics", "Mars"] }).regions, ["Germany", "Nordics"]);
-  assertEquals(clean({ product: { description: "x".repeat(2000), website: "https://www.Example.com/about?x=1" } }).product, { description: "x".repeat(1500), website: "example.com" });
+  assertEquals(clean({ product: { description: "x".repeat(2000), website: "https://www.Example.com/about?x=1" } }).product, { name: "", description: "x".repeat(1500), website: "example.com" });
   assertEquals(clean({ product: { website: "not a site" } }).product.website, "");
   assertEquals(clean({ motion: "weird" }).motion, "any");
   assertEquals(clean({ excludeDomains: ["https://www.Rival.com/pricing", ""] }).excludeDomains, ["rival.com"]);
@@ -831,4 +831,18 @@ Deno.test("events: a headline counts only if it is about the company and says it
   assertEquals(isEventHeadline("Webinar: how Outreach changes sales", "Gong"), false); // another company
   assertEquals(isEventHeadline("Gong raises a new round", "Gong"), false); // no event
   assertEquals(isEventHeadline("Acme to host a summit for revenue leaders", "acme"), true);
+});
+
+Deno.test("discovery: Launch HN titles give a company name, and what you sell reaches the AI prompts", () => {
+  assertEquals(launchName("Launch HN: Acme (YC S24) – CRM that fixes itself"), "Acme");
+  assertEquals(launchName("Launch HN: Beta Labs: queues for LLMs"), "Beta Labs");
+  assertEquals(launchName("Show HN: Not a launch"), null);
+  assertEquals(clean({ product: { name: "  Pipe<b>Kit  ", description: "We sell X" } }).product.name, "Pipe b Kit");
+  apply(clean({ product: { name: "Acme CRM", description: "We clean CRM data." } }));
+  try {
+    assertEquals([icp.seller.name, icp.seller.pitch], ["Acme CRM", "We clean CRM data."]);
+  } finally {
+    apply(clean({}));
+  }
+  assertEquals(icp.seller.name, "PipelineKit"); // back to the default when nothing is set
 });
