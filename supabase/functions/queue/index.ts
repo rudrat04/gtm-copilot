@@ -652,7 +652,7 @@ serve("queue", async (req) => {
   }
   if (body.action === "run_discovery") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can run discovery." });
-    return json({ mode: "live", ...(await runDiscovery({ dry: body.dry === true, firmo: body.firmo !== false })) });
+    return json({ mode: "live", ...(await runDiscovery({ dry: body.dry === true, firmo: body.firmo !== false, web: body.web === true ? true : body.web === false ? false : undefined })) });
   }
   if (body.action === "draft" && typeof body.account_id === "string") return await draft(body.account_id, admin);
   if (body.action === "enrich_company" && typeof body.account_id === "string") {

@@ -4,6 +4,7 @@ import { askClaude } from "./claude.ts";
 import { meetsFit } from "./fitgate.ts";
 import { fitState, type FitState, tierOf } from "./score.ts";
 import { firmoLine } from "./firmo.ts";
+import { aiMaps, type Ai } from "./aiscore.ts";
 import { autoFindContacts, type Contact, contactsFor } from "./contacts.ts";
 import icp from "./icp.json" with { type: "json" };
 
@@ -30,6 +31,7 @@ export type TodayItem = {
   last_action: string | null;
   due: string | null;
   meeting: { title: string; starts_at: string; briefed: boolean } | null;
+  ai?: { label: string; score: number; reasons: string[] } | null; // the AI's judgement of timing, when there is one
 };
 
 export function hash(s: string): string {
@@ -45,29 +47,58 @@ const ageLabel = (iso: string | null | undefined) => {
   return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d}d ago`;
 };
 
-/** Plain-English reason from the strongest two signals. No AI. */
+/** How strong a signal is as a reason to reach out. Higher leads the line. A visit to your website beats a competitor in use, then funding, a new leader, a stated problem, a tool change, then hiring. */
+export function signalWeight(s: SigRow): number {
+  const rt = s.detail?.ruleType as string | undefined;
+  if (s.kind === "tech") return rt === "visit" ? 100 : rt === "competitor" ? 90 : rt === "pain" ? 75 : rt === "change" ? 70 : 45;
+  if (s.kind === "news") {
+    const nt = s.detail?.newsType as string | undefined;
+    if (nt === "funding" || FUNDING.test(s.title)) return 85;
+    if (nt === "leadership" || /\b(appoints?|names?|hires?|joins as|promotes?)\b.*\b(head|vp|chief|cro|director)\b/i.test(s.title)) return 80;
+    if (nt === "event") return 55;
+    return nt === "rule" ? 50 : 40;
+  }
+  if (s.kind === "hiring") return s.detail && "salesOpenings" in s.detail ? (Number(s.detail.salesOpenings) > 0 ? 60 : 0) : 58;
+  if (s.kind === "hn") return 20;
+  return 10;
+}
+
+/** The signal that leads the line, so the rep and the AI start with the strongest reason. */
+export const strongest = (sigs: SigRow[]): SigRow | null => [...sigs].sort((x, y) => signalWeight(y) - signalWeight(x))[0] ?? null;
+
+const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+
+/** Plain-English reason from the strongest two signals, strongest first. No AI. */
 export function reasonLine(sigs: SigRow[]): string {
-  const parts: string[] = [];
+  const parts: { w: number; t: string }[] = [];
   const hiring = sigs.find((s) => s.kind === "hiring" && s.detail && "salesOpenings" in s.detail);
-  if (hiring && Number(hiring.detail?.salesOpenings) > 0) parts.push(`Hiring ${hiring.detail!.salesOpenings} sales/RevOps ${Number(hiring.detail!.salesOpenings) === 1 ? "role" : "roles"}`);
-  const news = sigs.filter((s) => s.kind === "news");
-  const funding = news.find((s) => FUNDING.test(s.title));
-  if (funding) parts.push(`Funding news${funding.detail?.published ? ` (${ageLabel(funding.detail.published)})` : ""}`);
-  else if (news[0]) parts.push(`In the news: ${news[0].title.slice(0, 60)}`);
-  if (sigs.some((s) => s.kind === "hn")) parts.push("Hacker News mention");
-  return parts.slice(0, 2).join(" · ") || "No fresh signal, follow your plan";
+  if (hiring && Number(hiring.detail?.salesOpenings) > 0) parts.push({ w: 60, t: `Hiring ${hiring.detail!.salesOpenings} sales/RevOps ${Number(hiring.detail!.salesOpenings) === 1 ? "role" : "roles"}` });
+  for (const s of sigs) {
+    const rt = s.detail?.ruleType as string | undefined;
+    const w = signalWeight(s);
+    if (s.kind === "tech") parts.push({ w, t: rt === "visit" ? clip(s.title.replace(/\s*\(\d{4}-\d\d-\d\d\)$/, ""), 80) : rt === "pain" ? clip(s.title, 80) : clip(s.title.replace(/ \(seen on their website\)$/, ""), 80) });
+    else if (s.kind === "news") {
+      const nt = s.detail?.newsType as string | undefined;
+      const when = s.detail?.published ? ` (${ageLabel(s.detail.published)})` : "";
+      parts.push({ w, t: w === 85 ? `Funding news${when}` : w === 80 ? `New leader: ${clip(s.title, 60)}` : nt === "event" ? `Hosting an event: ${clip(s.title, 55)}` : `In the news: ${clip(s.title, 60)}` });
+    } else if (s.kind === "hiring" && !(s.detail && "salesOpenings" in s.detail)) parts.push({ w, t: clip(s.title, 70) });
+  }
+  if (sigs.some((s) => s.kind === "hn")) parts.push({ w: 20, t: "Hacker News mention" });
+  const seen = new Set<string>();
+  const top = parts.sort((x, y) => y.w - x.w).filter((p) => (seen.has(p.t) ? false : (seen.add(p.t), true)));
+  return top.slice(0, 2).map((p) => p.t).join(" · ") || "No fresh signal, follow your plan";
 }
 
 /** One short, grounded sentence for the rep. The only AI in the Today list. */
 export async function generateWhy(it: { name: string; tier: string; type: string; touches: number; lastAction: string | null; sigs: SigRow[] }): Promise<string | null> {
   try {
-    const facts = it.sigs.slice(0, 5).map((s) => s.kind === "hiring" && s.detail && "salesOpenings" in s.detail
+    const facts = [...it.sigs].sort((x, y) => signalWeight(y) - signalWeight(x)).slice(0, 5).map((s) => s.kind === "hiring" && s.detail && "salesOpenings" in s.detail
       ? `hiring (current status, not a new event): ${s.title}`
       : `${s.kind}: ${s.title}${s.detail?.published ? ` (published ${ageLabel(s.detail.published)})` : ` (first seen ${ageLabel(s.detected_at)})`}`);
     const raw = await askClaude({
       feature: "why-today",
       maxTokens: 160,
-      system: `You write ONE sentence (max 25 words) telling a sales rep at ${icp.seller.name} why to contact this account today. ${icp.seller.pitch} Use only the facts given. No hype, no invented numbers, no greeting. Only say "just" or "new" about something published or first seen in the last 7 days; otherwise name how long ago it was. Do not describe roles as leadership or senior unless the title says so. Plain text only, one sentence, finish it.`,
+      system: `You write ONE sentence (max 25 words) telling a sales rep at ${icp.seller.name} why to contact this account today. ${icp.seller.pitch} Use only the facts given, and lead with the first (strongest) fact. No hype, no invented numbers, no greeting. Only say "just" or "new" about something published or first seen in the last 7 days; otherwise name how long ago it was. Do not describe roles as leadership or senior unless the title says so. Plain text only, one sentence, finish it.`,
       user: `Company: ${it.name} (${it.tier.replace("_", " ")})\nSituation: ${it.type.replace("_", " ")}${it.touches ? `, ${it.touches} touch(es) so far` : ""}${it.lastAction ? `, ${it.lastAction}` : ""}\nSignals:\n${facts.join("\n") || "none"}`,
     });
     return raw.trim().replace(/^["']|["']$/g, "").slice(0, 220) || null;
@@ -99,11 +130,12 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
   const cfg = icp.today;
 
   const { data: accts } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,lost_at,lost_reason,priority_score,icp_score,why_now,status,outreach_status,touches,contacted_at,last_touch_at,not_fit_reason,next_followup_at,snoozed_until,employee_band,employees,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,watched_at")
-    .is("removed_at", null).or("status.in.(queued,pushed),outreach_status.neq.open").limit(300);
+    .select("id,name,domain,segment,lost_at,lost_reason,priority_score,icp_score,why_now,status,outreach_status,touches,contacted_at,last_touch_at,not_fit_reason,next_followup_at,snoozed_until,employee_band,employees,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,watched_at,source,created_at")
+    .is("removed_at", null).or("status.in.(queued,pushed),outreach_status.neq.open,source.eq.discovered").limit(300);
   const accounts = accts ?? [];
   const ids = accounts.map((a) => a.id);
 
+  const aiBy = await aiMaps("company", ids).catch(() => new Map<string, Ai>());
   const [{ data: sigRows }, { data: meetings }, { data: outcomes }, { data: whyRows }] = await Promise.all([
     ids.length ? sb.from("cp_signals").select("account_id,kind,title,url,detail,detected_at").in("account_id", ids).order("detected_at", { ascending: false }) : Promise.resolve({ data: [] }),
     sb.from("cp_meetings").select("id,title,starts_at,status,attendee_name,account_id,attendee_domain")
@@ -177,13 +209,18 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
       it = { ...base, key: `hot-${a.id}`, type: hot ? "hot" : "new", label: watched ? (hot ? "Watchlist: hot now" : "Watchlist: new this week") : hot ? "Hot now" : "New this week",
         urgency: (hot ? 500 : 350) + (a.priority_score ?? 0) / 10 + (watched ? 100 : 0), headline: hot ? "New signal in the last 48 hours" : "New signal this week", due: null };
     }
+    if (!it && a.outreach_status === "open" && a.source === "discovered" && !clearMiss && ["matches", "close"].includes(fitState(a)) && now - Date.parse(a.created_at) < 21 * DAY) {
+      it = { ...base, key: `disc-${a.id}`, type: "new", label: "New from discovery", urgency: 330 + (a.priority_score ?? 0) / 10,
+        headline: `Found ${ageLabel(a.created_at)} and it fits your profile`, due: null,
+        reason: base.reason.startsWith("No fresh signal") ? "Found by discovery and it fits your profile. No fresh signal yet, so this is a good first conversation" : base.reason }; // companies discovery found, ready with a contact
+    }
     if (!it && newest && now - newest < cfg.newDays * DAY && a.status === "queued") {
       if (a.outreach_status === "open" && clearMiss) blocked.below_fit++;
       else if (a.outreach_status === "open" && (a.priority_score ?? 0) < icp.fit.minScore) blocked.low_score++;
       else if (["not_now", "snoozed"].includes(a.outreach_status)) blocked.parked++;
     }
     if (it) {
-      const h = hash("v3|" + sigs.map((s) => s.title).sort().join("|") + `|${a.outreach_status}|${a.touches}|${it.type}`); // v3 invalidates older cached sentences
+      const h = hash("v4|" + sigs.map((s) => s.title).sort().join("|") + `|${a.outreach_status}|${a.touches}|${it.type}`); // v3 invalidates older cached sentences
       meta.set(it.key, { name: a.name, tier, type: it.type, touches: a.touches ?? 0, lastAction, sigs, hash: h });
       it.why = (whyRows ?? []).find((w) => w.account_id === a.id && w.signal_hash === h)?.text ?? null;
       items.push(it as TodayItem);
@@ -201,6 +238,14 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
     });
   }
 
+  // The AI's judgement orders new-signal cards: hot rises, cold sinks, and a cold company is no longer called "Hot now". Follow-ups and meetings are never touched.
+  for (const it of items) {
+    const ai = it.account ? aiBy.get(it.account.id) : null;
+    if (!ai || it.type === "meeting" || it.type === "follow_up" || it.type === "revive") continue;
+    it.ai = { label: ai.label, score: ai.score, reasons: ai.reasons };
+    it.urgency += ai.label === "hot" ? 120 : ai.label === "warm" ? 30 : -150;
+    if (ai.label === "cold" && it.type === "hot") { it.type = "new"; it.label = it.account?.watched ? "Watchlist: new this week" : "New this week"; }
+  }
   items.sort((x, y) => y.urgency - x.urgency);
 
   // Today leads with a person. A new-signal item with nobody to contact is not actionable, so it waits in

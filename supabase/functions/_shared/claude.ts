@@ -13,6 +13,8 @@ export async function askClaude(opts: {
   system: string;
   user: string;
   maxTokens?: number;
+  /** Anthropic server tools, for example the web search tool. Each web search is billed at 1 cent on top of the tokens. */
+  tools?: unknown[];
 }): Promise<string> {
   const { data } = await sb.from("cp_ai_spend_today").select("usd").single();
   if (Number(data?.usd ?? 0) >= icp.ai.dailyBudgetUsd) {
@@ -33,6 +35,7 @@ export async function askClaude(opts: {
       max_tokens: opts.maxTokens ?? 1500,
       system: opts.system,
       messages: [{ role: "user", content: opts.user }],
+      ...(opts.tools ? { tools: opts.tools } : {}),
     }),
   });
   if (!res.ok) {
@@ -48,15 +51,17 @@ export async function askClaude(opts: {
   const out = await res.json();
   const inTok = out.usage?.input_tokens ?? 0;
   const outTok = out.usage?.output_tokens ?? 0;
+  const searches = Number(out.usage?.server_tool_use?.web_search_requests ?? 0);
+  const cost = inTok * PRICE_IN + outTok * PRICE_OUT + searches * 0.01;
   await sb.from("cp_ai_usage").insert({
     feature: opts.feature,
     model: icp.ai.model,
     input_tokens: inTok,
     output_tokens: outTok,
-    cost_usd: inTok * PRICE_IN + outTok * PRICE_OUT,
+    cost_usd: cost,
   });
   await log("info", "ai_call", {
-    detail: { feature: opts.feature, input_tokens: inTok, output_tokens: outTok, cost_usd: +(inTok * PRICE_IN + outTok * PRICE_OUT).toFixed(5), stop: out.stop_reason },
+    detail: { feature: opts.feature, input_tokens: inTok, output_tokens: outTok, cost_usd: +cost.toFixed(5), searches, stop: out.stop_reason },
     ms: Date.now() - started,
   });
   if (out.stop_reason === "max_tokens") {

@@ -5,6 +5,10 @@ import { fetchSite } from "./signals.ts";
 import { fetchFirmo, fitBreakdown, saveFirmo } from "./firmo.ts";
 import { meetsFit } from "./fitgate.ts";
 import { fitState } from "./score.ts";
+import { collectWeb } from "./websearch.ts";
+import { autoSearch } from "./autosearch.ts";
+import { aiRefresh } from "./aiscore.ts";
+import { FIT_COLS } from "./firmo.ts";
 import icp from "./icp.json" with { type: "json" };
 
 // Finds new companies for the pipeline from public sources, so reps do not have to hunt for them.
@@ -121,7 +125,7 @@ async function qualify(c: Candidate): Promise<Verdict | null> {
 Target: ${icp.company.industries.join(", ")}; ${icp.company.employeesMin}-${icp.company.employeesMax} employees.
 
 Company: ${c.name} (${c.domain})
-${c.source === "launch_hn" ? "Launch post" : "Job post"}: ${c.snippet}
+${c.source === "launch_hn" ? "Launch post" : c.source === "web" ? "Found on the web" : "Job post"}: ${c.snippet}
 Website title: ${site.title.slice(0, 120)}
 Website description: ${site.description.slice(0, 250)}
 Website text: ${site.text.slice(0, 600)}
@@ -136,10 +140,27 @@ JSON: {"fit": true|false, "name": "proper company name", "segment": "2-4 word de
   }
 }
 
-export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean } = {}) {
+/** The companies just added that clearly fit get their people searched (a few credits, inside the reserve) and an AI judgement, so the rep finds them ready on Today. */
+async function readyTheNew(ids: string[]) {
+  const per = (cfg as { peoplePerRun?: number }).peoplePerRun ?? 3;
+  let searched = 0;
+  const { data } = ids.length ? await sb.from("cp_accounts").select(`id,domain,${FIT_COLS}`).in("id", ids) : { data: [] };
+  for (const a of data ?? []) {
+    if (searched >= per) break;
+    if (fitState(a as never) !== "matches") continue;
+    if ((await autoSearch({ id: a.id, domain: a.domain }, { ignoreDaily: true })) !== "skipped") searched++;
+  }
+  const ai = ids.length ? await aiRefresh({ ids, maxCompanies: 12, maxPeopleCompanies: 6 }).catch(() => ({ companies: 0, people: 0 })) : { companies: 0, people: 0 };
+  return { searched, judged: ai.companies };
+}
+
+export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?: boolean } = {}) {
   const hiring = await collectHiring();
   const seenDomains = new Set(hiring.map((c) => c.domain));
-  const found = [...hiring, ...(await collectLaunches()).filter((c) => !seenDomains.has(c.domain))]; // hiring posts first: they are the stronger signal
+  const launches = (await collectLaunches()).filter((c) => !seenDomains.has(c.domain));
+  const useWeb = (opts.web ?? !opts.dry) && (cfg as { web?: boolean }).web !== false; // a dry run stays free unless asked
+  const web = useWeb ? (await collectWeb()).filter((c) => !seenDomains.has(c.domain) && !launches.some((l) => l.domain === c.domain)) : [];
+  const found = [...hiring, ...web, ...launches]; // hiring posts first (the strongest signal), then what the web search found
   const domains = found.map((c) => c.domain);
   const [{ data: have }, { data: seen }] = await Promise.all([
     sb.from("cp_accounts").select("domain").in("domain", domains.length ? domains : ["-"]),
@@ -149,12 +170,16 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean } = {}
   const retry = (r: { status: string; reason: string | null; found_at: string }) => r.status === "rejected" && /^Below the fit bar/.test(r.reason ?? "") && Date.now() - Date.parse(r.found_at) > 14 * 86_400_000;
   const known = new Set([...(have ?? []), ...(seen ?? []).filter((r) => !retry(r))].map((r) => r.domain));
   const fresh = found.filter((c) => !known.has(c.domain)).slice(0, cfg.maxCandidates);
-  const summary = { collected: found.length, already_known: found.length - fresh.length, checked: 0, added: [] as string[], rejected: 0, dry: !!opts.dry };
+  const addedIds: string[] = [];
+  const summary = { collected: found.length, from_web: web.length, already_known: found.length - fresh.length, checked: 0, added: [] as string[], rejected: 0, dry: !!opts.dry };
   if (opts.dry) return { ...summary, would_check: fresh.slice(0, cfg.maxAiPerRun).map((c) => `${c.name} (${c.domain})`) };
 
   let firmoLeft = opts.firmo === false ? 0 : cfg.firmoPerRun;
-  for (const c of fresh.slice(0, cfg.maxAiPerRun)) {
-    const v = await qualify(c);
+  const batch = fresh.slice(0, cfg.maxAiPerRun);
+  const verdicts = new Map<string, Verdict | null>();
+  for (let i = 0; i < batch.length; i += 4) await Promise.all(batch.slice(i, i + 4).map(async (c) => { verdicts.set(c.domain, await qualify(c)); })); // four at a time keeps a bigger run inside the time limit
+  for (const c of batch) {
+    const v = verdicts.get(c.domain) ?? null;
     if (!v) continue; // a failure is not a verdict; it is retried next week
     summary.checked++;
     const row = { domain: c.domain, name: (v.name || c.name).slice(0, 80), source: c.source, source_url: c.sourceUrl, snippet: c.snippet };
@@ -187,7 +212,10 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean } = {}
     if (firmo) await saveFirmo(acct.id, firmo);
     await sb.from("cp_discovered").upsert({ ...row, status: "added", reason: (v.reason ?? "Hiring sales roles").slice(0, 200), account_id: acct.id }, { onConflict: "domain" });
     summary.added.push(row.name);
+    addedIds.push(acct.id);
   }
+  const ready = await readyTheNew(addedIds).catch(() => ({ searched: 0, judged: 0 }));
+  Object.assign(summary, { people_searched: ready.searched, judged: ready.judged });
   await log("info", "discover_done", { detail: summary });
   return summary;
 }

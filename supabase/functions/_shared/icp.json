@@ -118,7 +118,7 @@
   },
   "ai": {
     "model": "claude-haiku-4-5-20251001",
-    "dailyBudgetUsd": 0.25
+    "dailyBudgetUsd": 0.4
   },
   "tiers": {
     "tier_1": 70,
@@ -168,9 +168,13 @@
     "postAgeDays": 120,
     "launchHn": true,
     "maxAgeDays": 45,
-    "maxCandidates": 40,
-    "maxAiPerRun": 15,
-    "firmoPerRun": 4,
+    "maxCandidates": 50,
+    "maxAiPerRun": 25,
+    "firmoPerRun": 8,
+    "peoplePerRun": 3,
+    "web": true,
+    "webCalls": 2,
+    "webSearches": 2,
     "note": "Weekly: reads the latest Hacker News 'Who is hiring' threads for companies hiring sales or RevOps roles, keeps only B2B software companies that fit the ICP, and adds them for scoring.",
     "enabled": true
   },

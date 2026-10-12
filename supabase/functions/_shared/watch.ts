@@ -3,13 +3,13 @@ import { log } from "./log.ts";
 import { collectSignals, eventSignals, saveSiteFacts, type Signal, storedHiringSignals } from "./signals.ts";
 import { competitorEvents, eventsFromSignals, hubspotVisits, marketSignals, personMentions, recordEvent, sendMovementEmail, titleRecheck, watchedPeopleHubspot } from "./movements.ts";
 import { scoreAccount, tierOf } from "./score.ts";
-import { generateWhy, hash } from "./today.ts";
+import { generateWhy, hash, strongest } from "./today.ts";
 import { alertEmail } from "./templates.ts";
 import { googleConfigured, ownerEmail, sendMail } from "./google.ts";
 import { firmoLine } from "./firmo.ts";
 import { contactsFor } from "./contacts.ts";
 import { autoSearch, searchStates } from "./autosearch.ts";
-import { aiRefresh } from "./aiscore.ts";
+import { aiMaps, aiRefresh, aiScoreCompany } from "./aiscore.ts";
 import { industryCheckMany, needIndustry } from "./industry.ts";
 import { fitState } from "./score.ts";
 import { autoRefreshPredictLeads, storedPlSignals } from "./predictleads.ts";
@@ -46,6 +46,7 @@ export async function lightCheck(admin: boolean) {
     .is("removed_at", null).in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted", "snoozed"])
     .order("watched_at", { ascending: false, nullsFirst: false }).order("priority_score", { ascending: false }).limit(MAX_ACCOUNTS); // followed companies are always checked first
   const accounts = (data ?? []) as Acct[];
+  const aiBy = await aiMaps("company", accounts.map((a) => a.id)).catch(() => new Map()); // the AI's last judgement of each company
   const pl = await autoRefreshPredictLeads(2).catch(() => ({ checked: 0, added: 0 })); // a couple of the best accounts a day, within the monthly allowance
 
   const candidates: { a: Acct; top: Signal; score: number; hash: string; fresh: number }[] = [];
@@ -72,9 +73,9 @@ export async function lightCheck(admin: boolean) {
     if (score !== a.priority_score) await sb.from("cp_accounts").update({ priority_score: score }).eq("id", a.id);
 
     // Alert-worthy: new news, or a newly posted individual role. Hacker News alone and role-count changes are not.
-    const worthy = fresh.filter((s) => s.kind === "news" || (s.kind === "hiring" && !(s.detail && "salesOpenings" in s.detail)));
-    if (worthy.length && a.outreach_status === "open" && (a.watched_at || tierOf(score) !== "tier_3")) { // a followed company is alert-worthy at any score
-      candidates.push({ a, top: worthy[0], score, hash: hash(worthy.map((w) => w.title).sort().join("|")), fresh: worthy.length });
+    const worthy = fresh.filter((s) => s.kind === "news" || (s.kind === "hiring" && !(s.detail && "salesOpenings" in s.detail)) || (s.kind === "tech" && ["visit", "change"].includes(String(s.detail?.ruleType)))); // a tool change on their website or a visit to yours counts too
+    if (worthy.length && a.outreach_status === "open" && (a.watched_at || tierOf(score) !== "tier_3" || aiBy.get(a.id)?.label === "hot")) { // a followed company is alert-worthy at any score, and so is one the AI calls hot
+      candidates.push({ a, top: (strongest(worthy.map((w) => ({ ...w, account_id: a.id, url: w.url ?? null, detail: w.detail ?? null, detected_at: new Date().toISOString() })) as never) as unknown as Signal | null) ?? worthy[0], score, hash: hash(worthy.map((w) => w.title).sort().join("|")), fresh: worthy.length });
     }
     await log("info", "account_watched", { account: a.domain, detail: { new: fresh.length, score, alert_candidate: worthy.length > 0 } });
   };
@@ -99,16 +100,24 @@ export async function lightCheck(admin: boolean) {
     const { data: followed } = sentToday?.length ? await sb.from("cp_accounts").select("id").in("id", sentToday.map((r) => r.account_id)).not("watched_at", "is", null) : { data: [] };
     const followedIds = new Set((followed ?? []).map((r) => r.id));
     const left = { followed: icp.watch.watchlistAlerts === false ? 0 : Math.max(0, WATCHLIST_ALERTS_PER_DAY - followedIds.size), other: Math.max(0, icp.alerts.maxPerDay - ((sentToday?.length ?? 0) - followedIds.size)) };
-    for (const c of candidates.sort((x, y) => (Number(!!y.a.watched_at) - Number(!!x.a.watched_at)) || (y.score - x.score))) {
+    for (const c of candidates.sort((x, y) => (Number(!!y.a.watched_at) - Number(!!x.a.watched_at)) || (Number(aiBy.get(y.a.id)?.label === "hot") - Number(aiBy.get(x.a.id)?.label === "hot")) || (y.score - x.score))) {
       const lane = c.a.watched_at ? "followed" : "other";
       if (left[lane] <= 0) continue;
       const { data: seen } = await sb.from("cp_alerts").select("account_id").eq("account_id", c.a.id).eq("signal_hash", c.hash).maybeSingle();
       if (seen) continue; // already alerted (or held back) for these signals
+      // Let the AI judge it on the fresh facts first. A company it calls cold waits for the daily email; one it calls hot is never held back.
+      await aiScoreCompany(c.a.id).catch(() => null);
+      const verdict = (await aiMaps("company", [c.a.id]).catch(() => new Map())).get(c.a.id)?.label as string | undefined;
+      if (verdict === "cold" && !c.a.watched_at) {
+        await sb.from("cp_alerts").insert({ account_id: c.a.id, signal_hash: c.hash, deferred: true });
+        await log("info", "hot_alert_held_back", { account: c.a.domain, detail: { score: c.score, ai: "cold" } });
+        continue;
+      }
       // Find people first, so the email names them. This spends search credits, so it only runs for companies that fit or that you follow.
       await autoSearch({ id: c.a.id, domain: c.a.domain });
       const contacts = (await contactsFor([c.a.id], true)).get(c.a.id) ?? [];
       const fits = fitState(c.a as never) === "matches";
-      if (!c.a.watched_at && !contacts.length && !fits) {
+      if (!c.a.watched_at && !contacts.length && !fits && verdict !== "hot") {
         // A weak alert: no fit and nobody to contact. It waits for the daily email instead of interrupting you.
         await sb.from("cp_alerts").insert({ account_id: c.a.id, signal_hash: c.hash, deferred: true });
         await log("info", "hot_alert_held_back", { account: c.a.domain, detail: { score: c.score } });
@@ -155,7 +164,7 @@ export async function lightCheck(admin: boolean) {
   // Judge the companies whose facts changed (and the people at them), and read the industry of a few new ones from their websites.
   const judged = { companies: 0, people: 0, industries: 0 };
   try {
-    const r = await aiRefresh({ maxCompanies: 20, maxPeopleCompanies: 8 });
+    const r = await aiRefresh({ maxCompanies: 30, maxPeopleCompanies: 10 });
     judged.companies = r.companies; judged.people = r.people;
     judged.industries = (await industryCheckMany(await needIndustry(8))).set;
   } catch (e) { await log("warn", "ai_refresh_failed", { message: (e as Error).message }); }

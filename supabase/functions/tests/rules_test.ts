@@ -895,3 +895,19 @@ Deno.test("customers: the profile is compared with who your customers really are
   assertEquals(validIndustry("fintech"), "Fintech");
   assertEquals(validIndustry("Made-up industry"), null);
 });
+
+Deno.test("reasonLine leads with the strongest signal", async () => {
+  const { reasonLine, signalWeight } = await import("../_shared/today.ts");
+  const row = (kind: string, title: string, detail: Record<string, unknown> = {}) => ({ account_id: "a", kind, title, url: null, detail, detected_at: new Date().toISOString() });
+  const sigs = [row("hiring", "3 open roles, 2 in sales/RevOps", { salesOpenings: 2 }), row("tech", "Uses a competitor: Gong", { ruleType: "competitor" }), row("news", "Acme raises $20M Series A")];
+  const line = reasonLine(sigs);
+  assertEquals(line.startsWith("Uses a competitor: Gong"), true);
+  assertEquals(signalWeight(row("tech", "x", { ruleType: "visit" })) > signalWeight(row("tech", "x", { ruleType: "competitor" })), true);
+});
+
+Deno.test("web search candidates are cleaned", async () => {
+  const { cleanWeb, pickAngles } = await import("../_shared/websearch.ts");
+  const out = cleanWeb({ companies: [{ name: "Acme", domain: "https://www.acme.io/about", why: "Raised a Series A", url: "https://x.test" }, { name: "TC", domain: "techcrunch.com" }, { name: "", domain: "nope.com" }] });
+  assertEquals(out.map((c) => c.domain), ["acme.io"]);
+  assertEquals(pickAngles(2, 0).length, 2);
+});

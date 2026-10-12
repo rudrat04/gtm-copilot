@@ -11,5 +11,5 @@ serve("discover", async (req) => {
   const body = (await req.json().catch(() => null)) ?? {};
   if ((icp.discovery as { enabled?: boolean }).enabled === false && body.force !== true) return json({ skipped: "Auto-discovery is switched off in Setup" });
   const owner = await isAdmin(req);
-  return json(await runDiscovery({ dry: owner && body.dry === true, firmo: !(owner && body.firmo === false) }));
+  return json(await runDiscovery({ dry: owner && body.dry === true, firmo: !(owner && body.firmo === false), web: owner && body.web === true ? true : owner && body.web === false ? false : undefined }));
 });
