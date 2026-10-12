@@ -42,7 +42,7 @@ export async function lightCheck(admin: boolean) {
   await setState("watch_last", new Date().toISOString());
 
   const { data } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,watched_at")
+    .select("id,name,domain,segment,priority_score,outreach_status,hubspot_company_id,employees,stage,country,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,watched_at")
     .is("removed_at", null).in("status", ["queued", "pushed"]).in("outreach_status", ["open", "contacted", "snoozed"])
     .order("watched_at", { ascending: false, nullsFirst: false }).order("priority_score", { ascending: false }).limit(MAX_ACCOUNTS); // followed companies are always checked first
   const accounts = (data ?? []) as Acct[];

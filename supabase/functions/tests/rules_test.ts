@@ -931,10 +931,11 @@ Deno.test("Hunter filters: size buckets, locations and searches match Hunter's o
   assertEquals(headcountBuckets(20, 200), ["11-50", "51-200"]);
   assertEquals(headcountBuckets(10, 12), ["1-10", "11-50"]);
   const s = searches({ industries: ["Software Development"], keywords: ["crm", "sales"], employeesMin: 20, employeesMax: 200, regions: ["US"] }, 0, 3);
-  assertEquals(s.length, 2);
+  assertEquals(s.length, 4); // two keywords, each asked once per size bucket (11-50 and 51-200)
+  assertEquals(s.map((b) => (b.headcount as string[])[0]), ["11-50", "51-200", "11-50", "51-200"]);
   assertEquals((s[0].headquarters_location as { include: { country: string }[] }).include[0].country, "US");
   assertEquals((s[0].keywords as { include: string[] }).include[0], "crm");
-  assertEquals(searches({ industries: [], employeesMin: 20, employeesMax: 200, regions: [] }, 0).length, 1);
+  assertEquals(searches({ industries: [], employeesMin: 20, employeesMax: 200, regions: [] }, 0).length, 2);
   assertEquals(fromResponse({ data: [{ domain: "https://www.acme.io", organization: "Acme" }, { domain: "", organization: "x" }] }, "t").map((c) => c.domain), ["acme.io"]);
   assertEquals(INDUSTRIES.includes("Software Development"), true);
   assertEquals(_legacyCheck(), []);
@@ -947,4 +948,19 @@ Deno.test("YC companies: B2B, in the size range, keyword matches first", async (
   const c = (name: string, size: number, tags: string[], industry = "B2B") => ({ name, slug: name.toLowerCase(), website: `https://${name.toLowerCase()}.com`, team_size: size, industry, tags, status: "Active", launched_at: 1 });
   const out = pickYc([c("Big", 900, []), c("Plain", 50, ["Dev"]), c("Crmy", 40, ["CRM"]), c("Shop", 30, [], "Consumer")], 20, 200, ["crm"]);
   assertEquals(out.map((x) => x.name), ["Crmy", "Plain"]);
+});
+
+Deno.test("size that comes free with a company counts in fit without a paid lookup", async () => {
+  const { fitBreakdown, bandRange, hasLightFacts } = await import("../_shared/firmo.ts");
+  const { fitState } = await import("../_shared/score.ts");
+  assertEquals(bandRange("11-50"), [11, 50]);
+  assertEquals(bandRange("10001+")![1], Infinity);
+  assertEquals(bandRange("x"), null);
+  const inside = { light_source: "hunter", employee_band: "51-200", firmo_at: null };
+  assertEquals(hasLightFacts(inside), true);
+  assertEquals(fitState(inside), "matches"); // size fits, stage not looked up yet
+  assertEquals(fitState({ light_source: "hunter", employee_band: "1001-5000" }), "outside");
+  assertEquals(fitState({ light_source: "yc", employees: 40 }), "matches");
+  assertEquals(fitState({ employee_band: "51-200" }), "unknown"); // no source: not a looked-up fact
+  assertEquals(fitBreakdown(inside).known, true);
 });

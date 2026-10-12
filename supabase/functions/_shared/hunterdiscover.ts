@@ -7,7 +7,7 @@ import icp from "./icp.json" with { type: "json" };
 // names, its company size buckets and countries, so a choice in Setup is exactly a filter here. The free plan returns only the first
 // 100 companies of a search (ordered by how many email addresses Hunter has), so each run asks a few different questions.
 
-export type HunterCandidate = { name: string; domain: string; source: "hunter"; sourceUrl: string; snippet: string };
+export type HunterCandidate = { name: string; domain: string; source: "hunter"; sourceUrl: string; snippet: string; band?: string };
 
 /** Hunter's company size buckets. */
 export const HEADCOUNTS: [string, number, number][] = [
@@ -42,18 +42,20 @@ export function searches(c: Company, week: number, max = 4): Body[] {
     out.push({ ...base, ...withInd(inds) });
     for (let i = 0; i < Math.min(max - 1, inds.length > 1 ? inds.length : 0); i++) out.push({ ...base, ...withInd([inds[(week + i) % inds.length]]) });
   }
-  return out.slice(0, max);
+  // One search per size bucket, so each company arrives with its size band (no paid lookup needed for size).
+  const buckets = (base.headcount as string[]);
+  return out.slice(0, max).flatMap((b) => buckets.map((h) => ({ ...b, headcount: [h] }))).slice(0, 12);
 }
 
 /** Pure: companies from a Discover response, as candidates. */
-export function fromResponse(d: unknown, label: string): HunterCandidate[] {
+export function fromResponse(d: unknown, label: string, band?: string): HunterCandidate[] {
   const rows = (d as { data?: { domain?: string; organization?: string }[] })?.data;
   if (!Array.isArray(rows)) return [];
   const out: HunterCandidate[] = [];
   for (const r of rows) {
     const domain = normalizeDomain(String(r.domain ?? ""));
     const name = String(r.organization ?? "").trim().slice(0, 60);
-    if (domain && name) out.push({ name, domain, source: "hunter", sourceUrl: "", snippet: label.slice(0, 200) });
+    if (domain && name) out.push({ name, domain, source: "hunter", sourceUrl: "", snippet: label.slice(0, 200), ...(band ? { band } : {}) });
   }
   return out;
 }
@@ -69,7 +71,7 @@ export async function collectHunter(opts: { max?: number } = {}): Promise<Hunter
       const res = await fetch("https://api.hunter.io/v2/discover", { method: "POST", headers: { "X-API-KEY": key, "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
       if (!res.ok) { await log("warn", "hunter_discover_failed", { message: `Hunter ${res.status}`, detail: { status: res.status } }); if (res.status === 403 || res.status === 401) break; continue; }
       const kw = (body.keywords as { include?: string[] } | undefined)?.include?.[0];
-      for (const c of fromResponse(await res.json(), `Matches your filters in Hunter${kw ? ` (keyword: ${kw})` : ""}`)) if (!out.has(c.domain)) out.set(c.domain, c);
+      for (const c of fromResponse(await res.json(), `Matches your filters in Hunter${kw ? ` (keyword: ${kw})` : ""}`, (body.headcount as string[] | undefined)?.[0])) if (!out.has(c.domain)) out.set(c.domain, c);
     } catch (e) { await log("warn", "hunter_discover_failed", { message: (e as Error).message }); }
   }
   await log("info", "discover_hunter", { detail: { searches: list.length, found: out.size } });

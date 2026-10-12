@@ -99,12 +99,12 @@ export async function saveFirmo(accountId: string, f: Firmo) {
 
 /** What we know about a company for fit. Every field is optional; a missing one counts as "not known yet", never as a mismatch. */
 export type FitRow = {
-  employees?: number | null; stage?: string | null; country?: string | null; firmo_at?: string | null;
+  employees?: number | null; stage?: string | null; country?: string | null; firmo_at?: string | null; light_source?: string | null; employee_band?: string | null;
   tech?: string[] | null; industry?: string | null; tags?: string[] | null; blurb?: string | null; sales_motion?: string | null;
   domain?: string | null; name?: string | null; known_as?: string | null; last_round_date?: string | null; industry_ai?: string | null;
 };
 /** The columns to select wherever fit is computed, so a new criterion takes effect everywhere. */
-export const FIT_COLS = "employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date,watched_at,industry_ai";
+export const FIT_COLS = "employees,stage,country,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date,watched_at,industry_ai";
 
 /** Is this funding stage one of the stages we target? Each stage the owner picked has its own pattern (see lists.ts). */
 const stageWanted = (s: string) => icp.company.stages.some((w) => (STAGE_OPTIONS.find((o) => o.name === w)?.re ?? new RegExp(w.toLowerCase().replace(/[^a-z0-9 ]/g, ""))).test(s));
@@ -164,16 +164,27 @@ export function exclusion(a: FitRow): string | null {
   return hit ? `Matches "${hit}"` : null;
 }
 
+/** Pure: "11-50" or "10001+" as a [low, high] range, or null. */
+export function bandRange(band?: string | null): [number, number] | null {
+  const m = /^(\d+)(?:-(\d+)|\+)$/.exec((band ?? "").replace(/\s/g, ""));
+  return m ? [Number(m[1]), m[2] ? Number(m[2]) : Infinity] : null;
+}
+/** Size facts that came for free with the company (a Hunter size bucket, a YC team size), without a paid lookup. Stage and place are still unknown. */
+export const hasLightFacts = (a: FitRow) => !a.firmo_at && !!a.light_source && (a.employees != null || !!bandRange(a.employee_band));
+
 export type FitParts = { size: number; stage: number; region: number; industry: number; tools: number; motion: number };
 
 export function fitBreakdown(a: FitRow): { points: number; known: boolean; size: number; stage: number; region: number; matches: boolean; excluded: string | null; parts: FitParts } {
   const excluded = exclusion(a);
   const none: FitParts = { size: 0.5, stage: 0.5, region: 0.5, industry: 0.5, tools: 0.5, motion: 0.5 };
-  if (!a.firmo_at) return { points: icp.signals.weights.fit * 0.6, known: false, size: 0, stage: 0, region: 0, matches: false, excluded, parts: none }; // neutral baseline, 15
+  const light = hasLightFacts(a);
+  if (!a.firmo_at && !light) return { points: icp.signals.weights.fit * 0.6, known: false, size: 0, stage: 0, region: 0, matches: false, excluded, parts: none }; // neutral baseline, 15
   const c = icp.company;
 
   const n = a.employees;
-  const size = n == null ? 5 : n >= c.employeesMin && n <= c.employeesMax ? 10
+  const band = n == null ? bandRange(a.employee_band) : null; // a size bucket: fully inside the range is a fit, touching it is partly, apart from it is not
+  const size = band ? (band[0] >= c.employeesMin && band[1] <= c.employeesMax ? 10 : band[1] >= c.employeesMin * 0.75 && band[0] <= c.employeesMax * 1.25 ? 5 : 0)
+    : n == null ? 5 : n >= c.employeesMin && n <= c.employeesMax ? 10
     : n >= c.employeesMin * 0.75 && n <= c.employeesMax * 1.25 ? 5 : 0;
 
   const s = (a.stage ?? "").toLowerCase();
@@ -191,7 +202,7 @@ export function fitBreakdown(a: FitRow): { points: number; known: boolean; size:
   const w = icp.fitWeights as Record<keyof FitParts, number>;
   const total = (Object.keys(parts) as (keyof FitParts)[]).reduce((t, k) => t + w[k], 0) || 1;
   const points = icp.signals.weights.fit * (Object.keys(parts) as (keyof FitParts)[]).reduce((t, k) => t + w[k] * parts[k], 0) / total;
-  return { points, known: true, size, stage, region, matches: size === 10 && stage === 10, excluded, parts };
+  return { points, known: true, size, stage, region, matches: size === 10 && (stage === 10 || (light && stage === 5)), excluded, parts };
 }
 
 /** The fit slice of the priority score. */
@@ -207,7 +218,10 @@ export function fitReasons(a: FitRow): { key: string; label: string; state: "ok"
   const w = icp.fitWeights as Record<keyof FitParts, number>;
   const out: { key: string; label: string; state: "ok" | "partly" | "no" | "unknown"; text: string }[] = [];
   if (b.excluded) out.push({ key: "excluded", label: "Excluded", state: "no", text: b.excluded });
-  if (!a.firmo_at) return out.concat([{ key: "facts", label: "Company facts", state: "unknown", text: "Size and stage not looked up yet" }]);
+  if (!a.firmo_at && !hasLightFacts(a)) return out.concat([{ key: "facts", label: "Company facts", state: "unknown", text: "Size and stage not looked up yet" }]);
+  if (!a.firmo_at) { // size known from the company search, stage not looked up
+    const sz = b.parts.size; return out.concat([{ key: "size", label: "Size", state: sz >= 1 ? "ok" : sz > 0 ? "partly" : "no", text: a.employees != null ? `${a.employees} people` : `${a.employee_band} people` }, { key: "stage", label: "Stage", state: "unknown", text: "not looked up yet" }]);
+  }
   const st = (v: number, partly = 0.5): "ok" | "partly" | "no" => (v >= 1 ? "ok" : v > 0 ? (v >= partly ? "partly" : "no") : "no");
   out.push({ key: "size", label: "Size", state: st(b.parts.size), text: a.employees != null ? `${a.employees} people` : "size unclear" });
   out.push({ key: "stage", label: "Stage", state: st(b.parts.stage), text: a.stage ?? "stage unclear" });
@@ -219,8 +233,8 @@ export function fitReasons(a: FitRow): { key: string; label: string; state: "ok"
   return out;
 }
 
-export function firmoLine(a: { employee_band?: string | null; employees?: number | null; stage?: string | null; raised_usd?: number | null; hq_city?: string | null; country?: string | null; firmo_at?: string | null }): string {
-  if (!a.firmo_at) return "";
+export function firmoLine(a: { employee_band?: string | null; employees?: number | null; stage?: string | null; raised_usd?: number | null; hq_city?: string | null; country?: string | null; firmo_at?: string | null; light_source?: string | null }): string {
+  if (!a.firmo_at && !(a.light_source && (a.employee_band || a.employees))) return "";
   return [
     a.employee_band ? `${a.employee_band} people` : a.employees ? `${a.employees} people` : null,
     a.stage && !/^(other|unknown|undisclosed)$/i.test(a.stage) ? a.stage : null,

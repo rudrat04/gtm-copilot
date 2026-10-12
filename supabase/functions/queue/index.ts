@@ -72,7 +72,7 @@ async function scanInfo() {
 
 async function list(view = "todo", admin = false) {
   const { data: accounts } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai")
+    .select("id,name,domain,segment,source,created_at,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,light_source,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai")
     .is("removed_at", null).in("status", ["queued", "pushed"])
     .in("outreach_status", VIEWS[view] ?? VIEWS.todo)
     .order("priority_score", { ascending: false })
@@ -146,7 +146,7 @@ function accountFacts(a: { firmo_at: string | null; employees: number | null; em
  */
 async function accountsView(admin: boolean) {
   const { data: all } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,founded_year,linkedin_handle,removed_at,watched_at,people_searched_at,industry_ai_at")
+    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,light_source,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,founded_year,linkedin_handle,removed_at,watched_at,people_searched_at,industry_ai_at,pl_checked_at")
     .order("priority_score", { ascending: false, nullsFirst: false }).limit(400);
   const rows = (all ?? []).map((a) => {
     const f = fitBreakdown(a);
@@ -188,7 +188,7 @@ async function accountsView(admin: boolean) {
         tier: tierOf(a.priority_score), priority: a.priority_score, icp_score: a.icp_score, why_now: a.why_now,
         facts: accountFacts(a), firmo: firmoLine(a), outside_icp: outside, fit: fitState(a), fit_reasons: fitReasons(a), excluded: fitBreakdown(a).excluded,
         heat: aiById.has(a.id) ? aiHeat(aiById.get(a.id)!.label) : heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)), ai: aiById.get(a.id) ?? null,
-        firmo_known: !!a.firmo_at, low, removed, watched: !!a.watched_at, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
+        firmo_known: !!a.firmo_at, industry_read: !!a.industry_ai_at, news_checked: !!a.pl_checked_at, low, removed, watched: !!a.watched_at, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
         lost_at: a.lost_at, lost_reason: a.lost_reason, not_fit_reason: a.not_fit_reason,
         last_scanned_at: a.last_scanned_at, found_reason: why.get(a.domain) ?? null, found_via: via.get(a.domain) ?? null,
@@ -304,7 +304,7 @@ async function setupView() {
     sb.from("cp_discovered").select("status,found_at").order("found_at", { ascending: false }).limit(60),
     sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("firmo_at", null),
     sb.from("cp_ai_spend_today").select("usd").single(),
-    sb.from("cp_accounts").select("employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,domain,name,source,lost_at,outreach_status").limit(1000),
+    sb.from("cp_accounts").select("employees,stage,country,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,domain,name,source,lost_at,outreach_status").limit(1000),
   ]);
   const fitCounts = { matches: 0, close: 0, unknown: 0, outside: 0 };
   for (const r of fitRows ?? []) fitCounts[fitState(r)]++;
@@ -400,7 +400,7 @@ async function enrichCompanies(rescoreAll = false, only?: string[]) {
   const ids = rescoreAll ? ((await sb.from("cp_accounts").select("id")).data ?? []).map((a) => a.id) : accounts.map((a) => a.id);
   if (ids.length) {
     const [{ data: rows }, { data: sigs }] = await Promise.all([
-      sb.from("cp_accounts").select("id,status,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,domain,name").in("id", ids),
+      sb.from("cp_accounts").select("id,status,employees,stage,country,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,domain,name").in("id", ids),
       sb.from("cp_signals").select("account_id,kind,title,detail,detected_at").in("account_id", ids),
     ]);
     for (const r of rows ?? []) {
@@ -421,7 +421,7 @@ async function enrichCompanies(rescoreAll = false, only?: string[]) {
  * and only ones that pass the fit bar (0.2 Hunter credit each). `dry` just says how many and what it would cost.
  */
 async function refreshFacts(limit: number, dry: boolean) {
-  const { data } = await sb.from("cp_accounts").select("id,priority_score,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,domain,name,known_as")
+  const { data } = await sb.from("cp_accounts").select("id,priority_score,employees,stage,country,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,domain,name,known_as")
     .not("firmo_at", "is", null).is("facts2_at", null).order("priority_score", { ascending: false, nullsFirst: false }).limit(300);
   const todo = (data ?? []).filter((a) => worthShowing(a));
   const ids = todo.slice(0, Math.max(1, Math.min(25, limit))).map((a) => a.id);
@@ -591,7 +591,7 @@ serve("queue", async (req) => {
   }
   if (body.action === "industry_check") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can run this." });
-    const ids = await needIndustry(30);
+    const ids = typeof body.account_id === "string" ? [body.account_id] : await needIndustry(30);
     if (body.dry !== false) return json({ mode: "plan", companies: ids.length, cost_usd: +(ids.length * 0.0015).toFixed(3) });
     const r = await industryCheckMany(ids);
     const rescored = (await enrichCompanies(true)).rescored; // fit follows the new industries (no credits)

@@ -18,7 +18,7 @@ import icp from "./icp.json" with { type: "json" };
 // Source today: the monthly Hacker News "Who is hiring" thread, which lists companies that are hiring right now.
 // Companies hiring sales or RevOps roles are the strongest signal for the seller, so only those posts are kept.
 
-export type Candidate = { name: string; domain: string; source: string; sourceUrl: string; snippet: string };
+export type Candidate = { name: string; domain: string; source: string; sourceUrl: string; snippet: string; band?: string; size?: number };
 
 const cfg = icp.discovery;
 /** Sales or RevOps roles to look for: the profile's hiring roles plus the general words. */
@@ -148,7 +148,7 @@ async function readyTheNew(ids: string[]) {
   const per = (cfg as { peoplePerRun?: number }).peoplePerRun ?? 3;
   let searched = 0;
   // Read their public signals now, so a new company arrives with signals and a score instead of waiting for the Monday scan.
-  const { data: fresh } = ids.length ? await sb.from("cp_accounts").select("id,name,domain,status,segment,employees,stage,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai").in("id", ids) : { data: [] };
+  const { data: fresh } = ids.length ? await sb.from("cp_accounts").select("id,name,domain,status,segment,employees,stage,country,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai").in("id", ids) : { data: [] };
   for (let i = 0; i < (fresh ?? []).length; i += 4) await Promise.allSettled((fresh ?? []).slice(i, i + 4).map((a) => scanOne(a as never)));
   const { data } = ids.length ? await sb.from("cp_accounts").select(`id,domain,${FIT_COLS}`).in("id", ids) : { data: [] };
   for (const a of data ?? []) {
@@ -176,7 +176,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
   const web = useWeb ? (await collectWeb()).filter((c) => !seenDomains.has(c.domain) && !launches.some((l) => l.domain === c.domain)) : [];
   const hunter = (await collectHunter()).filter((c) => !seenDomains.has(c.domain)); // free (no credits), so a dry run uses it too
   const yc = (await collectYc()).filter((c) => !seenDomains.has(c.domain) && !hunter.some((h) => h.domain === c.domain));
-  const found = [...hiring, ...hunter, ...yc, ...web, ...launches].filter((c, i, all) => all.findIndex((x) => x.domain === c.domain) === i); // hiring posts first (the strongest signal), then the company database, YC, the web search, launches
+  const found: Candidate[] = [...hiring, ...hunter, ...yc, ...web, ...launches].filter((c, i, all) => all.findIndex((x) => x.domain === c.domain) === i); // hiring posts first (the strongest signal), then the company database, YC, the web search, launches
   const domains = found.map((c) => c.domain);
   const [{ data: have }, { data: seen }] = await Promise.all([
     sb.from("cp_accounts").select("domain").in("domain", domains.length ? domains : ["-"]),
@@ -209,7 +209,8 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
     }
     // Company facts (0.2 Hunter credit) screen out companies clearly outside the target size or stage.
     let firmo = null;
-    if (firmoLeft > 0) {
+    const light = !!(c.band || c.size); // the company search already gave its size: no paid lookup for that
+    if (firmoLeft > 0 && !light) {
       firmoLeft--;
       firmo = await fetchFirmo(c.domain);
       if (firmo) {
@@ -223,7 +224,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
       }
     }
     const { data: acct, error } = await sb.from("cp_accounts")
-      .insert({ domain: c.domain, name: row.name, segment: (v.segment ?? "").slice(0, 80) || null, source: "discovered", status: "new" })
+      .insert({ domain: c.domain, name: row.name, segment: (v.segment ?? "").slice(0, 80) || null, source: "discovered", status: "new", ...(light ? { light_source: c.source, employee_band: c.band ?? null, employees: c.size ?? null } : {}) })
       .select("id").single();
     if (error || !acct) {
       await log("warn", "discover_insert_failed", { account: c.domain, message: error?.message });

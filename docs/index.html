@@ -122,6 +122,10 @@
   /* ---- accounts: filters ---- */
   .banner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 18px; font-size: 12.5px; color: var(--muted); margin: 0 0 12px; }
   .banner b { color: var(--soft); font-weight: 600; }
+  .lookups { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 10px 0 2px; }
+  .lookups button { font: inherit; font-size: 12px; padding: 4px 10px; border: 1px dashed var(--line); border-radius: 999px; background: transparent; color: var(--soft); cursor: pointer; }
+  .lookups button:hover { border-style: solid; color: var(--text, inherit); }
+  .lookups button small { color: var(--muted); font-size: 11px; }
   .fpanel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 14px; margin: 0 0 16px; box-shadow: var(--card-shadow); }
   .seg { display: flex; gap: 2px; background: var(--raised); border-radius: 11px; padding: 3px; overflow-x: auto; scrollbar-width: none; }
   .seg button { flex: 1 0 auto; display: inline-flex; justify-content: center; align-items: center; gap: 7px; background: none; border: 0; border-radius: 9px; padding: 8px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
@@ -649,6 +653,18 @@ function aFacts(a) {
   </dl>`;
 }
 
+/** What is missing on a card, as buttons that say what each lookup costs. Owner only; a lookup that was done is never offered again. */
+function lookupRow(a) {
+  if (!(ACC && ACC.admin) || a.removed) return "";
+  const b = [];
+  if (!a.firmo_known) b.push(`<button type="button" data-act="firmo" title="Hunter company lookup">${a.facts.size ? "Check stage and place" : "Check size and stage"} <small>· 0.2 credit</small></button>`);
+  if (!a.searched && !a.searched_at && !a.people_count) b.push(`<button type="button" data-act="people" title="A Hunter search by your buyer titles">Find people <small>· 1 credit, sometimes 2</small></button>`);
+  if (!a.industry_read) b.push(`<button type="button" data-act="industry" title="The AI reads their website">Read industry <small>· about 0.1 cent of AI, no credit</small></button>`);
+  if (!a.ai) b.push(`<button type="button" data-act="aiscore" title="The AI judges timing from everything we know">Score with AI <small>· about 0.2 cent of AI, no credit</small></button>`);
+  if (!a.news_checked) b.push(`<button type="button" data-act="plnews" title="PredictLeads funding and leadership news">Check company news <small>· 1 of your 100 monthly calls</small></button>`);
+  return b.length ? `<div class="lookups"><span class="meta">Not looked up yet:</span>${b.join("")}</div>` : "";
+}
+
 function aCard(a) {
   const ll = progressS(a) ? lifeLine(a) : "";
   const VIA = { hn_hiring: "a Hacker News hiring post", launch_hn: "a Launch HN post", web: "a web search" };
@@ -662,6 +678,7 @@ function aCard(a) {
     </div>
     <div class="tags">${a.removed ? "" : watchBtn("company", a.id, a.watched)}<span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
     ${aFacts(a)}
+    ${lookupRow(a)}
     <div class="fitrow"><span class="badge ${fit[1] || ""}">${fit[0]}</span>${fitWhy(a).replace('<div class="fitwhy" aria-label="Why this fit">', '<span class="fitwhy" aria-label="Why this fit" style="margin:0">').replace(/<\/div>$/, "</span>")}</div>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
     ${a.not_fit_reason ? `<div class="status-line">Not a fit: ${esc(NOT_FIT[a.not_fit_reason] || a.not_fit_reason)}</div>` : ""}
@@ -685,8 +702,8 @@ function drawAccounts() {
   const unchecked = d.accounts.filter((a) => !a.removed && !a.firmo_known).length; // companies whose size and stage were never looked up
   const c = $("c-accounts"); const open = counts.open; c.textContent = open; c.hidden = !open;
   const sel = ([k, label, opts]) => `<label>${label}<select data-f="${k}" class="${AF[k] && AF[k] !== "best" ? "set" : ""}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${AF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
-  const rep = d.discovery.report, plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  const reportHtml = rep ? `<details class="fdet" style="margin:0 0 12px" ${Date.now() - Date.parse(rep.at) < 36e5 * 6 ? "open" : ""}><summary>Last discovery run · ${esc(ago(rep.at))}: ${esc(plural(rep.added.length, "company"))} added, ${esc(rep.skipped_n)} skipped</summary>
+  const rep = d.discovery.report, plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const reportHtml = rep ? `<details class="fdet" style="margin:0 0 12px" ${Date.now() - Date.parse(rep.at) < 36e5 * 6 ? "open" : ""}><summary>Last discovery run · ${esc(ago(rep.at))}: ${esc(plural(rep.added.length, "company", "companies"))} added, ${esc(rep.skipped_n)} skipped</summary>
     <div class="meta" style="margin:8px 0">Looked at ${esc(rep.collected)} companies${rep.from_web ? ` (${esc(rep.from_web)} from a web search)` : ""}; ${esc(rep.already_known)} were seen before, so ${esc(rep.checked)} new ones were checked.${rep.facts_checked ? ` Size and stage looked up for ${esc(rep.facts_checked)}.` : " Size and stage were not looked up, so these show as fit unknown."}${rep.people_searched ? ` People searched for ${esc(rep.people_searched)} that fit; they now show on Today.` : ""}${rep.judged ? ` The AI judged ${esc(rep.judged)}.` : ""}</div>
     ${rep.added.length ? `<p class="meta" style="margin:6px 0"><b>Added</b> (in Prospects, or Low fit if size and stage are checked and outside your bar): ${esc(rep.added.join(", "))}. <button type="button" class="btn ghost sm" data-newones>Show the new ones</button></p>` : ""}
     ${rep.skipped.length ? `<p class="meta" style="margin:6px 0 2px"><b>Skipped</b> (kept in <a href="#/setup/find">Setup, "Skipped by discovery"</a>, where you can add any back):</p><ul class="whylist">${rep.skipped.map((x) => `<li>${esc(x.name)}: ${esc(x.reason)}</li>`).join("")}</ul>` : ""}</details>` : "";
@@ -840,6 +857,12 @@ function wireCards(root, reload) {
     if (act === "aiscore") {
       btn.disabled = true; say("Asking the AI…");
       try { const r = await api("queue", { action: "ai_rescore", account_id: card.dataset.id }); if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; } say("Scored."); reload(); }
+      catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
+    if (act === "industry") {
+      btn.disabled = true; say("Reading their website…");
+      try { const r = await api("queue", { action: "industry_check", account_id: card.dataset.id, dry: false }); if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; } say(r.set ? "Industry read." : "Could not tell the industry from their website."); reload(); }
       catch (err) { say(err.message); btn.disabled = false; }
       return;
     }
