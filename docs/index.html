@@ -682,7 +682,12 @@ function drawAccounts() {
   const unchecked = d.accounts.filter((a) => !a.removed && !a.firmo_known).length; // companies whose size and stage were never looked up
   const c = $("c-accounts"); const open = counts.open; c.textContent = open; c.hidden = !open;
   const sel = ([k, label, opts]) => `<label>${label}<select data-f="${k}" class="${AF[k] && AF[k] !== "best" ? "set" : ""}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${AF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
-  $("ahead").innerHTML = `${viewSwitch("companies")}<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""}</span>
+  const rep = d.discovery.report, plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const reportHtml = rep ? `<details class="fdet" style="margin:0 0 12px" ${Date.now() - Date.parse(rep.at) < 36e5 * 6 ? "open" : ""}><summary>Last discovery run · ${esc(ago(rep.at))}: ${esc(plural(rep.added.length, "company"))} added, ${esc(rep.skipped_n)} skipped</summary>
+    <div class="meta" style="margin:8px 0">Looked at ${esc(rep.collected)} companies${rep.from_web ? ` (${esc(rep.from_web)} from a web search)` : ""}; ${esc(rep.already_known)} were seen before, so ${esc(rep.checked)} new ones were checked.${rep.facts_checked ? ` Size and stage looked up for ${esc(rep.facts_checked)}.` : " Size and stage were not looked up, so these show as fit unknown."}${rep.people_searched ? ` People searched for ${esc(rep.people_searched)} that fit; they now show on Today.` : ""}${rep.judged ? ` The AI judged ${esc(rep.judged)}.` : ""}</div>
+    ${rep.added.length ? `<p class="meta" style="margin:6px 0"><b>Added</b> (in Prospects, or Low fit if size and stage are checked and outside your bar): ${esc(rep.added.join(", "))}. <button type="button" class="btn ghost sm" data-newones>Show the new ones</button></p>` : ""}
+    ${rep.skipped.length ? `<p class="meta" style="margin:6px 0 2px"><b>Skipped</b> (kept in <a href="#/setup/find">Setup, "Skipped by discovery"</a>, where you can add any back):</p><ul class="whylist">${rep.skipped.map((x) => `<li>${esc(x.name)}: ${esc(x.reason)}</li>`).join("")}</ul>` : ""}</details>` : "";
+  $("ahead").innerHTML = reportHtml + `${viewSwitch("companies")}<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""}</span>
       <span>Signals refresh ${d.scan.active ? esc(d.scan.label) : "(paused)"} · next ${esc(day(d.scan.next_scan))}</span></div>
     <div class="fpanel">
       <div class="seg" role="tablist" aria-label="Companies">${VIEWS.map(([k, l, tip]) => `<button role="tab" aria-selected="${k === AF.view}" class="${k === AF.view ? "on" : ""}" data-view="${k}" title="${esc(tip)}">${l}<i>${counts[k]}</i></button>`).join("")}</div>
@@ -773,6 +778,7 @@ $("ahead").addEventListener("submit", async (e) => {
   } catch (err) { say(err.message); } finally { b.disabled = false; }
 });
 $("ahead").addEventListener("input", (e) => { if (e.target.id === "asearch") { AF.q = e.target.value; saveAF(); drawAccounts(); const s = $("asearch"); s.focus(); s.setSelectionRange(AF.q.length, AF.q.length); } });
+$("ahead").addEventListener("click", (e) => { if (e.target.closest("[data-newones]")) { AF = { ...AF_DEFAULT, view: "all", origin: "new" }; saveAF(); drawAccounts(); } });
 $("alist").addEventListener("click", (e) => { if (e.target.closest("[data-clear]")) { AF = { ...AF_DEFAULT, view: AF.view }; saveAF(); drawAccounts(); } });
 $("ahead").addEventListener("toggle", (e) => { if (e.target.matches?.("details.fdet")) fOpen = e.target.open; }, true);
 $("ahead").addEventListener("change", (e) => { const k = e.target.dataset?.f; if (k) { AF[k] = e.target.value; saveAF(); drawAccounts(); } });
@@ -1678,7 +1684,8 @@ async function loadSetup() {
         else $("runout").innerHTML = dry
           ? `<p class="meta">${esc(r.collected)} candidates found, ${esc(r.already_known)} already seen before. Would check: ${esc((r.would_check || []).join(", ") || "nothing new")}.</p>`
           : r.checked === 0 ? `<p class="meta">Looked at ${esc(r.collected)} companies from Hacker News (hiring posts and Launch HN). ${r.already_known === r.collected ? "All of them were seen in earlier runs, so there was nothing new to check." : "None could be checked this time."} New hiring posts and launches appear every few days; try again later.</p>`
-          : `<p class="meta">Looked at ${esc(r.collected)} companies, ${esc(r.already_known)} already seen. Checked ${esc(r.checked)} new: added ${esc(r.added.length)}${r.added.length ? ` (${esc(r.added.join(", "))})` : ""}, ${esc(r.rejected)} did not fit (not B2B software, or outside your size and stage).</p>`;
+          : `<p class="meta">Looked at ${esc(r.collected)} companies${r.from_web ? ` (${esc(r.from_web)} from a web search)` : ""}, ${esc(r.already_known)} already seen. Checked ${esc(r.checked)} new: <b>added ${esc(r.added.length)}</b>${r.added.length ? ` (${esc(r.added.join(", "))}), now in Accounts under Prospects` : ""}; <b>${esc(r.rejected)} skipped</b>${(r.skipped || []).length ? `: ${esc(r.skipped.slice(0, 6).map((x) => `${x.name} (${x.reason})`).join("; "))}${r.rejected > 6 ? "…" : ""}` : ""}. Skipped ones stay in the list below, and you can add any back.${r.people_searched ? ` People found for ${esc(r.people_searched)}; see Today.` : ""}</p>`;
+        if (!dry && r.mode === "live") { ACC = null; loadSkipped(); say(`Discovery done: ${r.added.length} added, ${r.rejected} skipped.`, { label: "Open Accounts", run: () => { AF = { ...AF_DEFAULT, view: "all", origin: "new" }; saveAF(); showView({ view: "accounts" }); } }); }
       } catch (err) { $("runout").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
       btn.disabled = false;
     }

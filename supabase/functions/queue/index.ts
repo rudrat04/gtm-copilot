@@ -154,7 +154,7 @@ async function accountsView(admin: boolean) {
     const deliberate = !!a.watched_at || a.source === "research" || a.source === "discovered" || a.source === "hubspot" || !!a.lost_at; // someone chose or the system found it
     const low = !deliberate && !worthShowing(a) && a.outreach_status === "open";
     const isNew = a.source === "discovered" && a.outreach_status === "open" && Date.now() - Date.parse(a.created_at) < 14 * DAY;
-    return { a, removed: !!a.removed_at, low: !a.removed_at && !a.watched_at && (low || (a.source === "discovered" && !meetsFit(fitState(a)) && a.outreach_status === "open")), outside, isNew }; // found by the system and below the fit bar: hidden too
+    return { a, removed: !!a.removed_at, low: !a.removed_at && !a.watched_at && (low || (a.source === "discovered" && !!a.firmo_at && !meetsFit(fitState(a)) && a.outreach_status === "open")), outside, isNew }; // found by the system and checked, and below the fit bar: hidden. One not checked yet stays in Prospects as "fit unknown"
   });
   const aiById = await aiMaps("company", rows.map((r) => r.a.id));
   const shown = rows.filter((r) => !r.low && !r.removed).map((r) => r.a.id);
@@ -165,6 +165,7 @@ async function accountsView(admin: boolean) {
     sb.from("cp_people").select("account_id").in("account_id", ids),
     sb.from("cp_discovered").select("domain,reason,found_at").eq("status", "added").order("found_at", { ascending: false }).limit(100),
   ]);
+  const { data: lastRun } = await sb.from("cp_state").select("value").eq("key", "discovery_last").maybeSingle();
   const searched = new Set((ppl ?? []).map((p) => p.account_id));
   const peopleCount = new Map<string, number>();
   for (const p of ppl ?? []) peopleCount.set(p.account_id, (peopleCount.get(p.account_id) ?? 0) + 1);
@@ -174,7 +175,7 @@ async function accountsView(admin: boolean) {
   const isSummary = (s: { kind: string; detail: unknown }) => s.kind === "hiring" && !!s.detail && typeof s.detail === "object" && "salesOpenings" in (s.detail as object);
 
   return {
-    discovery: { added_30d: (disc ?? []).filter((d) => Date.parse(d.found_at) > Date.now() - 30 * DAY).length, last: disc?.[0]?.found_at ?? null },
+    discovery: { added_30d: (disc ?? []).filter((d) => Date.parse(d.found_at) > Date.now() - 30 * DAY).length, last: disc?.[0]?.found_at ?? null, report: (() => { try { return lastRun?.value ? JSON.parse(lastRun.value) : null; } catch { return null; } })() },
     scan: await scanInfo(),
     ai_missing: rows.filter((r) => !r.removed && !r.low && !aiById.has(r.a.id)).length,
     industry_missing: rows.filter((r) => !r.removed && !r.a.industry_ai_at).length,

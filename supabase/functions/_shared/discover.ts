@@ -171,6 +171,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
   const known = new Set([...(have ?? []), ...(seen ?? []).filter((r) => !retry(r))].map((r) => r.domain));
   const fresh = found.filter((c) => !known.has(c.domain)).slice(0, cfg.maxCandidates);
   const addedIds: string[] = [];
+  const skipped: { name: string; reason: string }[] = [];
   const summary = { collected: found.length, from_web: web.length, already_known: found.length - fresh.length, checked: 0, added: [] as string[], rejected: 0, dry: !!opts.dry };
   if (opts.dry) return { ...summary, would_check: fresh.slice(0, cfg.maxAiPerRun).map((c) => `${c.name} (${c.domain})`) };
 
@@ -186,6 +187,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
     if (!v.fit) {
       await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason: (v.reason ?? "Not a B2B software company").slice(0, 200) }, { onConflict: "domain" });
       summary.rejected++;
+      skipped.push({ name: row.name, reason: (v.reason ?? "Not a B2B software company").slice(0, 120) });
       continue;
     }
     // Company facts (0.2 Hunter credit) screen out companies clearly outside the target size or stage.
@@ -198,6 +200,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
         if (f.known && !meetsFit(fitState({ employees: firmo.employees, stage: firmo.stage, country: firmo.country, firmo_at: "now" }))) {
           await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason: `Below the fit bar (${firmo.employees ?? "?"} people, ${firmo.stage ?? "unknown stage"})` }, { onConflict: "domain" });
           summary.rejected++;
+          skipped.push({ name: row.name, reason: `Below the fit bar (${firmo.employees ?? "?"} people, ${firmo.stage ?? "unknown stage"})` });
           continue;
         }
       }
@@ -215,7 +218,8 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
     addedIds.push(acct.id);
   }
   const ready = await readyTheNew(addedIds).catch(() => ({ searched: 0, judged: 0 }));
-  Object.assign(summary, { people_searched: ready.searched, judged: ready.judged });
+  Object.assign(summary, { people_searched: ready.searched, judged: ready.judged, skipped: skipped.slice(0, 20) });
+  if (summary.checked > 0) await sb.from("cp_state").upsert({ key: "discovery_last", value: JSON.stringify({ at: new Date().toISOString(), collected: summary.collected, from_web: summary.from_web, already_known: summary.already_known, checked: summary.checked, added: summary.added.slice(0, 20), skipped: skipped.slice(0, 20), skipped_n: summary.rejected, people_searched: ready.searched, judged: ready.judged, facts_checked: (opts.firmo === false ? 0 : cfg.firmoPerRun) - firmoLeft }), updated_at: new Date().toISOString() });
   await log("info", "discover_done", { detail: summary });
   return summary;
 }

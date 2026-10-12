@@ -58,6 +58,9 @@ export async function changesSince(sinceIso: string, needs: { id: string; name: 
   const { data: leads } = await sb.from("cp_leads").select("name,company,label").gt("created_at", sinceIso).limit(5);
   for (const l of leads ?? []) c.moves.push(`New inbound lead: ${(l.name ?? "").split(" ")[0]}${l.company ? ` (${l.company})` : ""}${l.label ? `, ${l.label}` : ""}`);
 
+  const { data: found } = await sb.from("cp_accounts").select("name").eq("source", "discovered").is("removed_at", null).gt("created_at", sinceIso).limit(8);
+  if (found?.length) c.moves.push(`Discovery added ${found.length} ${found.length === 1 ? "company" : "companies"}: ${found.slice(0, 5).map((f) => f.name).join(", ")}${found.length > 5 ? "…" : ""}`);
+
   const { data: held } = await sb.from("cp_alerts").select("account_id,signal_hash").eq("deferred", true).gt("sent_at", sinceIso).limit(10);
   for (const h of held ?? []) {
     const s = (sigs ?? []).find((x) => x.account_id === h.account_id);
