@@ -17,23 +17,76 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
-  main { max-width: 880px; margin: 0 auto; padding: 26px 16px 110px; }
+  main { max-width: 1040px; width: 100%; margin: 0 auto; padding: 24px 28px 110px; }
   a { color: inherit; }
   button { font: inherit; color: inherit; }
   [hidden] { display: none !important; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
-  /* ---- header and tabs ---- */
-  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
-  .brand h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
-  .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-  .mode { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 5px 6px 5px 12px; }
-  .mode .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  /* ---- app shell: sidebar, top bar, page ---- */
+  .app { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 100vh; transition: grid-template-columns .2s ease; }
+  body.sb-collapsed .app { grid-template-columns: 72px minmax(0, 1fr); }
+  .side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 14px; padding: 16px 12px 14px; background: var(--surface); border-right: 1px solid var(--line); overflow-y: auto; overflow-x: hidden; z-index: 50; }
+  .sidetop { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 0; }
+  .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .bmark { flex: none; width: 36px; height: 36px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 700; font-size: 17px; letter-spacing: -.02em; }
+  .brand img { height: 34px; max-width: 150px; width: auto; object-fit: contain; border-radius: 8px; display: block; }
+  .bname { min-width: 0; line-height: 1.25; } .bname b { display: block; font-size: 16px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bname small { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mode { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 99px; padding: 5px 6px 5px 12px; }
+  .mode .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
   .mode.owner .dot { background: var(--good); }
-  .mode input { width: 150px; padding: 4px 9px; font-size: 12.5px; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); color: var(--ink); }
-  nav.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; scrollbar-width: none; }
-  nav.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 10px 14px; font-weight: 600; font-size: 14px; color: var(--muted); cursor: pointer; white-space: nowrap; }
-  nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .mode input { width: 150px; max-width: 100%; padding: 4px 9px; font-size: 12.5px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); color: var(--ink); }
+  .iconbtn { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid transparent; border-radius: 9px; background: none; color: var(--muted); cursor: pointer; flex: none; }
+  .iconbtn:hover { background: var(--raised); color: var(--ink); }
+  .ico { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  #kbar { display: flex; align-items: center; gap: 10px; width: 100%; justify-content: flex-start; padding: 9px 12px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); font-weight: 500; }
+  #kbar kbd { margin-left: auto; }
+  nav.tabs { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  nav.tabs .navgroup { margin: 14px 12px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+  nav.tabs .navgroup:first-child { margin-top: 2px; }
+  nav.tabs button { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: 0; border-radius: 10px; padding: 9px 12px; font-weight: 600; font-size: 14.5px; color: var(--soft); cursor: pointer; text-align: left; white-space: nowrap; }
+  nav.tabs button:hover { background: var(--raised); color: var(--ink); }
+  nav.tabs button[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 11%, transparent); color: var(--accent); }
+  nav.tabs button[aria-selected="true"]::before { content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+  nav.tabs .spacer { flex: 1; }
+  nav.tabs .count { margin-left: auto; }
+  .sidefoot { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .sidefoot .mode { flex-wrap: wrap; border-radius: 12px; padding: 8px 10px; }
+  body.sb-collapsed .side { padding-left: 10px; padding-right: 10px; align-items: stretch; }
+  body.sb-collapsed .sidetop { flex-direction: column; gap: 12px; padding: 0; }
+  body.sb-collapsed .bname, body.sb-collapsed .navlabel, body.sb-collapsed .navgroup, body.sb-collapsed #kbar span, body.sb-collapsed #kbar kbd { display: none; }
+  body.sb-collapsed .brand { justify-content: center; } body.sb-collapsed .brand img { width: 36px; max-width: 36px; object-fit: cover; }
+  body.sb-collapsed #kbar { justify-content: center; padding: 9px 0; }
+  body.sb-collapsed nav.tabs button { justify-content: center; padding: 10px 0; }
+  body.sb-collapsed nav.tabs button[aria-selected="true"]::before { left: -10px; }
+  body.sb-collapsed nav.tabs .count { position: absolute; top: 3px; right: 6px; margin: 0; padding: 0 5px; font-size: 10px; }
+  body.sb-collapsed .sidefoot .mode { font-size: 0; justify-content: center; padding: 10px; } body.sb-collapsed .sidefoot .mode > *:not(.dot) { display: none; } body.sb-collapsed .sidefoot .mode .dot { width: 10px; height: 10px; }
+  .content { min-width: 0; display: flex; flex-direction: column; }
+  .topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 12px; padding: 14px 28px; min-height: 76px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .topbar .menu { display: none; }
+  .ptitle { flex: 1; min-width: 0; } .ptitle h1 { margin: 0; font-size: 22px; letter-spacing: -.015em; line-height: 1.2; }
+  .ptitle p { margin: 3px 0 0; font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ptitle .back { font-size: 13px; color: var(--muted); text-decoration: none; display: inline-block; margin-bottom: 2px; } .ptitle .back:hover { color: var(--accent); }
+  .sidebg { display: none; }
+  @media (max-width: 900px) {
+    .app, body.sb-collapsed .app { grid-template-columns: minmax(0, 1fr); }
+    .side { position: fixed; left: 0; top: 0; bottom: 0; width: min(300px, 86vw); transform: translateX(-102%); transition: transform .22s ease; box-shadow: var(--shadow); }
+    body.sb-open .side { transform: none; }
+    body.sb-open .sidebg { display: block; position: fixed; inset: 0; background: rgba(40, 35, 27, .38); z-index: 45; }
+    .topbar { padding: 10px 14px; min-height: 60px; } .topbar .menu { display: inline-grid; }
+    .ptitle h1 { font-size: 19px; } .ptitle p { display: none; }
+    #sbcollapse { display: none; }
+    /* the drawer is never the narrow rail, whatever was saved */
+    body.sb-collapsed .bname, body.sb-collapsed .navlabel, body.sb-collapsed .navgroup, body.sb-collapsed #kbar span, body.sb-collapsed #kbar kbd { display: revert; }
+    body.sb-collapsed #kbar span, body.sb-collapsed #kbar kbd { display: inline; } body.sb-collapsed #kbar kbd { display: inline-block; }
+    body.sb-collapsed .navgroup { display: block; } body.sb-collapsed .navlabel { display: inline; }
+    body.sb-collapsed .sidetop { flex-direction: row; } body.sb-collapsed .brand { justify-content: flex-start; } body.sb-collapsed .brand img { width: auto; max-width: 150px; object-fit: contain; }
+    body.sb-collapsed #kbar { justify-content: flex-start; padding: 9px 12px; }
+    body.sb-collapsed nav.tabs button { justify-content: flex-start; padding: 9px 12px; } body.sb-collapsed nav.tabs .count { position: static; margin-left: auto; padding: 1px 7px; font-size: 11px; }
+    body.sb-collapsed nav.tabs button[aria-selected="true"]::before { left: -12px; }
+    body.sb-collapsed .sidefoot .mode { font-size: 12.5px; justify-content: flex-start; padding: 8px 10px; } body.sb-collapsed .sidefoot .mode > *:not(.dot) { display: revert; } body.sb-collapsed .sidefoot .mode .dot { width: 7px; height: 7px; }
+  }
   .count { font-size: 11px; font-weight: 600; background: var(--raised); color: var(--muted); border-radius: 99px; padding: 1px 7px; margin-left: 6px; }
 
   /* ---- buttons ---- */
@@ -339,7 +392,6 @@
   .spin { display: inline-block; width: 13px; height: 13px; margin-right: 9px; vertical-align: -2px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: rot .7s linear infinite; }
   @keyframes rot { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .bar::before { animation: none; width: 100%; opacity: .5; } .spin { animation-duration: 2s; } }
-  .brand { display: flex; align-items: center; gap: 12px; } .brand img { height: 38px; max-width: 120px; object-fit: contain; border-radius: 8px; }
   .logoprev { display: flex; align-items: center; gap: 14px; margin: 0 0 10px; } .logoprev .lp { width: 64px; height: 64px; border: 1px dashed var(--line); border-radius: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--bg); font-size: 11px; color: var(--muted); } .logoprev img { max-width: 100%; max-height: 100%; }
   .wrow { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--line); flex-wrap: wrap; } .wrow:first-child { border-top: 0; }
   .wrow .wmain { flex: 1 1 320px; min-width: 0; } .wrow .wmain b { font-size: 16px; } .wrow .wside { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .wrow .dd { width: 150px; }
@@ -379,7 +431,7 @@
 
   @media (max-width: 600px) {
     .leadform .row2 { grid-template-columns: 1fr; }
-    main { padding-top: 18px; }
+    main { padding: 16px 14px 110px; }
     .card { padding: 16px; }
     .cols { grid-template-columns: 1fr; gap: 6px; }
     .strip { grid-template-columns: repeat(3, 1fr); }
@@ -391,22 +443,40 @@
 </style>
 </head>
 <body>
-<main>
-  <header class="top">
-    <div class="brand"><h1>F1rstword</h1><p>Know who to talk to, and when.</p></div>
-    <div class="hdr"><button class="btn ghost sm" id="kbar" type="button" title="Search companies and jump anywhere (Ctrl or Cmd + K)">⌕ Search <kbd>⌘K</kbd></button><div class="bell" id="bellbox" hidden><button class="btn ghost sm" id="bell" type="button" aria-label="Notifications" aria-haspopup="true" title="Alerts and news from your watchlist, discovery and credits">🔔<span class="dotn" id="bellc" hidden></span></button><div class="nc" id="nc" hidden></div></div><div class="mode" id="mode"></div></div>
-  </header>
+<div class="app" id="app">
+  <aside class="side" id="side" aria-label="Main navigation">
+    <div class="sidetop">
+      <div class="brand"><span class="bmark">F</span><div class="bname"><b>F1rstword</b><small>Know who to talk to, and when.</small></div></div>
+      <button class="iconbtn" id="sbcollapse" type="button" aria-label="Collapse the sidebar" title="Collapse the sidebar"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></button>
+    </div>
+    <button class="btn ghost sm" id="kbar" type="button" title="Search companies and jump anywhere (Ctrl or Cmd + K)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Search</span><kbd>⌘K</kbd></button>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <div class="navgroup">Work</div>
+      <button role="tab" aria-selected="true" data-tab="today" title="To-do"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="navlabel">To-do</span><span class="count" id="c-today" hidden></span></button>
+      <button role="tab" aria-selected="false" data-tab="accounts" title="People"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="navlabel">People</span><span class="count" id="c-accounts" hidden></span></button>
+      <button role="tab" aria-selected="false" data-tab="research" title="Research"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="navlabel">Research</span></button>
 
-  <nav class="tabs" role="tablist">
-    <button role="tab" aria-selected="true" data-tab="today">To-do<span class="count" id="c-today" hidden></span></button>
-    <button role="tab" aria-selected="false" data-tab="accounts">People<span class="count" id="c-accounts" hidden></span></button>
-    <button role="tab" aria-selected="false" data-tab="research">Research</button>
-    <button role="tab" aria-selected="false" data-tab="signals">Signals<span class="count" id="c-signals" hidden></span></button>
-    <button role="tab" aria-selected="false" data-tab="watchlist">Watchlist<span class="count" id="c-watchlist" hidden></span></button>
-    <button role="tab" aria-selected="false" data-tab="discover">Discover</button>
-    <button role="tab" aria-selected="false" data-tab="conversations">Conversations<span class="count" id="c-conv" hidden></span></button>
-    <button role="tab" aria-selected="false" data-tab="setup">Setup</button>
-  </nav>
+      <div class="navgroup">Intelligence</div>
+      <button role="tab" aria-selected="false" data-tab="signals" title="Signals"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span class="navlabel">Signals</span><span class="count" id="c-signals" hidden></span></button>
+      <button role="tab" aria-selected="false" data-tab="watchlist" title="Watchlist"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><span class="navlabel">Watchlist</span><span class="count" id="c-watchlist" hidden></span></button>
+      <button role="tab" aria-selected="false" data-tab="discover" title="Discover"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/></svg><span class="navlabel">Discover</span></button>
+
+      <div class="navgroup">Pipeline</div>
+      <button role="tab" aria-selected="false" data-tab="conversations" title="Conversations"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="navlabel">Conversations</span><span class="count" id="c-conv" hidden></span></button>
+
+      <div class="spacer"></div>
+      <button role="tab" aria-selected="false" data-tab="setup" title="Setup"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg><span class="navlabel">Setup</span></button>
+    </nav>
+    <div class="sidefoot"><div class="mode" id="mode"></div></div>
+  </aside>
+  <div class="sidebg" id="sidebg"></div>
+  <div class="content">
+    <header class="topbar">
+      <button class="iconbtn menu" id="sbopen" type="button" aria-label="Open the menu" aria-controls="side"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg></button>
+      <div class="ptitle"><h1 id="ptitle">To-do</h1><p id="psub"></p></div>
+      <div class="hdr"><div class="bell" id="bellbox" hidden><button class="iconbtn" id="bell" type="button" aria-label="Notifications" aria-haspopup="true" title="Alerts and news from your watchlist, discovery and credits"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="dotn" id="bellc" hidden></span></button><div class="nc" id="nc" hidden></div></div></div>
+    </header>
+<main>
 
   <section id="today"><div id="thead"></div><div id="tlist" aria-live="polite"></div></section>
 
@@ -439,6 +509,8 @@
 
   <section id="setup" hidden><div id="setupbody"></div></section>
 </main>
+  </div>
+</div>
 <div class="bar" id="bar" hidden role="progressbar" aria-label="Loading"></div>
 <div class="toast" id="toast" hidden role="status"></div>
 
@@ -726,7 +798,7 @@ async function loadToday(quiet) {
 function drawBoard() {
   const d = BOARD, total = d.items.length; PERSONAS = d.personas || PERSONAS;
   const sort = (BSORTS.find(([k]) => k === BSORT) || BSORTS[0])[2];
-  $("thead").innerHTML = `<div class="day"><h2>${esc(new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }))}</h2>
+  $("thead").innerHTML = `<div class="day">
     <span><b>${total}</b> on your board · <b>${d.lanes.now}</b> to contact now${d.hidden ? ` · ${d.hidden} not shown` : ""}${info("Each person is placed by their lead score, how well the company fits and what just happened there.")}</span></div>
     <div class="boardbar"><label style="display:inline-flex;gap:8px;align-items:center">Sort by <select data-bsort aria-label="Sort the board">${BSORTS.map(([k, l]) => `<option value="${k}"${BSORT === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>
       <a href="#/people">All people</a></div>`;
@@ -2236,7 +2308,10 @@ let BRAND = null;
 function applyBrand(b) {
   BRAND = b;
   const box = document.querySelector(".brand"); if (!box) return;
-  box.innerHTML = `${b.logo ? `<img src="${esc(b.logo)}" alt="">` : ""}<div><h1>${esc(b.name)}</h1><p>${esc(b.tagline)}</p></div>`;
+  // With a logo the logo is the brand; without one, a tile with the first letter and the name.
+  box.innerHTML = b.logo
+    ? `<img src="${esc(b.logo)}" alt="${esc(b.name)}" title="${esc(b.name)}">`
+    : `<span class="bmark" aria-hidden="true">${esc((b.name || "F").trim().charAt(0).toUpperCase())}</span><div class="bname"><b>${esc(b.name)}</b><small>${esc(b.tagline)}</small></div>`;
   document.title = b.name;
   let ic = document.querySelector('link[rel="icon"]'); if (!ic) { ic = document.createElement("link"); ic.rel = "icon"; document.head.append(ic); }
   if (b.logo) ic.href = b.logo; else ic.removeAttribute("href");
@@ -2491,7 +2566,7 @@ function drawSignals() {
     <div class="sg-text">${i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a>` : esc(i.title)}</div>
     ${i.people.length ? `<div class="sg-who"><span class="meta">Who to talk to:</span> ${i.people.map((p) => `<a class="ptag" href="#/people/${esc(i.company.id)}" title="${esc(p.title || "")}">${esc(p.name)} · ${esc((p.title || "").slice(0, 30))}${p.preview ? " · not revealed" : ""}</a>`).join(" ")}</div>` : `<div class="sg-who meta">Nobody who matches your buyer types is listed yet. <a href="#/people/${esc(i.company.id)}">Open the company</a></div>`}
   </article>`;
-  $("sbody").innerHTML = `<div class="day"><h2>Signals</h2><span>${esc(d.total)} in the last 30 days · ${esc(d.today)} today · <b>${esc(d.intent)}</b> buying-intent</span></div>
+  $("sbody").innerHTML = `<div class="day"><span>${esc(d.total)} in the last 30 days · ${esc(d.today)} today · <b>${esc(d.intent)}</b> buying-intent</span></div>
     <div class="fpanel"><div class="chips" style="margin:0 0 10px">${chip("", "All", d.total)}${d.categories.map((k) => chip(k, k, d.counts[k] || 0)).join("")}</div>
       <div class="fgrid">${sel("sort", "Sort by", [["new", "Newest"], ["fit", "Best company fit"], ["intent", "Buying intent first"]])}${sel("intent", "Show", [["", "Everything"], ["1", "Buying intent only"]])}${sel("fit", "Company fit", [["", "Any"], ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Fit unknown"]])}</div>
       <div class="fbar"><span>Showing <b>${shown.length}</b> of ${list.length}. Each signal names the people in that company who would care. Buying intent is also told in the bell.</span></div></div>
@@ -2529,7 +2604,7 @@ function drawDiscover() {
   const people = `<article class="card"><p class="label">Skipped people${ps ? ` (${esc(ps.items.length)})` : ""}</p><p class="help" style="margin:0 0 8px">People the free list showed at your companies but who are not one of your buyer types, so they are not kept. Change the buyer types in <a href="#/setup/contact">Setup</a>. <b>Remove</b> clears one from here.</p>
     ${ps?.items?.length ? ps.items.slice(0, 40).map((x) => `<div class="wrow" data-pkey="${esc(x.key || "")}"><div class="wmain"><b>${esc(x.name)}</b> <span class="meta">${esc(x.title)} at ${esc(x.company)}</span> <span class="badge ${x.label === "Too junior" ? "" : "warn"}">${esc(x.label || "Skipped")}</span>
       <div class="meta" style="margin-top:4px">${esc(x.reason)}${x.department ? ` · team: ${esc(x.department)}` : ""}${x.level ? ` · level: ${esc(LEVEL[x.level] || x.level)}` : ""}</div></div>${own && x.key ? `<div class="wside"><button class="btn link sm" data-hidepeople>Remove</button></div>` : ""}</div>`).join("") : `<p class="meta" style="margin:0">Nobody skipped in the last listing.</p>`}</article>`;
-  $("dbody").innerHTML = `<div class="day"><h2>Discover</h2><span>Find new companies, then the people who work there</span></div>
+  $("dbody").innerHTML = `
     ${own ? `<article class="card"><p class="label">Run it</p><p class="help" style="margin:0 0 10px">It reads Hacker News hiring and launch posts, Hunter's company database, Y Combinator companies that are hiring and a web search. New companies are screened, scanned for signals, and the people who work there are listed free. About 15 cents of AI for a full run (11 cents is the web search); search credits only for the size lookups of companies from the older sources (up to 1.6).</p>
       <div class="actions" style="margin:0"><button class="btn ghost" data-drun="preview">Preview what it would check</button><button class="btn primary" data-drun="live">Run discovery now</button>${d.unknown_fit ? `<button class="btn ghost" data-dfacts>Check size and stage for ${esc(d.unknown_fit)} companies · 0.2 credit each</button>` : ""}</div><div id="druneout"></div></article>` : ""}
     ${rep}${people}${skipped}${sources}`;
@@ -2594,6 +2669,34 @@ function parseRoute(h = location.hash) {
   return { view: "today" };
 }
 const routeHash = (r) => r.view === "company" ? `#/company/${r.id}` : r.view === "people" ? (r.id ? `#/people/${r.id}` : "#/people") : r.view === "conversations" ? `#/conversations/${r.sub === "meetings" ? "meetings" : "leads"}` : r.view === "setup" ? (r.sub ? `#/setup/${r.sub}` : "#/setup") : `#/${r.view}`;
+/* ---- page header and sidebar ---- */
+const PAGE_HEAD = {
+  today: ["To-do", () => new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }) + ". Who to contact, in priority order."],
+  people: ["People", () => "Everyone worth contacting, with the company behind them."],
+  accounts: ["Companies", () => "Every company we track, and what to do next with each."],
+  research: ["Research", () => "Look up any company: a dossier, and the people who work there."],
+  signals: ["Signals", () => "What changed at companies in the last 30 days."],
+  watchlist: ["Watchlist", () => "Companies and people you follow, and what moved."],
+  discover: ["Discover", () => "New companies found for you, and the ones we skipped."],
+  conversations: ["Conversations", () => "Inbound leads and meetings."],
+  setup: ["Setup", () => "What you sell, who you look for and how you are told."],
+  company: ["Company", () => ""],
+};
+function setPageHead(view) {
+  const [t, sub] = PAGE_HEAD[view] || PAGE_HEAD.today;
+  $("ptitle").innerHTML = view === "company" ? `<a class="back" href="#/people">← People</a><br>${esc(t)}` : esc(t);
+  $("psub").textContent = sub();
+  $("psub").hidden = !$("psub").textContent;
+}
+const sbSet = (collapsed) => { document.body.classList.toggle("sb-collapsed", collapsed); const b = $("sbcollapse"); b.setAttribute("aria-label", collapsed ? "Expand the sidebar" : "Collapse the sidebar"); b.title = b.getAttribute("aria-label"); try { localStorage.setItem("cp_sidebar", collapsed ? "1" : "0"); } catch {} };
+try { if (localStorage.getItem("cp_sidebar") === "1") sbSet(true); } catch {}
+$("sbcollapse").addEventListener("click", () => sbSet(!document.body.classList.contains("sb-collapsed")));
+const drawer = (open) => { document.body.classList.toggle("sb-open", open); $("sbopen").setAttribute("aria-expanded", String(open)); };
+$("sbopen").addEventListener("click", () => drawer(true));
+$("sidebg").addEventListener("click", () => drawer(false));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("sb-open")) drawer(false); });
+$("side").addEventListener("click", (e) => { if (e.target.closest("[data-tab], #kbar")) drawer(false); });
+
 let lastView = null;
 function showView(r, { push = true, force = false } = {}) {
   const view = SECTIONS.includes(r.view) ? r.view : "today";
@@ -2606,6 +2709,7 @@ function showView(r, { push = true, force = false } = {}) {
   if (location.hash !== h) (push ? history.pushState : history.replaceState).call(history, null, "", h);
   if (lastView !== view || force) window.scrollTo(0, 0);
   lastView = view;
+  setPageHead(view === "accounts" ? "accounts" : view); drawer(false);
   if (view === "conversations") {
     const sub = next.sub === "meetings" ? "meetings" : "leads";
     $("inbound").hidden = sub !== "leads"; $("meetings").hidden = sub !== "meetings";
