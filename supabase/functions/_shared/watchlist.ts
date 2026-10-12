@@ -4,7 +4,11 @@ import { log } from "./log.ts";
 import { collectSignals, saveSiteFacts, storedHiringSignals } from "./signals.ts";
 import { scoreAccount } from "./score.ts";
 import { storedPlSignals } from "./predictleads.ts";
-import { KIND_LABEL, MAX_WATCHED, type EventKind } from "./movements.ts";
+import { eventsFromSignals, KIND_LABEL, MAX_WATCHED, personMentions, recordEvent, type EventKind } from "./movements.ts";
+import { eventSignals } from "./signals.ts";
+import { personActivity, teamEvents } from "./peopleactivity.ts";
+import { scanOne } from "./scan.ts";
+import icp from "./icp.json" with { type: "json" };
 import { fitState, heatOf } from "./score.ts";
 import { FIT_COLS } from "./firmo.ts";
 import { loadProfile } from "./profile.ts";
@@ -105,10 +109,43 @@ export async function markSeen(): Promise<void> {
 }
 
 /** Everything the Watchlist tab shows. Public viewers get companies and movements; people are shown as "First L.". */
+/** What a followed company is checked for, from your settings: shown on the Watchlist so you know what is being watched. */
+function companyCovers(): string[] {
+  const w = icp.watch as { titleCheck?: boolean };
+  void w;
+  return ["Hiring and sales roles", "Funding and news", "Leadership changes", "Events they host", "Tools on their website", ...(icp.company && (icp.signals as { rules?: unknown[] }).rules?.length ? ["Your own signals (tools, competitors, phrases)"] : []), "HubSpot deals"];
+}
+function personCovers(preview: boolean): string[] {
+  const w = icp.watch as { titleCheck?: boolean; activityPerDay?: number };
+  if (preview) return ["Their team's hiring and news (free). Reveal them to also follow their own activity."];
+  return ["Mentions in the news", ...(w.activityPerDay ? ["Events, talks, podcasts and posts"] : []), "Their team's hiring and news", ...(w.titleCheck ? ["Job title changes (monthly)"] : []), "Their HubSpot record"];
+}
+
+/** "Check now" for one followed company or person. A company costs nothing; a person costs about 5 cents of AI (a web search by name). */
+export async function checkNow(kind: "company" | "person", id: string): Promise<{ found: number; cost: string }> {
+  if (kind === "person") {
+    let n = await personMentions(1, id);
+    n += await personActivity(1, id);
+    await sb.from("cp_people").update({ watch_checked_at: new Date().toISOString() }).eq("id", id);
+    return { found: n, cost: "about 5 cents of AI" };
+  }
+  const { data: a } = await sb.from("cp_accounts").select("id,name,domain,status,segment,employees,stage,country,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai").eq("id", id).maybeSingle();
+  if (!a) return { found: 0, cost: "free" };
+  const started = new Date(Date.now() - 2000).toISOString();
+  await scanOne(a as never); // reads the public sources and stores what is new
+  const extra = await eventSignals(a.name, a.domain).catch(() => []);
+  if (extra.length) await sb.from("cp_signals").upsert(extra.map((x) => ({ account_id: id, kind: x.kind, title: x.title.slice(0, 300), url: x.url, detail: x.detail ?? {} })), { onConflict: "account_id,kind,title", ignoreDuplicates: true });
+  const { data: fresh } = await sb.from("cp_signals").select("kind,title,url,detail,detected_at").eq("account_id", id).gte("detected_at", started);
+  let n = 0;
+  for (const ev of eventsFromSignals({ id }, (fresh ?? []).map((f) => ({ ...f, url: f.url ?? undefined, detail: f.detail ?? undefined })) as never)) if (await recordEvent(ev)) n++;
+  await teamEvents(id, (fresh ?? []) as never).catch(() => 0);
+  return { found: n, cost: "free" };
+}
+
 export async function watchlistView(admin: boolean) {
   const [{ data: accts }, { data: ppl }, { data: ev }] = await Promise.all([
-    sb.from("cp_accounts").select(`id,name,domain,priority_score,watch_notify,watched_at,outreach_status,${FIT_COLS}`).not("watched_at", "is", null).is("removed_at", null).order("watched_at", { ascending: false }),
-    sb.from("cp_people").select("id,account_id,first_name,last_name,title,persona,watch_notify,watched_at").not("watched_at", "is", null).order("watched_at", { ascending: false }),
+    sb.from("cp_accounts").select(`id,name,domain,priority_score,watch_notify,watched_at,last_scanned_at,outreach_status,${FIT_COLS}`).not("watched_at", "is", null).is("removed_at", null).order("watched_at", { ascending: false }),
+    sb.from("cp_people").select("id,account_id,first_name,last_name,title,persona,watch_notify,watched_at,watch_checked_at,activity_checked_at,preview").not("watched_at", "is", null).order("watched_at", { ascending: false }),
     sb.from("cp_watch_events").select("id,kind,importance,title,url,account_id,person_id,subject,detected_at,seen_at").order("detected_at", { ascending: false }).limit(80),
   ]);
   const ids = [...new Set([...(ppl ?? []).map((p) => p.account_id), ...(ev ?? []).map((e) => e.account_id).filter(Boolean) as string[]])];
@@ -126,17 +163,17 @@ export async function watchlistView(admin: boolean) {
     limits: MAX_WATCHED,
     competitors: (await loadProfile()).competitors,
     events: (ev ?? []).map((e) => ({
-      id: e.id, kind: e.kind, label: KIND_LABEL[e.kind as EventKind] ?? e.kind, importance: e.importance, title: e.title, url: e.url, detected_at: e.detected_at, unseen: !e.seen_at,
+      id: e.id, person_id: e.person_id, kind: e.kind, label: KIND_LABEL[e.kind as EventKind] ?? e.kind, importance: e.importance, title: e.title, url: e.url, detected_at: e.detected_at, unseen: !e.seen_at,
       who: e.account_id ? nameOf.get(e.account_id)?.name ?? "" : e.subject ?? "Competitor", company_id: e.account_id,
       person: e.person_id && pById.get(e.person_id) ? pname(pById.get(e.person_id)!) : null,
     })),
     companies: (accts ?? []).map((a) => {
       const l = last((e) => e.account_id === a.id && !e.person_id);
-      return { id: a.id, name: a.name, domain: a.domain, notify: a.watch_notify, fit: fitState(a), heat: aiCo.has(a.id) ? aiHeat(aiCo.get(a.id)!.label) : heatOf(sigs.filter((s) => s.account_id === a.id) as never, fitState(a)), last: l ? { label: KIND_LABEL[l.kind as EventKind] ?? l.kind, title: l.title, detected_at: l.detected_at } : null, unseen: (ev ?? []).filter((e) => e.account_id === a.id && !e.seen_at).length };
+      return { id: a.id, name: a.name, domain: a.domain, since: a.watched_at, checked: a.last_scanned_at, covers: companyCovers(), notify: a.watch_notify, fit: fitState(a), heat: aiCo.has(a.id) ? aiHeat(aiCo.get(a.id)!.label) : heatOf(sigs.filter((s) => s.account_id === a.id) as never, fitState(a)), last: l ? { label: KIND_LABEL[l.kind as EventKind] ?? l.kind, title: l.title, detected_at: l.detected_at } : null, unseen: (ev ?? []).filter((e) => e.account_id === a.id && !e.seen_at).length };
     }),
     people: (ppl ?? []).map((p) => {
       const l = last((e) => e.person_id === p.id);
-      return { id: p.id, name: pname(p), title: p.title, persona: p.persona, company: nameOf.get(p.account_id)?.name ?? "", notify: p.watch_notify, last: l ? { label: KIND_LABEL[l.kind as EventKind] ?? l.kind, title: l.title, detected_at: l.detected_at } : null, unseen: (ev ?? []).filter((e) => e.person_id === p.id && !e.seen_at).length };
+      return { id: p.id, account_id: p.account_id, name: pname(p), title: p.title, persona: p.persona, company: nameOf.get(p.account_id)?.name ?? "", since: p.watched_at, checked: p.watch_checked_at, activity_checked: p.activity_checked_at, preview: !!p.preview, covers: personCovers(!!p.preview), notify: p.watch_notify, last: l ? { label: KIND_LABEL[l.kind as EventKind] ?? l.kind, title: l.title, detected_at: l.detected_at } : null, unseen: (ev ?? []).filter((e) => e.person_id === p.id && !e.seen_at).length };
     }),
   };
 }

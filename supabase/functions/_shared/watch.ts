@@ -1,5 +1,6 @@
 import { json, sb } from "./db.ts";
 import { log } from "./log.ts";
+import { notify } from "./notify.ts";
 import { collectSignals, eventSignals, saveSiteFacts, type Signal, storedHiringSignals } from "./signals.ts";
 import { competitorEvents, eventsFromSignals, hubspotVisits, marketSignals, personMentions, recordEvent, sendMovementEmail, titleRecheck, watchedPeopleHubspot } from "./movements.ts";
 import { scoreAccount, tierOf } from "./score.ts";
@@ -10,6 +11,7 @@ import { firmoLine } from "./firmo.ts";
 import { contactsFor } from "./contacts.ts";
 import { autoSearch, searchStates } from "./autosearch.ts";
 import { aiMaps, aiRefresh, aiScoreCompany } from "./aiscore.ts";
+import { hunterBalance } from "./people.ts";
 import { personActivity, teamEvents } from "./peopleactivity.ts";
 import { peekCandidates, peekPeople } from "./peoplepreview.ts";
 import { industryCheckMany, needIndustry } from "./industry.ts";
@@ -144,6 +146,7 @@ export async function lightCheck(admin: boolean) {
       try {
         await sendMail(ownerEmail(), mail.subject, mail.body, mail.html);
         alerted++; left[lane]--; alertedIds.push(c.a.id);
+        await notify({ key: `alert:${c.a.id}:${c.hash}`, kind: "alert", title: `Hot alert: ${c.a.name}`, body: c.top.title, route: `#/company/${c.a.id}` });
         await log("info", "hot_alert_sent", { account: c.a.domain, detail: { fresh: c.fresh, score: c.score } });
       } catch (e) {
         await sb.from("cp_alerts").delete().eq("account_id", c.a.id).eq("signal_hash", c.hash); // retry next run
@@ -175,6 +178,8 @@ export async function lightCheck(admin: boolean) {
   } catch (e) { await log("warn", "ai_refresh_failed", { message: (e as Error).message }); }
 
   try { await peekPeople(await peekCandidates(30)); } catch (e) { await log("warn", "people_peek_daily_failed", { message: (e as Error).message }); } // free: who works at the companies worth working that have nobody listed
+
+  try { const bal = await hunterBalance(); if (bal && bal.remaining < 10) await notify({ key: `credits:${new Date().toISOString().slice(0, 7)}:${bal.remaining < 5 ? 5 : 10}`, kind: "credits", title: `Only ${Math.round(bal.remaining)} search credits left this month`, body: "Reveal only the people worth it.", route: "#/setup/conn" }); } catch { /* not important */ }
 
   await log("info", "watch_done", { detail: { accounts: accounts.length, new_signals: newSignals, candidates: candidates.length, alerted, failed, predictleads: pl } });
   return json({ accounts: accounts.length, new_signals: newSignals, alert_candidates: candidates.length, alerted, failed, predictleads: pl, movements: moved, ai: judged });

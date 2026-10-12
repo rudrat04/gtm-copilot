@@ -3,9 +3,11 @@ import { isAdmin } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
 import { applyOutcome, type OutcomeKind } from "../_shared/lifecycle.ts";
 import { buildToday, reasonLine } from "../_shared/today.ts";
+import { buildBoard } from "../_shared/board.ts";
+import { listNotifications, markRead } from "../_shared/notify.ts";
 import { draftNoteHtml, noteToHubSpot } from "../_shared/hsnotes.ts";
 import { writeDraft } from "../_shared/draft.ts";
-import { FIT_COLS, fetchFirmo, firmoLine, fitBreakdown, fitReasons, saveFirmo, usdShort } from "../_shared/firmo.ts";
+import { fetchFirmo, firmoLine, fitBreakdown, fitReasons, saveFirmo, usdShort } from "../_shared/firmo.ts";
 import { fitState, heatOf, scoreAccount } from "../_shared/score.ts";
 import { contactsFor } from "../_shared/contacts.ts";
 import { fetchSite } from "../_shared/signals.ts";
@@ -15,10 +17,9 @@ import { activeFlags, flagAction } from "../_shared/flags.ts";
 import { meetsFit, queueThreshold, worthShowing } from "../_shared/fitgate.ts";
 import { clean, DEPARTMENTS, INDUSTRIES, loadProfile, REGIONS, saveProfile, SENIORITIES, STAGES } from "../_shared/profile.ts";
 import { REGION_GROUPS, RULE_TYPES } from "../_shared/lists.ts";
-import { addPersonToWatchlist, addToWatchlist, markSeen, setNotify, setPersonWatched, setWatched, watchlistView } from "../_shared/watchlist.ts";
+import { addPersonToWatchlist, addToWatchlist, checkNow, markSeen, setNotify, setPersonWatched, setWatched, watchlistView } from "../_shared/watchlist.ts";
 import { cleanBrand, loadBrand, saveBrand } from "../_shared/brand.ts";
-import { scorePerson } from "../_shared/leadscore.ts";
-import { teamSignals } from "../_shared/peoplesignals.ts";
+import { peopleRows } from "../_shared/peoplerows.ts";
 import { peekCandidates, peekPeople } from "../_shared/peoplepreview.ts";
 import { aiHeat, aiMaps, aiRefresh, aiScoreCompany, aiScorePeople, candidates } from "../_shared/aiscore.ts";
 import { industryCheckMany, needIndustry } from "../_shared/industry.ts";
@@ -207,39 +208,7 @@ async function accountsView(admin: boolean) {
 
 /** Everyone we have searched, found or added, with or without an email, so nothing has to be searched twice. One company, or all (newest first). */
 async function peopleList(admin: boolean, accountId?: string) {
-  let q = sb.from("cp_people").select("id,account_id,first_name,last_name,title,persona,relevance,seniority,department,email,email_status,email_confidence,email_revealed,hubspot_contact_id,hs_status,hs_note,watched_at,created_at,provider,preview,decision_maker").order("created_at", { ascending: false }).limit(600);
-  if (accountId) q = q.eq("account_id", accountId);
-  const { data: rows } = await q;
-  const ids = [...new Set((rows ?? []).map((p) => p.account_id))];
-  const { data: accts } = ids.length ? await sb.from("cp_accounts").select(`id,name,domain,removed_at,hubspot_company_id,hs_seen_id,hs_contacts,${FIT_COLS}`).in("id", ids) : { data: [] };
-  const a = new Map((accts ?? []).map((x) => [x.id, x]));
-  const [{ data: sigs }, { data: evs }] = await Promise.all([
-    ids.length ? sb.from("cp_signals").select("account_id,kind,title,detail,detected_at").in("account_id", ids).order("detected_at", { ascending: false }).limit(2000) : Promise.resolve({ data: [] }),
-    sb.from("cp_watch_events").select("person_id,kind,title,url,detected_at").in("kind", ["job_change", "mention", "activity", "team"]).not("person_id", "is", null).order("detected_at", { ascending: false }),
-  ]);
-  const heatOfAcct = new Map<string, "hot" | "warm" | "watching">();
-  const aiCo = await aiMaps("company", ids);
-  for (const id of ids) heatOfAcct.set(id, aiCo.has(id) ? aiHeat(aiCo.get(id)!.label) : heatOf((sigs ?? []).filter((s) => s.account_id === id) as never, fitState(a.get(id) as never)));
-  const aiPeople = await aiMaps("person", (rows ?? []).map((p) => p.id));
-  const daysSince = (kind: string, pid: string) => { const e = (evs ?? []).filter((x) => x.person_id === pid && x.kind === kind).sort((x, y) => Date.parse(y.detected_at) - Date.parse(x.detected_at))[0]; return e ? Math.floor((Date.now() - Date.parse(e.detected_at)) / DAY) : null; };
-  const people = (rows ?? []).filter((p) => a.has(p.account_id) && !a.get(p.account_id)!.removed_at).map((p) => ({
-    lead: scorePerson({ relevance: p.relevance, persona: p.persona, companyFit: fitState(a.get(p.account_id) as never), companyHeat: heatOfAcct.get(p.account_id) ?? "watching", jobChangeDays: daysSince("job_change", p.id), mentionDays: daysSince("mention", p.id), emailStatus: p.email_status, hasEmail: !!p.email, hsStatus: p.hs_status }),
-    id: p.id, account_id: p.account_id, company: a.get(p.account_id)!.name, domain: a.get(p.account_id)!.domain,
-    activity: (evs ?? []).filter((x) => x.person_id === p.id && (x.kind === "activity" || x.kind === "team")).slice(0, 2).map((x) => ({ kind: x.kind, title: x.title, url: x.url, at: x.detected_at })),
-    hs_company: a.get(p.account_id)!.hubspot_company_id || a.get(p.account_id)!.hs_seen_id ? { contacts: a.get(p.account_id)!.hs_contacts ?? null, ours: !!a.get(p.account_id)!.hubspot_company_id } : null,
-    preview: !!p.preview, decision_maker: p.decision_maker ?? null, company_fit: fitState(a.get(p.account_id) as never), company_heat: heatOfAcct.get(p.account_id) ?? "watching",
-    team: teamSignals(p.department, p.title, (sigs ?? []).filter((s) => s.account_id === p.account_id) as never),
-    name: admin ? `${p.first_name} ${p.last_name}`.trim() : `${p.first_name} ${(p.last_name || "").charAt(0)}.`.trim(),
-    title: p.title, persona: p.persona, relevance: p.relevance, seniority: p.seniority, department: p.department,
-    has_email: !!p.email, revealed: admin && !!p.email_revealed, email: admin && p.email_revealed ? p.email : null, email_status: p.email_status, email_confidence: p.email_confidence,
-    in_hubspot: !!p.hubspot_contact_id, hs_status: p.hs_status, hs_note: p.hs_note, watched: !!p.watched_at, added: p.created_at, manual: p.provider === "manual",
-  }));
-  // The AI's judgement replaces the rule-based lead when there is one; a person who opted out stays blocked either way.
-  for (const p of people) {
-    const ai = aiPeople.get(p.id);
-    if (ai && p.lead.label !== "blocked") p.lead = { ...p.lead, score: ai.score, label: ai.label, reasons: ai.reasons.length ? ai.reasons : p.lead.reasons, ai: true } as typeof p.lead;
-  }
-  return { people };
+  return { people: await peopleRows(admin, { accountId }) };
 }
 
 /** One company in full: its card, every signal, what moved, its history and meetings. */
@@ -557,8 +526,17 @@ serve("queue", async (req) => {
     return json({ admin, people, nobody: (s ?? []).filter((x) => !have.has(x.id)).map((x) => ({ id: x.id, name: x.name, domain: x.domain, at: x.people_searched_at, by: x.people_search_source })), personas: icp.personas.map((p) => p.title) });
   }
   if (body.action === "discover_list") {
-    const { data } = await sb.from("cp_discovered").select("domain,name,reason,source,found_at,status").eq("status", "rejected").order("found_at", { ascending: false }).limit(40);
-    return json({ admin, skipped: data ?? [] });
+    const { data } = await sb.from("cp_discovered").select("domain,name,reason,source,found_at,status").eq("status", "rejected").order("found_at", { ascending: false }).limit(60);
+    const [{ data: last }, { data: sp }, { data: all }] = await Promise.all([
+      sb.from("cp_state").select("value").eq("key", "discovery_last").maybeSingle(),
+      sb.from("cp_state").select("value").eq("key", "people_skipped").maybeSingle(),
+      sb.from("cp_discovered").select("source,status").limit(5000),
+    ]);
+    const sources: Record<string, { added: number; skipped: number }> = {};
+    for (const r of all ?? []) { const x = (sources[r.source] ??= { added: 0, skipped: 0 }); if (r.status === "added") x.added++; else if (r.status === "rejected") x.skipped++; }
+    const parse = (v?: string | null) => { try { return v ? JSON.parse(v) : null; } catch { return null; } };
+    const { count: unknownFit } = await sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("firmo_at", null).is("removed_at", null);
+    return json({ admin, unknown_fit: unknownFit ?? 0, skipped: data ?? [], report: parse(last?.value), people_skipped: parse(sp?.value), sources, enabled: (icp.discovery as { enabled?: boolean }).enabled !== false, web: (icp.discovery as { web?: boolean }).web !== false });
   }
   if (body.action === "discover_add" && typeof body.domain === "string") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to add a company." });
@@ -614,6 +592,11 @@ serve("queue", async (req) => {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to follow companies and people." });
     const r = typeof body.person_id === "string" ? await setPersonWatched(body.person_id, body.on !== false) : await setWatched(body.account_id as string, body.on !== false);
     return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", ok: true });
+  }
+  if (body.action === "watch_check" && (body.kind === "company" || body.kind === "person") && typeof body.id === "string") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to check now." });
+    if (body.dry === true) return json({ mode: "plan", cost: body.kind === "person" ? "about 5 cents of AI" : "free" });
+    try { return json({ mode: "live", ...(await checkNow(body.kind, body.id)) }); } catch (e) { return json({ error: (e as Error).message }, e instanceof BudgetError ? 429 : 500); }
   }
   if (body.action === "watch_notify") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to change this." });
@@ -693,6 +676,22 @@ serve("queue", async (req) => {
     return json({ mode: "live", ...(await enrichCompanies(body.rescore === true)) });
   }
   if (body.action === "today") return json({ ...(await buildToday(admin)), attention: admin ? await activeFlags(5) : { items: [], total: 0 }, admin });
+  if (body.action === "board") {
+    const b = await buildBoard(admin);
+    return json({ ...b, attention: admin ? await activeFlags(5) : { items: [], total: 0 }, admin });
+  }
+  if (body.action === "todo_set" && typeof body.person_id === "string") { // pin a person to the board, set them aside, or clear it
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to change your to-do." });
+    const state = body.state === "pinned" || body.state === "dismissed" ? body.state : null;
+    await sb.from("cp_people").update({ todo_state: state, todo_at: state ? new Date().toISOString() : null }).eq("id", body.person_id);
+    return json({ mode: "live", ok: true });
+  }
+  if (body.action === "notifications") return admin ? json({ admin, ...(await listNotifications(40)) }) : json({ admin, items: [], unread: 0 });
+  if (body.action === "notifications_read") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode." });
+    await markRead(Array.isArray(body.ids) ? body.ids.map(String) : undefined);
+    return json({ mode: "live", ok: true });
+  }
   if (body.action === "flag_action" && typeof body.key === "string") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to snooze or dismiss." });
     const act = body.do === "dismiss" ? "dismiss" : "snooze";

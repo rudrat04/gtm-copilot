@@ -171,24 +171,31 @@ export type ContactInput = {
   firstName: string;
   lastName: string;
   title: string;
-  email: string;
+  email?: string | null;   // missing until the person is revealed: the contact is then created without one and completed later
   persona: string | null;   // HubSpot option value: sales_leader | revops | Founder
   personaScore: number;
   draftHtml?: string;
 };
 
+/** Completes a contact that was added before the person was revealed: the full name and the email. A clash with another contact is logged, never thrown. */
+export async function updateContact(contactId: string, props: { firstname?: string; lastname?: string; email?: string }, domain: string): Promise<boolean> {
+  const r = await hs(`/crm/v3/objects/contacts/${contactId}`, { method: "PATCH", body: JSON.stringify({ properties: props }) }, [409]);
+  if (!r.ok) await log("warn", "hubspot_contact_update_failed", { account: domain, detail: { status: r.status } });
+  return r.ok;
+}
+
 export async function pushContact(c: ContactInput, companyId: string, domain: string) {
-  const found = await hs("/crm/v3/objects/contacts/search", {
+  const found = c.email ? await hs("/crm/v3/objects/contacts/search", {
     method: "POST",
     body: JSON.stringify({ filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: c.email }] }], limit: 1 }),
-  });
+  }) : { ok: true, status: 200, body: { results: [] as { id: string }[] } };
   if (!found.ok) throw new Error(`HubSpot contact search ${found.status}`);
 
   const props: Record<string, string> = {
     firstname: c.firstName,
     lastname: c.lastName,
     jobtitle: c.title,
-    email: c.email,
+    ...(c.email ? { email: c.email } : {}),
     gtm_persona_score: String(Math.min(100, c.personaScore)),
   };
   if (c.persona) props.gtm_persona = c.persona;

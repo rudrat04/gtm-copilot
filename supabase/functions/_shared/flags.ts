@@ -1,5 +1,6 @@
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
+import { notify } from "./notify.ts";
 import { createTask, readCompanies } from "./hubspot.ts";
 import { fitState, heatOf } from "./score.ts";
 import { worthShowing } from "./fitgate.ts";
@@ -151,7 +152,7 @@ export async function collect(mode: "daily" | "urgent"): Promise<Candidate[]> {
     const ready = accounts.filter((a) => a.status === "queued" && a.outreach_status === "open" && contactOf.has(a.id) && worthShowing(a)).length;
     if (thinPipeline(ready, n("thinPipeline"))) {
       const best = (await planBulkFind(3).catch(() => ({ plan: [] as { name: string }[] }))).plan.map((p) => p.name);
-      add({ kind: "thin_pipeline", severity: "normal", accountId: null, title: `Only ${ready} ready account${ready === 1 ? "" : "s"} with someone to contact`, detail: `You asked to be warned when fewer than ${n("thinPipeline")} are ready, so Today will run dry.${best.length ? ` Best companies to search next: ${best.join(", ")} (about ${best.length} to ${best.length * 2} credits; "Find people for the top companies" in Accounts does it).` : ' Use "Find relevant people" on your best companies in Accounts.'}`, since: new Date(now).toISOString() });
+      add({ kind: "thin_pipeline", severity: "normal", accountId: null, title: `Only ${ready} ready account${ready === 1 ? "" : "s"} with someone to contact`, detail: `You asked to be warned when fewer than ${n("thinPipeline")} are ready, so your To-do will run dry. Open Discover and run it, or press "List people at my best companies" in People (free).${best.length ? ` Companies with nobody listed yet: ${best.join(", ")}.` : ""}`, since: new Date(now).toISOString() });
     }
   }
 
@@ -228,7 +229,7 @@ export async function runWatch(mode: "daily" | "urgent", opts: { dry?: boolean }
   for (const f of found) {
     const row = { kind: f.kind, account_id: f.accountId, severity: f.severity, title: f.title, detail: f.detail, last_seen: nowIso };
     if (have.has(f.key)) await sb.from("cp_flags").update(row).eq("key", f.key);
-    else await sb.from("cp_flags").upsert({ key: f.key, ...row, since: f.since, first_seen: nowIso, resolved_at: null, snoozed_until: null, dismissed_at: null, hubspot_task_id: null });
+    else { await sb.from("cp_flags").upsert({ key: f.key, ...row, since: f.since, first_seen: nowIso, resolved_at: null, snoozed_until: null, dismissed_at: null, hubspot_task_id: null }); await notify({ key: `flag:${f.key}:${nowIso.slice(0, 10)}`, kind: "flag", title: f.title, body: f.detail, route: f.accountId ? `#/company/${f.accountId}` : "#/today" }); }
   }
   for (const f of gone) await sb.from("cp_flags").update({ resolved_at: nowIso, dismissed_at: null, snoozed_until: null }).eq("key", f.key);
 

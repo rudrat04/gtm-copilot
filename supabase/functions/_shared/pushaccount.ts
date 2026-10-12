@@ -44,17 +44,18 @@ export type PushResult =
   | { ok: false; error: string; code: number };
 
 /** Creates or updates the company, then the revealed people, links them, adds the note and fills the columns. */
-export async function pushAccount(accountId: string, personIds?: string[]): Promise<PushResult> {
+export async function pushAccount(accountId: string, personIds?: string[], opts: { allowUnrevealed?: boolean } = {}): Promise<PushResult> {
   const ctx = await companyContext(accountId);
   if (!ctx) return { ok: false, error: "Account not found", code: 404 };
   const a = ctx.account;
 
-  let q = sb.from("cp_people").select("*").eq("account_id", accountId).eq("email_revealed", true).eq("preview", false);
+  let q = sb.from("cp_people").select("*").eq("account_id", accountId);
+  if (!opts.allowUnrevealed) q = q.eq("email_revealed", true).eq("preview", false); // only revealed people, unless the owner chose to add someone before revealing
   if (personIds?.length) q = q.in("id", personIds);
   const { data: all } = await q;
   const people = (all ?? []).filter((p) => p.hs_status !== "opted_out" && p.hs_status !== "bounced"); // never add someone who opted out or bounced
   const skipped = (all ?? []).length - people.length;
-  if (!people.length) return { ok: false, error: skipped ? "Everyone selected opted out or bounced in HubSpot" : "Reveal at least one person before adding to HubSpot", code: 409 };
+  if (!people.length) return { ok: false, error: skipped ? "Everyone selected opted out or bounced in HubSpot" : "Reveal at least one person first, or choose add without revealing", code: 409 };
 
   const { data: draft } = await sb.from("cp_outreach_drafts").select("*").eq("account_id", accountId)
     .in("status", ["pending", "approved"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -66,8 +67,10 @@ export async function pushAccount(accountId: string, personIds?: string[]): Prom
       const html = draft
         ? `<p><b>Draft (not sent):</b></p><p><b>${draft.subject}</b><br>${draft.body.replace(/\{\{first_name\}\}/g, p.first_name).replace(/\n/g, "<br>")}</p>`
         : undefined;
+      if (p.hubspot_contact_id && !p.email_revealed) continue; // already added before being revealed: it is completed when they are revealed
+      const known = p.email_revealed && !p.preview && p.email; // the email goes to HubSpot only once it is revealed
       const c = await pushContact(
-        { firstName: p.first_name, lastName: p.last_name ?? "", title: p.title, email: p.email!, persona: personaValue(p.persona), personaScore: p.relevance, draftHtml: html },
+        { firstName: p.first_name, lastName: p.last_name ?? "", title: p.title, email: known ? p.email : null, persona: personaValue(p.persona), personaScore: p.relevance, draftHtml: known ? html : `<p><b>Not revealed yet in F1rstword.</b> The name is shortened and there is no email. It is completed here when the person is revealed.</p>${html ?? ""}` },
         company.companyId,
         a.domain,
       );

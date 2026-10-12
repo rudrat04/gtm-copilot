@@ -1,6 +1,7 @@
 import { normalizeDomain, sb } from "./db.ts";
 import { log } from "./log.ts";
 import { guardPeople } from "./guard.ts";
+import { updateContact } from "./hubspot.ts";
 import { HUNTER_MONTHLY_CAP, monthlyUsed, peopleFilter, rank } from "./people.ts";
 import { FIT_COLS } from "./firmo.ts";
 import { worthShowing } from "./fitgate.ts";
@@ -49,6 +50,17 @@ export function pickPeople(rows: PreviewRow[], domains: Set<string>, employeesOf
   return byDomain;
 }
 
+/** Pure: people the free list showed but that are not one of your buyer types, so they are not kept (listed on the Discover page so nothing is hidden silently). */
+export function droppedPeople(rows: PreviewRow[], domains: Set<string>, employeesOf: (domain: string) => number | null | undefined) {
+  const out: { company: string; name: string; title: string; reason: string }[] = [];
+  for (const row of rows) {
+    const domain = normalizeDomain(row.domain ?? "");
+    if (!domain || !domains.has(domain) || !row.name || !row.position) continue;
+    if (rank(row.position, employeesOf(domain), row.department).relevance < 50) out.push({ company: row.company_name ?? domain, name: row.name, title: row.position, reason: "Not one of your buyer types" });
+  }
+  return out;
+}
+
 // deno-lint-ignore no-explicit-any -- Hunter's JSON
 async function call(path: string, body?: unknown): Promise<{ ok: boolean; status: number; json: Record<string, any> }> {
   const key = Deno.env.get("HUNTER_API_KEY");
@@ -60,6 +72,7 @@ async function call(path: string, body?: unknown): Promise<{ ok: boolean; status
 /** Free: stores the people (shortened names, no emails) at these companies. Returns how many people were stored. */
 export async function peekPeople(accounts: { id: string; name: string; domain: string }[]): Promise<{ stored: number; companies: number; withPeople: number }> {
   const out = { stored: 0, companies: 0, withPeople: 0 };
+  const dropped: ReturnType<typeof droppedPeople> = [];
   if (!accounts.length || !Deno.env.get("HUNTER_API_KEY")) return out;
   const idOf = new Map(accounts.map((a) => [a.domain, a.id]));
   const { data: sizes } = await sb.from("cp_accounts").select("domain,employees").in("id", accounts.map((a) => a.id));
@@ -76,6 +89,7 @@ export async function peekPeople(accounts: { id: string; name: string; domain: s
       cursor = r.json.meta?.next_search_after;
       if (!cursor || (r.json.data ?? []).length < 100) break;
     }
+    dropped.push(...droppedPeople(rows, new Set(chunk.map((a) => a.domain)), (d) => emp.get(d)));
     const picked = pickPeople(rows, new Set(chunk.map((a) => a.domain)), (d) => emp.get(d));
     const ids = chunk.map((a) => a.id);
     // Replace the earlier preview rows, but never one you follow, revealed or pushed.
@@ -95,13 +109,14 @@ export async function peekPeople(accounts: { id: string; name: string; domain: s
     await sb.from("cp_accounts").update({ people_previewed_at: new Date().toISOString() }).in("id", ids);
     out.companies += chunk.length;
   }
+  if (dropped.length) await sb.from("cp_state").upsert({ key: "people_skipped", value: JSON.stringify({ at: new Date().toISOString(), items: dropped.slice(0, 60) }), updated_at: new Date().toISOString() });
   await log("info", "people_peek", { detail: out });
   return out;
 }
 
 /** 1 credit: shows the full name and email of one previewed person. */
 export async function revealPerson(personId: string, retry = true): Promise<{ ok: true; credits: number } | { ok: false; error: string; code?: number }> {
-  const { data: p } = await sb.from("cp_people").select("id,account_id,title,reveal_handle,handle_period,preview").eq("id", personId).maybeSingle();
+  const { data: p } = await sb.from("cp_people").select("id,account_id,title,reveal_handle,handle_period,preview,hubspot_contact_id").eq("id", personId).maybeSingle();
   if (!p) return { ok: false, error: "Person not found", code: 404 };
   if (!p.preview) return { ok: false, error: "This person is already revealed", code: 409 };
   const { data: acct } = await sb.from("cp_accounts").select("id,name,domain").eq("id", p.account_id).maybeSingle();
@@ -127,6 +142,7 @@ export async function revealPerson(personId: string, retry = true): Promise<{ ok
     first_name: row.first_name ?? undefined, last_name: row.last_name ?? "", email: row.email.toLowerCase(), linkedin_url: row.linkedin_url ?? null,
     provider: "hunter", preview: false, reveal_handle: null, email_revealed: true, enriched_at: new Date().toISOString(), seniority: rk.seniority,
   }).eq("id", p.id);
+  if (p.hubspot_contact_id) await updateContact(p.hubspot_contact_id, { firstname: row.first_name ?? undefined, lastname: row.last_name ?? "", email: row.email.toLowerCase() }, acct.domain).catch(() => false); // a contact added before the reveal is completed in HubSpot
   await guardPeople({ accountId: acct.id });
   await log("info", "person_revealed", { account: acct.domain, detail: { credits } });
   return { ok: true, credits };

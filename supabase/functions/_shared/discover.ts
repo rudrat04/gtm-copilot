@@ -1,5 +1,6 @@
 import { normalizeDomain, sb } from "./db.ts";
 import { log } from "./log.ts";
+import { notify } from "./notify.ts";
 import { askClaude, parseJson } from "./claude.ts";
 import { fetchSite } from "./signals.ts";
 import { fetchFirmo, fitBreakdown, saveFirmo } from "./firmo.ts";
@@ -236,6 +237,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
   const ready = await readyTheNew(addedIds.slice(0, 12)).catch(() => ({ searched: 0, judged: 0 }));
   Object.assign(summary, { people_searched: ready.searched, judged: ready.judged, skipped: skipped.slice(0, 20) });
   await save(ready);
+  if (summary.checked > 0) await notify({ key: `discovery:${new Date().toISOString().slice(0, 13)}`, kind: "discovery", title: `Discovery: ${summary.added.length} companies added, ${summary.rejected} skipped`, body: summary.added.slice(0, 6).join(", "), route: "#/discover" });
   await log("info", "discover_done", { detail: summary });
   return summary;
 }

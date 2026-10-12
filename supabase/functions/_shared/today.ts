@@ -126,7 +126,7 @@ export function goneDark(
 /** Companies the rep cannot act on yet: a good signal but no named person to contact. */
 export type NeedsContact = { id: string; name: string; tier: string; priority: number | null; reason: string };
 
-export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = {}) {
+export async function buildToday(admin: boolean, opts: { autoFind?: boolean; cap?: number } = {}) {
   const now = Date.now();
   const cfg = icp.today;
 
@@ -267,7 +267,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
   const waits = (i: TodayItem) => i.type !== "meeting" && i.type !== "follow_up" && !i.contacts.length;
   const needs: NeedsContact[] = items.filter(waits).map((i) => ({ id: i.account!.id, name: i.account!.name, tier: i.account!.tier, priority: i.account!.priority, reason: i.reason }));
   const ready = items.filter((i) => !waits(i));
-  const shown = ready.slice(0, cfg.cap);
+  const shown = ready.slice(0, opts.cap ?? cfg.cap);
 
   // Owner view: write any missing "Why today" sentences (cached per signal set, so each costs once).
   if (admin) {
@@ -288,7 +288,7 @@ export async function buildToday(admin: boolean, opts: { autoFind?: boolean } = 
   const counts: Record<string, number> = {};
   for (const it of shown) counts[it.type] = (counts[it.type] ?? 0) + 1;
   await log("info", "today_built", { detail: { shown: shown.length, hidden: ready.length - shown.length, needs: needs.length, counts, admin } });
-  return { generated_at: new Date().toISOString(), cap: cfg.cap, counts, hidden: Math.max(0, ready.length - shown.length), needs, debriefs: debriefs ?? 0, leads: leads ?? 0, blocked, items: shown };
+  return { generated_at: new Date().toISOString(), cap: opts.cap ?? cfg.cap, counts, hidden: Math.max(0, ready.length - shown.length), needs, debriefs: debriefs ?? 0, leads: leads ?? 0, blocked, items: shown };
 }
 
 

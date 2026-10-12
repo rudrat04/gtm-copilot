@@ -1,5 +1,6 @@
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
+import { notify } from "./notify.ts";
 import { isEventHeadline, newsRaw, type Signal } from "./signals.ts";
 import { googleConfigured, ownerEmail, sendMail } from "./google.ts";
 import { button, esc as h, h2, layout, link, list } from "./emailhtml.ts";
@@ -59,7 +60,13 @@ export async function recordEvent(e: WatchEvent): Promise<boolean> {
     key: e.key, kind: e.kind, importance: e.importance, account_id: e.accountId ?? null, person_id: e.personId ?? null, subject: e.subject ?? null, title: e.title, url: e.url ?? null,
   }, { onConflict: "key", ignoreDuplicates: true }).select("id");
   if (error) { await log("warn", "watch_event_failed", { message: error.message, detail: { key: e.key } }); return false; }
-  return (data ?? []).length > 0;
+  const isNew = (data ?? []).length > 0;
+  if (isNew && e.importance === "big") {
+    let who = e.subject ?? "";
+    if (e.accountId && !who) who = (await sb.from("cp_accounts").select("name").eq("id", e.accountId).maybeSingle()).data?.name ?? "";
+    await notify({ key: `ev:${e.key}`, kind: "watch", title: `${who ? `${who}: ` : ""}${KIND_LABEL[e.kind] ?? e.kind}`, body: e.title, route: e.personId ? `#/people/${e.accountId ?? ""}` : e.accountId ? `#/company/${e.accountId}` : "#/watchlist" });
+  }
+  return isNew;
 }
 
 /** Records an event only if the company is followed (used by hooks in other jobs). */
@@ -128,9 +135,10 @@ export async function hubspotVisits(): Promise<number> {
 }
 
 /** Followed people mentioned in the news (free; up to `limit` people a run, the longest-unchecked first). */
-export async function personMentions(limit = 8): Promise<number> {
-  const { data: people } = await sb.from("cp_people").select("id,first_name,last_name,account_id,watch_checked_at,watch_notify").not("watched_at", "is", null).eq("preview", false).neq("watch_notify", "off")
-    .order("watch_checked_at", { ascending: true, nullsFirst: true }).limit(limit);
+export async function personMentions(limit = 8, onlyId?: string): Promise<number> {
+  let q = sb.from("cp_people").select("id,first_name,last_name,account_id,watch_checked_at,watch_notify").not("watched_at", "is", null).eq("preview", false);
+  q = onlyId ? q.eq("id", onlyId) : q.neq("watch_notify", "off").order("watch_checked_at", { ascending: true, nullsFirst: true }).limit(limit);
+  const { data: people } = await q;
   if (!people?.length) return 0;
   const { data: accts } = await sb.from("cp_accounts").select("id,name").in("id", people.map((p) => p.account_id));
   const company = new Map((accts ?? []).map((a) => [a.id, a.name]));

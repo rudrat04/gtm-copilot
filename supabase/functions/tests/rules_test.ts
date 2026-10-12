@@ -1034,3 +1034,17 @@ Deno.test("activity found on the web is cleaned", async () => {
   assertEquals(activityLine(out[0]), "Speaking at SaaSBoomi in Bengaluru · Bengaluru · 2026-11");
   assertEquals(cleanActivity(null), []);
 });
+
+Deno.test("the to-do board: lanes and the first reason", async () => {
+  const { laneOf, whyLine } = await import("../_shared/board.ts");
+  assertEquals(laneOf({ type: "follow_up", priority: 10 }), "now");
+  assertEquals(laneOf({ type: "pinned", priority: 5 }), "now");
+  assertEquals(laneOf({ type: "hot", priority: 80 }), "now");
+  assertEquals(laneOf({ type: "new", priority: 50 }), "week");
+  assertEquals(laneOf({ type: "new", priority: 20 }), "later");
+  assertEquals(laneOf({ type: "waiting", priority: 99 }), "waiting");
+  const recent = new Date().toISOString();
+  assertEquals(whyLine({ activity: [{ kind: "activity", title: "Speaking in Hyderabad", url: null, at: recent }], team: ["Hiring in your area: AE"] }, "x").label, "Their activity");
+  assertEquals(whyLine({ activity: [], team: ["Hiring in your area: AE"] }, "x").label, "Their team");
+  assertEquals(whyLine(null, "Funding news").text, "Funding news");
+});

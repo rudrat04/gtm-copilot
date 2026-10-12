@@ -4,7 +4,7 @@ import { log, serve } from "../_shared/log.ts";
 import { hunterBalance, rerankPeople, searchAndStore } from "../_shared/people.ts";
 import { peekPeople, revealPerson } from "../_shared/peoplepreview.ts";
 import { companyContext, headerScores, personaValue, pushAccount } from "../_shared/pushaccount.ts";
-import { companyFields, tierLabel } from "../_shared/hubspot.ts";
+import { companyFields, tierLabel, updateContact } from "../_shared/hubspot.ts";
 
 type Row = {
   id: string; first_name: string; last_name: string; title: string; seniority: string;
@@ -97,6 +97,7 @@ async function enrich(personId: string, what: string, admin: boolean) {
   if (p.hs_status === "opted_out" || p.hs_status === "bounced") return json({ error: p.hs_note ?? "HubSpot says this person should not be emailed" }, 409);
 
   await sb.from("cp_people").update({ email_revealed: true, enriched_at: new Date().toISOString() }).eq("id", personId);
+  if (p.hubspot_contact_id) await updateContact(p.hubspot_contact_id, { email: p.email }, String(p.email).split("@")[1] ?? "").catch(() => false); // added to HubSpot before being enriched: add the email now
   await log("info", "person_enriched", { account: p.email.split("@")[1], detail: { what, status: p.email_status } });
   return json({ mode: "live", person: view({ ...p, email_revealed: true } as Row, true) });
 }
@@ -128,9 +129,17 @@ async function preview(accountId: string, admin: boolean) {
   });
 }
 
-async function push(accountId: string, personIds: string[] | undefined, admin: boolean) {
+async function push(accountId: string, personIds: string[] | undefined, admin: boolean, mode: "reveal" | "without" = "reveal") {
   if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to push to HubSpot." });
-  const r = await pushAccount(accountId, personIds);
+  if (mode === "reveal" && personIds?.length) { // reveal first (1 credit for each person still hidden), then add
+    for (const id of personIds) {
+      const { data: p } = await sb.from("cp_people").select("preview,email,email_revealed,hs_status").eq("id", id).maybeSingle();
+      if (!p || (p.email_revealed && !p.preview)) continue;
+      if (p.preview) { const r = await revealPerson(id); if (!r.ok) return json({ error: r.error }, r.code ?? 400); }
+      else if (p.email && p.hs_status !== "opted_out" && p.hs_status !== "bounced") await sb.from("cp_people").update({ email_revealed: true, enriched_at: new Date().toISOString() }).eq("id", id);
+    }
+  }
+  const r = await pushAccount(accountId, personIds, { allowUnrevealed: mode === "without" });
   if (!r.ok) return json({ error: r.error }, r.code);
   return json({ mode: "live", company: r.company, contacts: r.contacts, used_dossier: r.used_dossier, skipped: r.skipped });
 }
@@ -148,7 +157,7 @@ serve("people", async (req) => {
     case "preview":
       return await preview(String(body.account_id ?? ""), admin);
     case "push":
-      return await push(String(body.account_id ?? ""), Array.isArray(body.person_ids) ? body.person_ids : undefined, admin);
+      return await push(String(body.account_id ?? ""), Array.isArray(body.person_ids) ? body.person_ids : undefined, admin, body.mode === "without" ? "without" : "reveal");
     case "rerank": {
       // Recompute persona/relevance from stored titles after an ICP change. Costs no credits.
       if (!admin) return json({ error: "Owner only" }, 403);

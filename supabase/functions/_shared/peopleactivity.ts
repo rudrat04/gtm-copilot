@@ -30,15 +30,20 @@ export function cleanActivity(raw: unknown): Activity[] {
 export const activityLine = (a: Activity) => [a.title, a.place, a.date].filter(Boolean).join(" · ");
 
 /** Looks up a few followed people on the web. Spends AI (about 5 cents each), never more than `activityPerDay` people a day. */
-export async function personActivity(limit = (icp.watch as { activityPerDay?: number }).activityPerDay ?? 2): Promise<number> {
-  if (limit <= 0) return 0;
+export async function personActivity(limit = (icp.watch as { activityPerDay?: number }).activityPerDay ?? 2, onlyId?: string): Promise<number> {
+  if (limit <= 0 && !onlyId) return 0;
   const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
-  const { count: today } = await sb.from("cp_people").select("id", { count: "exact", head: true }).gte("activity_checked_at", dayStart.toISOString());
-  const left = limit - (today ?? 0);
-  if (left <= 0) return 0;
-  const { data: people } = await sb.from("cp_people").select("id,first_name,last_name,title,account_id,watch_notify").not("watched_at", "is", null).eq("preview", false).neq("watch_notify", "off")
-    .or(`activity_checked_at.is.null,activity_checked_at.lt.${since}`).order("activity_checked_at", { ascending: true, nullsFirst: true }).limit(left);
+  let people;
+  if (onlyId) { // "Check now": one person, whatever the daily allowance
+    people = (await sb.from("cp_people").select("id,first_name,last_name,title,account_id,watch_notify").eq("id", onlyId).eq("preview", false)).data;
+  } else {
+    const { count: today } = await sb.from("cp_people").select("id", { count: "exact", head: true }).gte("activity_checked_at", dayStart.toISOString());
+    const left = limit - (today ?? 0);
+    if (left <= 0) return 0;
+    people = (await sb.from("cp_people").select("id,first_name,last_name,title,account_id,watch_notify").not("watched_at", "is", null).eq("preview", false).neq("watch_notify", "off")
+      .or(`activity_checked_at.is.null,activity_checked_at.lt.${since}`).order("activity_checked_at", { ascending: true, nullsFirst: true }).limit(left)).data;
+  }
   if (!people?.length) return 0;
   const { data: accts } = await sb.from("cp_accounts").select("id,name,domain").in("id", people.map((p) => p.account_id));
   const co = new Map((accts ?? []).map((a) => [a.id, a]));
