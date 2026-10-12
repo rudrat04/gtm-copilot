@@ -211,7 +211,7 @@ async function peopleList(admin: boolean, accountId?: string) {
   if (accountId) q = q.eq("account_id", accountId);
   const { data: rows } = await q;
   const ids = [...new Set((rows ?? []).map((p) => p.account_id))];
-  const { data: accts } = ids.length ? await sb.from("cp_accounts").select(`id,name,domain,removed_at,${FIT_COLS}`).in("id", ids) : { data: [] };
+  const { data: accts } = ids.length ? await sb.from("cp_accounts").select(`id,name,domain,removed_at,hubspot_company_id,hs_seen_id,hs_contacts,${FIT_COLS}`).in("id", ids) : { data: [] };
   const a = new Map((accts ?? []).map((x) => [x.id, x]));
   const [{ data: sigs }, { data: evs }] = await Promise.all([
     ids.length ? sb.from("cp_signals").select("account_id,kind,title,detail,detected_at").in("account_id", ids).order("detected_at", { ascending: false }).limit(2000) : Promise.resolve({ data: [] }),
@@ -226,6 +226,7 @@ async function peopleList(admin: boolean, accountId?: string) {
     lead: scorePerson({ relevance: p.relevance, persona: p.persona, companyFit: fitState(a.get(p.account_id) as never), companyHeat: heatOfAcct.get(p.account_id) ?? "watching", jobChangeDays: daysSince("job_change", p.id), mentionDays: daysSince("mention", p.id), emailStatus: p.email_status, hasEmail: !!p.email, hsStatus: p.hs_status }),
     id: p.id, account_id: p.account_id, company: a.get(p.account_id)!.name, domain: a.get(p.account_id)!.domain,
     activity: (evs ?? []).filter((x) => x.person_id === p.id && (x.kind === "activity" || x.kind === "team")).slice(0, 2).map((x) => ({ kind: x.kind, title: x.title, url: x.url, at: x.detected_at })),
+    hs_company: a.get(p.account_id)!.hubspot_company_id || a.get(p.account_id)!.hs_seen_id ? { contacts: a.get(p.account_id)!.hs_contacts ?? null, ours: !!a.get(p.account_id)!.hubspot_company_id } : null,
     preview: !!p.preview, decision_maker: p.decision_maker ?? null, company_fit: fitState(a.get(p.account_id) as never), company_heat: heatOfAcct.get(p.account_id) ?? "watching",
     team: teamSignals(p.department, p.title, (sigs ?? []).filter((s) => s.account_id === p.account_id) as never),
     name: admin ? `${p.first_name} ${p.last_name}`.trim() : `${p.first_name} ${(p.last_name || "").charAt(0)}.`.trim(),

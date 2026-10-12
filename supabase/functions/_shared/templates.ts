@@ -35,7 +35,7 @@ export function longDate(d = new Date()) {
 
 type Links = Map<string, string>; // account id -> HubSpot company id
 
-const person = (c: Contact) => `${c.name}, ${c.title}`;
+const person = (c: Contact) => `${c.name}, ${c.title}${c.preview ? " (email not revealed yet)" : ""}`;
 
 /** What to say when an alert has nobody to name: be exact about whether we looked. */
 export const noContactText = (state: "searched" | "none" | "never") =>
@@ -143,7 +143,7 @@ function itemHtml(it: TodayItem, links: Links): string {
   const [c, c2] = it.contacts;
   const verb = it.type === "follow_up" ? "Follow up with " : it.type === "revive" ? "Revisit " : "";
   const headline = c
-    ? `<div style="font-size:17px;font-weight:600">${h(verb + c.name)} <span style="font-weight:400;color:#78716c">· ${h(c.title)} at ${h(a!.name)}</span></div>`
+    ? `<div style="font-size:17px;font-weight:600">${h(verb + c.name)} <span style="font-weight:400;color:#78716c">· ${h(c.title)} at ${h(a!.name)}${c.preview ? " · email not revealed yet" : ""}</span></div>`
     : `<div style="font-size:17px;font-weight:600">${h(verb + a!.name)} <span style="font-weight:400;color:#78716c">· no contact found yet</span></div>`;
   const signals = it.signals.slice(0, 2).map((s) => h(sigText(s)));
   return wrap([

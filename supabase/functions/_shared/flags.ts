@@ -73,12 +73,12 @@ export async function collect(mode: "daily" | "urgent"): Promise<Candidate[]> {
   // Companies below the owner's fit bar are never flagged, unless the owner is already working them.
   const inScope = (a: typeof accounts[number]) => a.outreach_status !== "open" || worthShowing(a);
 
-  const { data: people } = await sb.from("cp_people").select("account_id,first_name,last_name,title,relevance,email,email_status,email_revealed").gte("relevance", 50).order("relevance", { ascending: false }).limit(2000);
+  const { data: people } = await sb.from("cp_people").select("account_id,first_name,last_name,title,relevance,email,email_status,email_revealed,preview").gte("relevance", 50).order("relevance", { ascending: false }).limit(2000);
   const contactOf = new Map<string, number>();
   const bestOf = new Map<string, string>(); // the best person at each company, for the details below
   for (const p of people ?? []) {
     contactOf.set(p.account_id, (contactOf.get(p.account_id) ?? 0) + 1);
-    if (!bestOf.has(p.account_id)) bestOf.set(p.account_id, `${p.first_name} ${p.last_name}, ${p.title}`.replace("  ", " "));
+    if (!bestOf.has(p.account_id)) bestOf.set(p.account_id, `${p.first_name} ${p.last_name}, ${p.title}${p.preview ? " (not revealed yet)" : ""}`.replace("  ", " "));
   }
   const who = (id: string) => (bestOf.has(id) ? ` Contact: ${bestOf.get(id)}.` : "");
 

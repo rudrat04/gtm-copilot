@@ -280,6 +280,40 @@ export async function readCompanyFacts(ids: string[]): Promise<HsCompanyFacts[]>
   return out;
 }
 
+/** Companies HubSpot already has for these website domains, with how many contacts each holds. Read-only. */
+export async function findCompaniesByDomain(domains: string[]): Promise<Map<string, { id: string; contacts: number }>> {
+  const out = new Map<string, { id: string; contacts: number }>();
+  for (let i = 0; i < domains.length; i += 90) {
+    const r = await hs("/crm/v3/objects/companies/search", { method: "POST", body: JSON.stringify({ filterGroups: [{ filters: [{ propertyName: "domain", operator: "IN", values: domains.slice(i, i + 90) }] }], properties: ["domain", "num_associated_contacts"], limit: 100 }) });
+    // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
+    for (const c of (r.body?.results ?? []) as any[]) { const d = String(c.properties?.domain ?? "").toLowerCase().replace(/^www\./, ""); if (d && !out.has(d)) out.set(d, { id: c.id, contacts: Number(c.properties?.num_associated_contacts ?? 0) }); }
+  }
+  return out;
+}
+
+export type HsContactRead = { id: string; first: string; last: string; email: string | null; title: string | null; company: string | null; companyId: string | null; modified: string | null };
+
+/** Contacts changed in HubSpot since a time (oldest first), with the company they belong to. Read-only. */
+export async function readChangedContacts(sinceMs: number, limit = 20): Promise<HsContactRead[]> {
+  const r = await hs("/crm/v3/objects/contacts/search", { method: "POST", body: JSON.stringify({
+    filterGroups: [{ filters: [{ propertyName: "lastmodifieddate", operator: "GTE", value: String(sinceMs) }] }],
+    sorts: [{ propertyName: "lastmodifieddate", direction: "ASCENDING" }],
+    properties: ["firstname", "lastname", "email", "jobtitle", "company", "associatedcompanyid", "lastmodifieddate"], limit }) });
+  // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
+  return ((r.body?.results ?? []) as any[]).map((c) => ({ id: c.id, first: c.properties?.firstname ?? "", last: c.properties?.lastname ?? "", email: c.properties?.email?.toLowerCase() ?? null, title: c.properties?.jobtitle ?? null, company: c.properties?.company ?? null, companyId: c.properties?.associatedcompanyid ?? null, modified: c.properties?.lastmodifieddate ?? null }));
+}
+
+/** Name and website of HubSpot companies by id. Read-only. */
+export async function readCompanyBasics(ids: string[]): Promise<Map<string, { domain: string | null; name: string | null }>> {
+  const out = new Map<string, { domain: string | null; name: string | null }>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const r = await hs("/crm/v3/objects/companies/batch/read", { method: "POST", body: JSON.stringify({ properties: ["domain", "name"], inputs: ids.slice(i, i + 100).map((id) => ({ id })) }) }, [207]);
+    // deno-lint-ignore no-explicit-any -- JSON payloads from external APIs
+    for (const c of (r.body?.results ?? []) as any[]) out.set(c.id, { domain: c.properties?.domain ? String(c.properties.domain).toLowerCase().replace(/^www\./, "") : null, name: c.properties?.name ?? null });
+  }
+  return out;
+}
+
 export type TaskInput = {
   subject: string;
   html: string;

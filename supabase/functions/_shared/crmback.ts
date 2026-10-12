@@ -1,7 +1,8 @@
 import { recordIfWatched } from "./movements.ts";
 import { normalizeDomain, sb } from "./db.ts";
 import { log } from "./log.ts";
-import { readCompanyFacts, readCustomerCompanies, readDeals, readTaskStatuses, searchLostDeals } from "./hubspot.ts";
+import { findCompaniesByDomain, readChangedContacts, readCompanyBasics, readCompanyFacts, readCustomerCompanies, readDeals, readTaskStatuses, searchLostDeals } from "./hubspot.ts";
+import { rank } from "./people.ts";
 import { countryCodeOf } from "./lists.ts";
 import { applyOutcome } from "./lifecycle.ts";
 import { askLossReasons } from "./lossreason.ts";
@@ -12,7 +13,7 @@ import { askLossReasons } from "./lossreason.ts";
 const DAY = 86_400_000;
 const OPEN_STAGES = new Set(["appointmentscheduled", "qualifiedtobuy", "presentationscheduled", "decisionmakerboughtin", "contractsent"]);
 
-export type BackSummary = { facts?: number; tasks_done: number; marked_contacted: number; deals_changed: number; lost_found: number; imported: number; customers?: number; asked?: number; skipped?: string };
+export type BackSummary = { seen?: number; contacts_imported?: number; facts?: number; tasks_done: number; marked_contacted: number; deals_changed: number; lost_found: number; imported: number; customers?: number; asked?: number; skipped?: string };
 
 /** Fills what a card shows as unknown (place, size, founding year) from the company record in HubSpot, for companies that are there. Never overwrites what we already know. */
 export async function pullHubspotFacts(limit = 60): Promise<number> {
@@ -32,6 +33,58 @@ export async function pullHubspotFacts(limit = 60): Promise<number> {
     if (!a.founded_year && f.founded) upd.founded_year = f.founded;
     if (Object.keys(upd).length) { await sb.from("cp_accounts").update(upd).eq("id", a.id); n++; }
   }
+  return n;
+}
+
+/** For companies we know: does HubSpot already have them, and how many contacts does it hold? Read-only knowledge that warns before a reveal or an add. */
+export async function checkHubspotCompanies(limit = 80): Promise<number> {
+  const stale = new Date(Date.now() - 3 * DAY).toISOString();
+  const { data } = await sb.from("cp_accounts").select("id,domain").is("removed_at", null).or(`hs_checked_at.is.null,hs_checked_at.lt.${stale}`)
+    .order("priority_score", { ascending: false, nullsFirst: false }).limit(limit);
+  if (!data?.length) return 0;
+  const found = await findCompaniesByDomain(data.map((a) => a.domain));
+  const now = new Date().toISOString();
+  for (const a of data) {
+    const f = found.get(a.domain);
+    await sb.from("cp_accounts").update({ hs_seen_id: f?.id ?? null, hs_contacts: f ? f.contacts : null, hs_checked_at: now }).eq("id", a.id);
+  }
+  return found.size;
+}
+
+const FREE_MAIL = /^(gmail|googlemail|yahoo|ymail|outlook|hotmail|live|msn|icloud|me|aol|proton|protonmail|zoho|gmx|mail|rediffmail)\./i;
+
+/**
+ * Contacts someone created or changed in HubSpot become people here, and their company becomes a company here (source "hubspot"),
+ * so the CRM and this list agree. Looks at changes from the last 3 days (then since the last run), at most 20 a run. Never writes to HubSpot.
+ */
+export async function importHubspotContacts(limit = 20): Promise<number> {
+  const { data: cur } = await sb.from("cp_state").select("value").eq("key", "hs_contacts_cursor").maybeSingle();
+  const since = cur?.value ? Date.parse(cur.value) : Date.now() - 3 * DAY;
+  const contacts = await readChangedContacts(since - 60_000, limit);
+  if (!contacts.length) return 0;
+  const { data: known } = await sb.from("cp_people").select("hubspot_contact_id").in("hubspot_contact_id", contacts.map((c) => c.id));
+  const have = new Set((known ?? []).map((k) => k.hubspot_contact_id));
+  const fresh = contacts.filter((c) => !have.has(c.id) && (c.first || c.last) && c.email);
+  const basics = await readCompanyBasics([...new Set(fresh.map((c) => c.companyId).filter(Boolean) as string[])]);
+  let n = 0;
+  for (const c of fresh) {
+    const b = c.companyId ? basics.get(c.companyId) : null;
+    const emailDomain = normalizeDomain(c.email!.split("@")[1] ?? "");
+    const domain = b?.domain ?? (emailDomain && !FREE_MAIL.test(emailDomain) ? emailDomain : null);
+    if (!domain) continue;
+    let { data: acct } = await sb.from("cp_accounts").select("id,removed_at,employees").eq("domain", domain).maybeSingle();
+    if (acct?.removed_at) continue;
+    if (!acct) {
+      const ins = await sb.from("cp_accounts").insert({ domain, name: (b?.name || c.company || domain).slice(0, 80), source: "hubspot", status: "new", hubspot_company_id: c.companyId }).select("id,removed_at,employees").single();
+      if (ins.error || !ins.data) continue;
+      acct = ins.data;
+    } else if (c.companyId) await sb.from("cp_accounts").update({ hubspot_company_id: c.companyId }).eq("id", acct.id).is("hubspot_company_id", null);
+    const r = rank(c.title ?? "", acct.employees, null);
+    const { error } = await sb.from("cp_people").upsert({ account_id: acct.id, provider: "hubspot", first_name: c.first, last_name: c.last, title: c.title, seniority: r.seniority, persona: r.persona, relevance: r.relevance, email: c.email, email_revealed: true, hubspot_contact_id: c.id }, { onConflict: "account_id,email", ignoreDuplicates: true });
+    if (!error) n++;
+  }
+  const lastSeen = contacts[contacts.length - 1].modified; // a full page means there may be more: carry on from the last one next time
+  await sb.from("cp_state").upsert({ key: "hs_contacts_cursor", value: contacts.length >= limit && lastSeen ? new Date(lastSeen).toISOString() : new Date().toISOString(), updated_at: new Date().toISOString() });
   return n;
 }
 
@@ -136,8 +189,10 @@ export async function syncFromHubSpot(): Promise<BackSummary> {
   // 4) Lost deals of ours with no reason: one email with five one-tap choices (once per deal).
   out.asked = await askLossReasons().catch(() => 0);
 
+  out.seen = await checkHubspotCompanies().catch(() => 0);
+  out.contacts_imported = await importHubspotContacts().catch(() => 0);
   out.facts = await pullHubspotFacts().catch(() => 0); // 5) place, size and founding year from HubSpot where a card still shows them as unknown
 
-  if (out.tasks_done || out.deals_changed || out.imported || out.asked || out.customers || out.facts) await log("info", "crm_read_back", { detail: out });
+  if (out.tasks_done || out.deals_changed || out.imported || out.asked || out.customers || out.facts || out.contacts_imported) await log("info", "crm_read_back", { detail: out });
   return out;
 }

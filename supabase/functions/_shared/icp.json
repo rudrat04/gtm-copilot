@@ -195,6 +195,7 @@
     "autoFix": false,
     "titleCheck": false,
     "activityPerDay": 2,
+    "autoPush": true,
     "watchlistAlerts": true,
     "todayCap": 8,
     "digestFlags": true,

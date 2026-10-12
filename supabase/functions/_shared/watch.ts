@@ -117,8 +117,9 @@ export async function lightCheck(admin: boolean) {
         continue;
       }
       // Find people first, so the email names them. This spends search credits, so it only runs for companies that fit or that you follow.
-      await autoSearch({ id: c.a.id, domain: c.a.domain });
-      const contacts = (await contactsFor([c.a.id], true)).get(c.a.id) ?? [];
+      let contacts = (await contactsFor([c.a.id], true)).get(c.a.id) ?? [];
+      if (!contacts.length) { await peekPeople([{ id: c.a.id, name: c.a.name, domain: c.a.domain }]).catch(() => null); contacts = (await contactsFor([c.a.id], true)).get(c.a.id) ?? []; } // the free list first
+      if (!contacts.length) { await autoSearch({ id: c.a.id, domain: c.a.domain }); contacts = (await contactsFor([c.a.id], true)).get(c.a.id) ?? []; } // a paid search only when nobody is listed
       const fits = fitState(c.a as never) === "matches";
       if (!c.a.watched_at && !contacts.length && !fits && verdict !== "hot") {
         // A weak alert: no fit and nobody to contact. It waits for the daily email instead of interrupting you.

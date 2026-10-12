@@ -1,19 +1,10 @@
 import { json, normalizeDomain, sb } from "../_shared/db.ts";
 import { isAdmin } from "../_shared/auth.ts";
 import { log, serve } from "../_shared/log.ts";
-import { refreshAccountFields } from "../_shared/hsfields.ts";
 import { hunterBalance, rerankPeople, searchAndStore } from "../_shared/people.ts";
 import { peekPeople, revealPerson } from "../_shared/peoplepreview.ts";
-import {
-  type CompanyScores,
-  companyFields,
-  type Dossier,
-  pushCompany,
-  pushContact,
-  tierLabel,
-} from "../_shared/hubspot.ts";
-import { scoreAccount, tierOf } from "../_shared/score.ts";
-import icp from "../_shared/icp.json" with { type: "json" };
+import { companyContext, headerScores, personaValue, pushAccount } from "../_shared/pushaccount.ts";
+import { companyFields, tierLabel } from "../_shared/hubspot.ts";
 
 type Row = {
   id: string; first_name: string; last_name: string; title: string; seniority: string;
@@ -60,34 +51,6 @@ async function list(accountId: string, admin: boolean) {
     .order("relevance", { ascending: false }).order("email_confidence", { ascending: false });
   return (data ?? []).map((r) => view(r as Row, admin));
 }
-
-/** Everything the HubSpot push needs, read from storage. Scores are recomputed so signal decay applies. */
-async function companyContext(accountId: string) {
-  const { data: a } = await sb.from("cp_accounts").select("*").eq("id", accountId).maybeSingle();
-  if (!a) return null;
-  const [{ data: d }, { data: sigs }] = await Promise.all([
-    sb.from("cp_dossiers").select("content").eq("account_id", accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    sb.from("cp_signals").select("kind,title,url,detail,detected_at").eq("account_id", accountId).order("detected_at", { ascending: false }),
-  ]);
-  const dossier = (d?.content ?? null) as Dossier | null;
-  const signals = (sigs ?? []).map((s) => ({ ...s, detail: { ...(s.detail ?? {}), detected_at: s.detected_at } }));
-  const sc = scoreAccount(signals, a);
-  const scores: CompanyScores = {
-    fit: dossier?.icp_fit?.score ?? a.icp_score ?? null,
-    priority: sc.score,
-    signal: sc.signalScore,
-    intent: sc.intentScore,
-    tier: tierOf(sc.score),
-    whyNow: a.why_now ?? dossier?.why_now ?? "",
-    whyFit: (dossier?.icp_fit?.reasons ?? []).join(" "),
-    scoredAt: a.last_scanned_at,
-  };
-  return { account: a, dossier, signals, scores, hasDossier: !!dossier };
-}
-
-const headerScores = (s: CompanyScores) => ({
-  fit: s.fit, priority: s.priority, signal: s.signal, intent: s.intent, tier: s.tier, tier_label: tierLabel(s.tier),
-});
 
 async function find(domainInput: string, admin: boolean, refresh: boolean) {
   const domain = normalizeDomain(domainInput);
@@ -138,7 +101,6 @@ async function enrich(personId: string, what: string, admin: boolean) {
   return json({ mode: "live", person: view({ ...p, email_revealed: true } as Row, true) });
 }
 
-const personaValue = (title: string | null) => icp.personas.find((p) => p.title === title)?.hubspot ?? null;
 const personaLabel = (v: string | null) =>
   ({ sales_leader: "Sales leader", revops: "Revenue operations", Founder: "Founder" } as Record<string, string>)[v ?? ""] ?? (v ? v.replace(/_/g, " ") : "No persona");
 
@@ -168,52 +130,9 @@ async function preview(accountId: string, admin: boolean) {
 
 async function push(accountId: string, personIds: string[] | undefined, admin: boolean) {
   if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to push to HubSpot." });
-
-  const ctx = await companyContext(accountId);
-  if (!ctx) return json({ error: "Account not found" }, 404);
-  const a = ctx.account;
-
-  let q = sb.from("cp_people").select("*").eq("account_id", accountId).eq("email_revealed", true);
-  if (personIds?.length) q = q.in("id", personIds);
-  const { data: all } = await q;
-  const people = (all ?? []).filter((p) => p.hs_status !== "opted_out" && p.hs_status !== "bounced"); // never add someone who opted out or bounced
-  const skipped = (all ?? []).length - people.length;
-  if (!people.length) return json({ error: skipped ? "Everyone selected opted out or bounced in HubSpot" : "Enrich at least one person before pushing" }, 409);
-
-  const { data: draft } = await sb.from("cp_outreach_drafts").select("*").eq("account_id", accountId)
-    .in("status", ["pending", "approved"]).order("created_at", { ascending: false }).limit(1).maybeSingle();
-
-  try {
-    const company = await pushCompany({
-      name: a.name, domain: a.domain, scores: ctx.scores, dossier: ctx.dossier, signals: ctx.signals,
-    });
-
-    const contacts = [];
-    for (const p of people) {
-      const html = draft
-        ? `<p><b>Draft (not sent):</b></p><p><b>${draft.subject}</b><br>${draft.body.replace(/\{\{first_name\}\}/g, p.first_name).replace(/\n/g, "<br>")}</p>`
-        : undefined;
-      const c = await pushContact(
-        {
-          firstName: p.first_name, lastName: p.last_name ?? "", title: p.title, email: p.email!,
-          persona: personaValue(p.persona), personaScore: p.relevance, draftHtml: html,
-        },
-        company.companyId,
-        a.domain,
-      );
-      await sb.from("cp_people").update({ hubspot_contact_id: c.contactId }).eq("id", p.id);
-      contacts.push({ name: `${p.first_name} ${p.last_name}`.trim(), ...c });
-    }
-
-    await sb.from("cp_accounts").update({ status: "pushed", hubspot_company_id: company.companyId, priority_score: ctx.scores.priority }).eq("id", accountId);
-    if (draft) await sb.from("cp_outreach_drafts").update({ status: "approved" }).eq("id", draft.id);
-    await refreshAccountFields(accountId); // signals, status, facts and owner columns; failures are logged, never block the push
-    await log("info", "push_complete", { account: a.domain, detail: { contacts: contacts.length, used_dossier: ctx.hasDossier } });
-    return json({ mode: "live", company, contacts, used_dossier: ctx.hasDossier, skipped });
-  } catch (e) {
-    await log("error", "push_failed", { account: a.domain, message: (e as Error).message });
-    return json({ error: (e as Error).message }, 502);
-  }
+  const r = await pushAccount(accountId, personIds);
+  if (!r.ok) return json({ error: r.error }, r.code);
+  return json({ mode: "live", company: r.company, contacts: r.contacts, used_dossier: r.used_dossier, skipped: r.skipped });
 }
 
 serve("people", async (req) => {
