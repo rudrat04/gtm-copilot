@@ -250,6 +250,7 @@
   .pal-bg { position: fixed; inset: 0; z-index: 85; background: rgba(40, 35, 27, .45); display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; } .pal { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); width: 100%; max-width: 560px; overflow: hidden; }
   .pal input { width: 100%; box-sizing: border-box; border: 0; border-bottom: 1px solid var(--line); padding: 16px 18px; font: inherit; font-size: 17px; color: var(--ink); background: transparent; outline: 0; } .pal-list { max-height: 50vh; overflow: auto; padding: 6px; }
   .pal-opt { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; cursor: pointer; font-size: 15px; } .pal-opt.act, .pal-opt:hover { background: var(--raised); } .pal-opt small { color: var(--muted); font-size: 12.5px; } .pal-sec { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 10px 12px 4px; }
+  .viewsw { margin-bottom: 12px; display: flex; gap: 4px; max-width: 320px; } .viewsw button { flex: 1; } .viewsw i { font-style: normal; background: var(--raised); color: var(--muted); border-radius: 99px; font-size: 11px; padding: 1px 7px; margin-left: 6px; }
   .modal-bg { position: fixed; inset: 0; z-index: 80; background: rgba(40, 35, 27, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
   .modal { background: var(--surface); border: 1px solid var(--line, #e3dcc8); border-radius: 14px; box-shadow: var(--shadow); max-width: 440px; width: 100%; padding: 20px 22px; }
   .modal h3 { margin: 0 0 8px; font-size: 17px; }
@@ -302,6 +303,8 @@
   <section id="today"><div id="thead"></div><div id="tlist" aria-live="polite"></div></section>
 
   <section id="accounts" hidden><div id="ahead"></div><div id="alist" aria-live="polite"></div></section>
+
+  <section id="people" hidden><div id="phead"></div><div id="plist" aria-live="polite"></div></section>
 
   <section id="research" hidden>
     <form class="search" id="form">
@@ -605,9 +608,11 @@ function nextStep(a) {
 }
 
 function contactLine(a) {
-  const c = a.contacts[0]; if (!c) return a.searched ? `<div class="contact meta">No relevant person found yet</div>` : "";
+  const c = a.contacts[0];
+  if (!c) return a.people_count ? `<div class="contact meta">${a.people_count} saved ${a.people_count === 1 ? "person does" : "people do"} not match your buyer types. <a href="#/people/${esc(a.id)}">See ${a.people_count === 1 ? "them" : "all"}</a></div>`
+    : a.searched_at ? `<div class="contact meta">Searched ${esc(day(a.searched_at))}: nobody found. No need to search again for a while.</div>` : "";
   const mail = c.revealed && c.email ? (c.email.includes("***") ? esc(c.email) : `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`) : c.email ? "email found, not revealed" : "no email";
-  return `<div class="contact"><b>${esc(c.name)}</b> · ${esc(c.title)} · ${mail}${c.persona ? ` <span class="ptag" title="Matches your buyer type">${esc(c.persona)}</span>` : ""}${c.known ? ` <span class="ptag warnx" title="${esc(c.note || "")}">Already in your HubSpot</span>` : c.pushed ? ` <span class="ptag">In HubSpot</span>` : ""}${a.contacts.length > 1 ? ` <span class="meta">+${a.contacts.length - 1} more</span>` : ""}</div>`;
+  return `<div class="contact"><b>${esc(c.name)}</b> · ${esc(c.title)} · ${mail}${c.persona ? ` <span class="ptag" title="Matches your buyer type">${esc(c.persona)}</span>` : ""}${c.known ? ` <span class="ptag warnx" title="${esc(c.note || "")}">Already in your HubSpot</span>` : c.pushed ? ` <span class="ptag">In HubSpot</span>` : ""}${(a.people_count || a.contacts.length) > 1 ? ` <a class="meta" href="#/people/${esc(a.id)}" title="Everyone saved for this company">+${(a.people_count || a.contacts.length) - 1} more</a>` : ""}</div>`;
 }
 
 const NOT_FIT = { too_big: "Too big", too_small: "Too small", wrong_industry: "Wrong industry", competitor: "Competitor", agency_b2c: "Agency or B2C", wrong_region: "Wrong region", customer: "Already a customer", other: "Other" };
@@ -674,7 +679,7 @@ function drawAccounts() {
   const unchecked = d.accounts.filter((a) => !a.removed && !a.firmo_known).length; // companies whose size and stage were never looked up
   const c = $("c-accounts"); const open = counts.open; c.textContent = open; c.hidden = !open;
   const sel = ([k, label, opts]) => `<label>${label}<select data-f="${k}" class="${AF[k] && AF[k] !== "best" ? "set" : ""}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${AF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
-  $("ahead").innerHTML = `<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""}</span>
+  $("ahead").innerHTML = `${viewSwitch("companies")}<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""}</span>
       <span>Signals refresh ${d.scan.active ? esc(d.scan.label) : "(paused)"} · next ${esc(day(d.scan.next_scan))}</span></div>
     <div class="fpanel">
       <div class="seg" role="tablist" aria-label="Companies">${VIEWS.map(([k, l, tip]) => `<button role="tab" aria-selected="${k === AF.view}" class="${k === AF.view ? "on" : ""}" data-view="${k}" title="${esc(tip)}">${l}<i>${counts[k]}</i></button>`).join("")}</div>
@@ -1278,7 +1283,7 @@ const WATCH_ROWS = [
 ];
 /* Setup is long, so it is split into sections with their own addresses (#/setup/alerts) and a short checklist for a first run. */
 const SETUP_SECS = [["start", "Getting started"], ["sell", "What you sell"], ["look", "Who we look for"], ["contact", "Who we contact"], ["signals", "Signals"], ["fit", "Fit and score"], ["alerts", "Alerts and email"], ["find", "Finding companies"], ["conn", "HubSpot, name and health"]];
-const SEC_OF = [["What you sell", "sell"], ["Who we look for", "look"], ["Who we contact", "contact"], ["What counts as a buying signal", "signals"], ["Which companies to show", "fit"], ["Alerts, daily email", "alerts"], ["Finding new companies", "find"], ["Credits and costs", "find"], ["HubSpot columns", "conn"], ["Name and logo", "conn"], ["Health", "conn"]];
+const SEC_OF = [["What you sell", "sell"], ["Who we look for", "look"], ["Who we contact", "contact"], ["What counts as a buying signal", "signals"], ["Which companies to show", "fit"], ["Alerts, daily email", "alerts"], ["Finding new companies", "find"], ["Credits and costs", "find"], ["Skipped by discovery", "find"], ["Search history", "conn"], ["HubSpot columns", "conn"], ["Name and logo", "conn"], ["Health", "conn"]];
 function setupSteps() {
   const d = SETUP;
   return [
@@ -1412,6 +1417,8 @@ function drawSetup() {
       <div id="runout"></div>
     </article>
 
+    <article class="card" id="skipcard"><p class="label">Skipped by discovery</p><p class="meta" style="margin:0">Loading…</p></article>
+
     <article class="card"><p class="label">Credits and costs</p>
       <div class="tiles" style="margin:0 0 10px"><div class="tile"><b>${esc(d.ai.today_usd.toFixed(2))}</b><span>AI spend today (limit $${esc(d.ai.cap_usd.toFixed(2))})</span></div>
         <div class="tile"><b>${esc(d.unknown_fit)}</b><span>companies with size and stage not checked</span></div></div>
@@ -1434,12 +1441,38 @@ function drawSetup() {
       <div class="actions" style="margin:0"><button type="button" class="btn ghost" data-brandsave${own ? "" : " disabled"}>Save name and logo</button><span class="meta">${own ? "Applies right away. Separate from the Save button above." : "Demo mode: unlock to change."}</span></div>
     </article>
 
-    ${own ? `<article class="card" id="healthcard"><p class="label">Health</p><p class="meta" style="margin:0">Loading…</p></article>` : ""}
+    ${own ? `<article class="card" id="healthcard"><p class="label">Health</p><p class="meta" style="margin:0">Loading…</p></article>
+    <article class="card" id="usagecard"><p class="label">Search history</p><p class="help" style="margin:0 0 8px">Every search that used credits, so you can see what was spent and where.</p><div class="actions" style="margin:0"><button type="button" class="btn ghost" data-usage>Show the last 25 searches</button></div><div id="usageout"></div></article>` : ""}
 
     <details class="how"><summary>How scoring and signals work</summary><div id="icpbody"></div></details>`;
   msDrawAll();
   applySetupSection();
+  loadSkipped();
 }
+async function loadSkipped() {
+  const el = $("skipcard"); if (!el) return;
+  try {
+    const d = await api("queue", { action: "discover_list" });
+    el.innerHTML = `<p class="label">Skipped by discovery</p><p class="help" style="margin:0 0 8px">Companies discovery looked at and turned down, with the reason. Add one back if the reason is wrong.</p>${d.skipped.length ? d.skipped.map((x) => `<div class="wrow" data-dom="${esc(x.domain)}"><div class="wmain"><b>${esc(x.name || x.domain)}</b> <span class="meta">${esc(x.domain)} · ${esc(day(x.found_at))}</span><div class="meta">${esc(x.reason || "")}</div></div>${d.admin ? `<div class="wside"><button class="btn ghost sm" data-addskip>Add anyway</button></div>` : ""}</div>`).join("") : `<p class="meta" style="margin:0">Nothing skipped yet.</p>`}`;
+  } catch (e) { el.innerHTML = `<p class="label">Skipped by discovery</p><p class="err">${esc(e.message)}</p>`; }
+}
+$("setupbody").addEventListener("click", async (e) => {
+  const a = e.target.closest("[data-addskip]");
+  if (a) {
+    const dom = a.closest("[data-dom]").dataset.dom; a.disabled = true;
+    try { const r = await api("queue", { action: "discover_add", domain: dom }); if (r.mode === "dry_run") { say(r.message); a.disabled = false; return; } say(`${r.name || dom} added to Accounts. Use Check size and stage to see if it fits.`); ACC = null; loadSkipped(); }
+    catch (err) { say(err.message); a.disabled = false; }
+    return;
+  }
+  const u = e.target.closest("[data-usage]");
+  if (u) {
+    u.disabled = true;
+    try {
+      const r = await api("queue", { action: "usage_log" });
+      $("usageout").innerHTML = r.log.length ? `<div style="margin-top:10px">${r.log.map((x) => `<div class="meta" style="margin:4px 0">${esc(day(x.created_at))} · ${esc(x.provider)} ${esc(String(x.action).replace(/_/g, " "))}${x.account ? ` · ${esc(x.account)}` : ""} · <b>${esc(x.credits)} credit${Number(x.credits) === 1 ? "" : "s"}</b></div>`).join("")}</div>` : `<p class="meta">No searches yet.</p>`;
+    } catch (err) { say(err.message); } finally { u.disabled = false; }
+  }
+});
 
 const LV = { ok: ["good", "OK"], warn: ["warn", "Check"], bad: ["bad", "Problem"] };
 const lvDot = (l) => `<span class="badge ${LV[l][0]}">${LV[l][1]}</span>`;
@@ -1772,21 +1805,72 @@ function logoFromFile(file) {
   });
 }
 
+/* ============ People: everyone we have searched or added, so nothing is searched twice ============ */
+let PPL = null, PF = { q: "", persona: "", email: "", hub: "", company: null };
+const viewSwitch = (cur) => `<div class="seg viewsw" role="tablist" aria-label="Companies or people"><button role="tab" class="${cur === "companies" ? "on" : ""}" aria-selected="${cur === "companies"}" data-vsw="accounts">Companies</button><button role="tab" class="${cur === "people" ? "on" : ""}" aria-selected="${cur === "people"}" data-vsw="people">People${PPL ? `<i>${PPL.people.length}</i>` : ""}</button></div>`;
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-vsw]"); if (b) showView({ view: b.dataset.vsw }); });
+async function loadPeople(quiet) {
+  if (!quiet) { $("phead").innerHTML = ""; $("plist").innerHTML = skeleton(4); }
+  try { PPL = await api("queue", { action: "people_list" }); drawPeople(); }
+  catch (e) { $("plist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
+}
+function drawPeople() {
+  const d = PPL, own = !!d.admin, q = PF.q.trim().toLowerCase();
+  const matchesPersona = (p) => !PF.persona || (PF.persona === "__none" ? !p.persona : p.persona === PF.persona);
+  const list = d.people.filter((p) => matchesPersona(p)
+    && (!PF.company || p.account_id === PF.company)
+    && (!PF.email || (PF.email === "none" ? !p.has_email : PF.email === "found" ? p.has_email && !p.revealed : p.revealed))
+    && (!PF.hub || (PF.hub === "yes" ? p.in_hubspot : !p.in_hubspot))
+    && (!q || `${p.name} ${p.title} ${p.company}`.toLowerCase().includes(q)));
+  const sel = (k, label, opts) => `<label>${label}<select data-pf="${k}" class="${PF[k] ? "set" : ""}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${PF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
+  const co = PF.company ? d.people.find((p) => p.account_id === PF.company)?.company : null;
+  $("phead").innerHTML = `${viewSwitch("people")}<div class="fpanel">
+    <div class="fgrid">${sel("persona", "Buyer type", [["", "Any"], ...d.personas.map((t) => [t, t]), ["__none", "Does not match any"]])}${sel("email", "Email", [["", "Any"], ["found", "Found, not revealed"], ["revealed", "Revealed"], ["none", "No email"]])}${sel("hub", "HubSpot", [["", "Any"], ["yes", "In HubSpot"], ["no", "Not in HubSpot"]])}</div>
+    <input id="psearch" class="fsearch" type="search" placeholder="Search by name, title or company" aria-label="Search people" value="${esc(PF.q)}" style="margin-top:10px">
+    <div class="fbar"><span>Showing <b>${list.length}</b> of ${d.people.length} saved people${co ? ` at <b>${esc(co)}</b> <a href="#/people">(all companies)</a>` : ""}</span>
+      <span class="acts">${(PF.persona || PF.email || PF.hub || PF.q) ? `<button class="btn link sm" data-pclear>Clear filters</button>` : ""}${own && d.people.length ? `<button class="btn ghost sm" data-pexport title="Downloads this list as a spreadsheet file. Only emails you have revealed are included">Export (.csv)</button>` : ""}</span></div></div>`;
+  const row = (p) => `<div class="wrow" data-pid="${esc(p.id)}"><div class="wmain"><b>${esc(p.name)}</b> <span class="meta">${esc(p.title)} at <a class="clink" href="#/company/${esc(p.account_id)}">${esc(p.company)}</a></span>
+      <div class="meta">${p.persona ? `<span class="ptag">${esc(p.persona)}</span> ` : `<span class="meta">Not one of your buyer types</span> `}${p.revealed ? `<b>${esc(p.email)}</b>${p.email_status ? ` <span class="pill ${(STATUS[p.email_status] || [0, ""])[1]}">${esc((STATUS[p.email_status] || ["Unverified"])[0])}</span>` : ""}` : p.has_email ? "email found, not revealed" : "no email"}${p.in_hubspot ? ` · <span class="pill ok">In HubSpot</span>` : ""}${p.hs_status === "opted_out" ? ` · <span class="pill bad">Opted out</span>` : p.hs_status === "bounced" ? ` · <span class="pill bad">Bounced</span>` : p.hs_status === "known" ? ` · <span class="pill warn" title="${esc(p.hs_note || "")}">Already in your HubSpot</span>` : ""}${p.manual ? " · added by you" : ""} · saved ${esc(day(p.added))}</div></div>
+      <div class="wside">${own && p.has_email && !p.revealed && !["opted_out", "bounced"].includes(p.hs_status) ? `<button class="btn ghost sm" data-penrich>Enrich</button>` : ""}${watchBtn("person", p.id, p.watched)}</div></div>`;
+  const nobody = !PF.company && !PF.persona && !PF.email && !PF.hub && !q && d.nobody.length
+    ? `<article class="card"><p class="label">Searched, nobody found (${d.nobody.length})</p><p class="help" style="margin:0 0 6px">These companies were searched. No need to search them again for a while.</p>${d.nobody.slice(0, 30).map((n) => `<div class="wrow"><div class="wmain"><b><a class="clink" href="#/company/${esc(n.id)}">${esc(n.name)}</a></b> <span class="meta">${esc(n.domain)} · searched ${esc(day(n.at))}${n.by === "auto" ? " (automatic)" : ""}</span></div></div>`).join("")}</article>` : "";
+  $("plist").innerHTML = (list.length ? `<article class="card">${list.map(row).join("")}</article>` : `<div class="card empty">${d.people.length ? "No people match these filters." : "No people saved yet. Use <b>Find people</b> on a company in Accounts and everyone found is kept here, enriched or not."}${d.people.length ? "" : `<div class="actions" style="justify-content:center;margin-top:12px"><a class="btn ghost sm" href="#/accounts">Open Accounts</a></div>`}</div>`) + nobody;
+  const s = $("psearch"); if (PF.q && document.activeElement?.id === "psearch") { s.focus(); s.setSelectionRange(PF.q.length, PF.q.length); }
+}
+$("phead").addEventListener("input", (e) => { if (e.target.id === "psearch") { PF.q = e.target.value; drawPeople(); const s = $("psearch"); s.focus(); s.setSelectionRange(PF.q.length, PF.q.length); } });
+$("phead").addEventListener("change", (e) => { const k = e.target.dataset?.pf; if (k) { PF[k] = e.target.value; drawPeople(); } });
+$("phead").addEventListener("click", (e) => {
+  if (e.target.closest("[data-pclear]")) { PF = { q: "", persona: "", email: "", hub: "", company: PF.company }; drawPeople(); return; }
+  if (e.target.closest("[data-pexport]")) {
+    const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = [["Name", "Title", "Company", "Website", "Buyer type", "Email (revealed only)", "In HubSpot", "Saved"], ...PPL.people.map((p) => [p.name, p.title, p.company, p.domain, p.persona || "", p.email || "", p.in_hubspot ? "yes" : "no", (p.added || "").slice(0, 10)])];
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([rows.map((r) => r.map(cell).join(",")).join("\n")], { type: "text/csv" })); a.download = "f1rstword-people.csv"; a.click(); URL.revokeObjectURL(a.href);
+    say("Exported. Only emails you have revealed are included.");
+  }
+});
+$("plist").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-penrich]"); if (!b) return;
+  const id = b.closest("[data-pid]").dataset.pid; b.disabled = true;
+  try { const r = await api("people", { action: "enrich", person_id: id, what: "email" }); if (r.mode === "dry_run") { say(r.message); b.disabled = false; return; } say("Email revealed."); loadPeople(true); }
+  catch (err) { say(err.message); b.disabled = false; }
+});
+
 /* ============ navigation: every view has its own address, so Back, bookmarks and email links work ============ */
-const SECTIONS = ["today", "accounts", "company", "research", "watchlist", "conversations", "setup"];
-const NAV_OF = { today: "today", accounts: "accounts", company: "accounts", research: "accounts", watchlist: "watchlist", conversations: "conversations", setup: "setup" };
+const SECTIONS = ["today", "accounts", "people", "company", "research", "watchlist", "conversations", "setup"];
+const NAV_OF = { today: "today", accounts: "accounts", people: "accounts", company: "accounts", research: "accounts", watchlist: "watchlist", conversations: "conversations", setup: "setup" };
 let CUR = { view: "today" }, CO = null, PENDING_CLICK = null;
 function parseRoute(h = location.hash) {
   const [v, a] = h.replace(/^#\/?/, "").split("?")[0].split("/");
   if (v === "inbound") return { view: "conversations", sub: "leads" };
   if (v === "meetings") return { view: "conversations", sub: "meetings" };
   if (v === "company" && a) return { view: "company", id: a };
+  if (v === "people") return { view: "people", id: a || null };
   if (v === "conversations") return { view: v, sub: a === "meetings" ? "meetings" : "leads" };
   if (v === "setup") return { view: v, sub: a || null };
   if (["today", "accounts", "watchlist", "research"].includes(v)) return { view: v };
   return { view: "today" };
 }
-const routeHash = (r) => r.view === "company" ? `#/company/${r.id}` : r.view === "conversations" ? `#/conversations/${r.sub === "meetings" ? "meetings" : "leads"}` : r.view === "setup" ? (r.sub ? `#/setup/${r.sub}` : "#/setup") : `#/${r.view}`;
+const routeHash = (r) => r.view === "company" ? `#/company/${r.id}` : r.view === "people" ? (r.id ? `#/people/${r.id}` : "#/people") : r.view === "conversations" ? `#/conversations/${r.sub === "meetings" ? "meetings" : "leads"}` : r.view === "setup" ? (r.sub ? `#/setup/${r.sub}` : "#/setup") : `#/${r.view}`;
 let lastView = null;
 function showView(r, { push = true, force = false } = {}) {
   const view = SECTIONS.includes(r.view) ? r.view : "today";
@@ -1806,6 +1890,7 @@ function showView(r, { push = true, force = false } = {}) {
     (sub === "leads" ? loadInbound : loadMeetings)();
   } else if (view === "company") loadCompany(next.id);
   else if (view === "setup") { if (sameSetup && SETUP) applySetupSection(); else loadSetup(); }
+  else if (view === "people") { PF.company = next.id || null; loadPeople(); }
   else if (view === "research") { if (next.domain) { $("domain").value = next.domain; run(next.domain); } }
   else ({ today: loadToday, accounts: loadAccounts, watchlist: loadWatchlist }[view] || (() => {}))();
 }
@@ -1836,6 +1921,8 @@ function drawCompany() {
   const mt = d.meetings.map((m) => `<div class="wev"><span class="dot"></span><div><div class="wt">${esc(m.title || "Meeting")}${m.outcome ? ` · ${esc(String(m.outcome).replace(/_/g, " "))}` : ""}</div><div class="wm">${esc(day(m.starts_at))}</div></div></div>`).join("");
   $("cobody").innerHTML = `<p style="margin:0 0 12px"><a href="#/accounts" data-back>← Accounts</a></p>${aCard({ ...a, signals: d.signals.slice(0, 3) })}
     ${d.signals.length > 3 ? `<article class="card"><p class="label">Earlier signals</p>${sigList(d.signals.slice(3), 25)}</article>` : ""}
+    <article class="card"><p class="label">People (${d.people.length})</p>${d.people.length ? d.people.map((p) => `<div class="wrow"><div class="wmain"><b>${esc(p.name)}</b> <span class="meta">${esc(p.title)}</span><div class="meta">${p.persona ? `<span class="ptag">${esc(p.persona)}</span> ` : ""}${p.revealed ? `<b>${esc(p.email)}</b>` : p.has_email ? "email found, not revealed" : "no email"}${p.in_hubspot ? ` · <span class="pill ok">In HubSpot</span>` : ""}</div></div><div class="wside">${watchBtn("person", p.id, p.watched)}</div></div>`).join("") : `<p class="meta" style="margin:0">${a.searched_at ? `Searched ${esc(day(a.searched_at))}: nobody found.` : "Nobody saved yet. Use Find people above."}</p>`}</article>
+    ${d.drafts.length ? `<article class="card"><p class="label">Drafts (suggestions, never sent)</p>${d.drafts.map((x) => `<div class="draft"><b>${esc(x.subject)}</b>\n\n${esc(x.body)}</div><p class="meta" style="margin:6px 0 12px">${x.persona ? `For ${esc(x.persona)} · ` : ""}${esc(day(x.created_at))}</p>`).join("")}</article>` : ""}
     ${ev ? `<article class="card"><p class="label">What moved (Watchlist)</p>${ev}</article>` : ""}
     ${hist ? `<article class="card"><p class="label">History</p>${hist}</article>` : ""}
     ${mt ? `<article class="card"><p class="label">Meetings</p>${mt}</article>` : ""}
@@ -1845,7 +1932,7 @@ wireCards($("cobody"), () => loadCompany(CUR.id, true));
 $("cobody").addEventListener("click", (e) => { const r = e.target.closest("[data-research]"); if (r) { e.preventDefault(); showView({ view: "research", domain: r.dataset.research }); } });
 
 /* ============ search and jump (Ctrl or Cmd + K) ============ */
-const PAL_PAGES = [["Today", { view: "today" }], ["Accounts", { view: "accounts" }], ["Watchlist", { view: "watchlist" }], ["Inbound leads", { view: "conversations", sub: "leads" }], ["Meetings", { view: "conversations", sub: "meetings" }],
+const PAL_PAGES = [["Today", { view: "today" }], ["Accounts", { view: "accounts" }], ["Watchlist", { view: "watchlist" }], ["Inbound leads", { view: "conversations", sub: "leads" }], ["Meetings", { view: "conversations", sub: "meetings" }], ["People (everyone searched)", { view: "people" }],
   ["Research a company", { view: "research" }], ["Setup: what you sell", { view: "setup", sub: "sell" }], ["Setup: who we look for", { view: "setup", sub: "look" }], ["Setup: who we contact", { view: "setup", sub: "contact" }], ["Setup: signals", { view: "setup", sub: "signals" }],
   ["Setup: alerts and email", { view: "setup", sub: "alerts" }], ["Setup: finding companies and credits", { view: "setup", sub: "find" }], ["Setup: HubSpot, name and health", { view: "setup", sub: "conn" }]];
 const PAL_ACTIONS = [["Check size and stage for companies without it", () => { PENDING_CLICK = "[data-bulkfacts]"; showView({ view: "accounts" }); }], ["Find people for the top companies", () => { PENDING_CLICK = "[data-bulkfind]"; showView({ view: "accounts" }); }],
@@ -1865,7 +1952,7 @@ async function openPalette() {
     const pages = PAL_PAGES.filter(([t]) => match(t, words)).slice(0, words.length ? 5 : 6).map(([t, r]) => ({ sec: "Go to", t, go: () => showView(r) }));
     const acts = PAL_ACTIONS.filter(([t]) => match(t, words)).slice(0, 3).map(([t, f]) => ({ sec: "Do", t, go: f }));
     const cos = words.length ? (ACC?.accounts || []).filter((a) => !a.removed && match(`${a.name} ${a.domain} ${a.segment || ""}`, words)).slice(0, 6).map((a) => ({ sec: "Companies", t: a.name, small: a.domain, go: () => showView({ view: "company", id: a.id }) })) : [];
-    const ppl = words.length ? (ACC?.accounts || []).flatMap((a) => (a.contacts || []).map((c) => ({ a, c }))).filter(({ a, c }) => match(`${c.name} ${c.title} ${a.name}`, words)).slice(0, 4).map(({ a, c }) => ({ sec: "People", t: c.name, small: `${c.title} at ${a.name}`, go: () => showView({ view: "company", id: a.id }) })) : [];
+    const ppl = words.length ? (ACC?.accounts || []).flatMap((a) => (a.contacts || []).map((c) => ({ a, c }))).filter(({ a, c }) => match(`${c.name} ${c.title} ${a.name}`, words)).slice(0, 4).map(({ a, c }) => ({ sec: "People", t: c.name, small: `${c.title} at ${a.name}`, go: () => showView({ view: "people", id: a.id }) })) : [];
     const dom = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(q.value.trim()) ? [{ sec: "Research", t: `Research ${q.value.trim().toLowerCase()}`, go: () => showView({ view: "research", domain: q.value.trim().toLowerCase() }) }] : [];
     items = [...cos, ...ppl, ...dom, ...pages, ...acts];
     act = Math.min(act, Math.max(0, items.length - 1));

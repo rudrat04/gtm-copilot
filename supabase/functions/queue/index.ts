@@ -142,7 +142,7 @@ function accountFacts(a: { firmo_at: string | null; employees: number | null; em
  */
 async function accountsView(admin: boolean) {
   const { data: all } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,founded_year,linkedin_handle,removed_at,watched_at")
+    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,founded_year,linkedin_handle,removed_at,watched_at,people_searched_at")
     .order("priority_score", { ascending: false, nullsFirst: false }).limit(400);
   const rows = (all ?? []).map((a) => {
     const f = fitBreakdown(a);
@@ -161,6 +161,8 @@ async function accountsView(admin: boolean) {
     sb.from("cp_discovered").select("domain,reason,found_at").eq("status", "added").order("found_at", { ascending: false }).limit(100),
   ]);
   const searched = new Set((ppl ?? []).map((p) => p.account_id));
+  const peopleCount = new Map<string, number>();
+  for (const p of ppl ?? []) peopleCount.set(p.account_id, (peopleCount.get(p.account_id) ?? 0) + 1);
   const why = new Map((disc ?? []).map((d) => [d.domain, d.reason]));
   const sigsBy = new Map<string, NonNullable<typeof signals>>();
   for (const s of signals ?? []) (sigsBy.get(s.account_id) ?? sigsBy.set(s.account_id, []).get(s.account_id)!).push(s);
@@ -181,7 +183,7 @@ async function accountsView(admin: boolean) {
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
         lost_at: a.lost_at, lost_reason: a.lost_reason, not_fit_reason: a.not_fit_reason,
         last_scanned_at: a.last_scanned_at, found_reason: why.get(a.domain) ?? null,
-        searched: searched.has(a.id), contacts: contactMap.get(a.id) ?? [],
+        searched: searched.has(a.id), people_count: peopleCount.get(a.id) ?? 0, searched_at: a.people_searched_at ?? null, contacts: contactMap.get(a.id) ?? [],
         signals: low || removed ? [] : mine.slice(0, 3).map((s) => ({
           kind: s.kind, title: s.title, url: s.url, first_seen: s.detected_at,
           published: (s.detail as { published?: string } | null)?.published ?? null,
@@ -192,17 +194,37 @@ async function accountsView(admin: boolean) {
   };
 }
 
+/** Everyone we have searched, found or added, with or without an email, so nothing has to be searched twice. One company, or all (newest first). */
+async function peopleList(admin: boolean, accountId?: string) {
+  let q = sb.from("cp_people").select("id,account_id,first_name,last_name,title,persona,relevance,seniority,department,email,email_status,email_confidence,email_revealed,hubspot_contact_id,hs_status,hs_note,watched_at,created_at,provider").order("created_at", { ascending: false }).limit(600);
+  if (accountId) q = q.eq("account_id", accountId);
+  const { data: rows } = await q;
+  const ids = [...new Set((rows ?? []).map((p) => p.account_id))];
+  const { data: accts } = ids.length ? await sb.from("cp_accounts").select("id,name,domain,removed_at").in("id", ids) : { data: [] };
+  const a = new Map((accts ?? []).map((x) => [x.id, x]));
+  const people = (rows ?? []).filter((p) => a.has(p.account_id) && !a.get(p.account_id)!.removed_at).map((p) => ({
+    id: p.id, account_id: p.account_id, company: a.get(p.account_id)!.name, domain: a.get(p.account_id)!.domain,
+    name: admin ? `${p.first_name} ${p.last_name}`.trim() : `${p.first_name} ${(p.last_name || "").charAt(0)}.`.trim(),
+    title: p.title, persona: p.persona, relevance: p.relevance, seniority: p.seniority, department: p.department,
+    has_email: !!p.email, revealed: admin && !!p.email_revealed, email: admin && p.email_revealed ? p.email : null, email_status: p.email_status, email_confidence: p.email_confidence,
+    in_hubspot: !!p.hubspot_contact_id, hs_status: p.hs_status, hs_note: p.hs_note, watched: !!p.watched_at, added: p.created_at, manual: p.provider === "manual",
+  }));
+  return { people };
+}
+
 /** One company in full: its card, every signal, what moved, its history and meetings. */
 async function companyView(id: string, admin: boolean) {
   const view = await accountsView(admin);
   const account = view.accounts.find((a) => a.id === id);
   if (!account) return null;
-  const [{ data: sigs }, { data: events }, { data: outcomes }, { data: meetings }, { data: acct }] = await Promise.all([
+  const [{ data: sigs }, { data: events }, { data: outcomes }, { data: meetings }, { data: acct }, people, { data: drafts }] = await Promise.all([
     sb.from("cp_signals").select("kind,title,url,detail,detected_at").eq("account_id", id).order("detected_at", { ascending: false }).limit(40),
     sb.from("cp_watch_events").select("kind,title,url,detected_at,importance").eq("account_id", id).order("detected_at", { ascending: false }).limit(20),
     sb.from("cp_outcomes").select("kind,note,created_at").eq("account_id", id).order("created_at", { ascending: false }).limit(15),
     sb.from("cp_meetings").select("title,starts_at,outcome,status").eq("account_id", id).order("starts_at", { ascending: false }).limit(8),
     sb.from("cp_accounts").select("hubspot_company_id").eq("id", id).maybeSingle(),
+    peopleList(admin, id),
+    sb.from("cp_outreach_drafts").select("persona,subject,body,created_at").eq("account_id", id).order("created_at", { ascending: false }).limit(3),
   ]);
   const isSummary = (s: { kind: string; detail: unknown }) => s.kind === "hiring" && !!s.detail && typeof s.detail === "object" && "salesOpenings" in (s.detail as object);
   const seenSummary = { v: false };
@@ -212,7 +234,7 @@ async function companyView(id: string, admin: boolean) {
   }));
   return {
     account, signals, events: events ?? [], history: (outcomes ?? []).map((o) => ({ kind: o.kind, note: o.note, at: o.created_at })),
-    meetings: admin ? (meetings ?? []) : [],
+    meetings: admin ? (meetings ?? []) : [], people: people.people, drafts: admin ? (drafts ?? []) : [], good_tools: view.good_tools,
     hubspot_url: acct?.hubspot_company_id ? `https://${icp.owner.hubspotHost}/contacts/${icp.owner.hubspotPortal}/record/0-2/${acct.hubspot_company_id}` : null,
     admin,
   };
@@ -497,6 +519,36 @@ serve("queue", async (req) => {
     return json({ mode: "live", ok: true });
   }
   if (body.action === "company" && typeof body.account_id === "string") return json(await companyView(body.account_id, admin) ?? { error: "Company not found" }, 200);
+  if (body.action === "people_list") {
+    const { people } = await peopleList(admin);
+    // Companies we searched that returned nobody: shown so they are not searched again by mistake.
+    const { data: s } = await sb.from("cp_accounts").select("id,name,domain,people_searched_at,people_search_source").not("people_searched_at", "is", null).is("removed_at", null).order("people_searched_at", { ascending: false }).limit(300);
+    const have = new Set(people.map((p) => p.account_id));
+    return json({ admin, people, nobody: (s ?? []).filter((x) => !have.has(x.id)).map((x) => ({ id: x.id, name: x.name, domain: x.domain, at: x.people_searched_at, by: x.people_search_source })), personas: icp.personas.map((p) => p.title) });
+  }
+  if (body.action === "discover_list") {
+    const { data } = await sb.from("cp_discovered").select("domain,name,reason,source,found_at,status").eq("status", "rejected").order("found_at", { ascending: false }).limit(40);
+    return json({ admin, skipped: data ?? [] });
+  }
+  if (body.action === "discover_add" && typeof body.domain === "string") {
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to add a company." });
+    const { data: d } = await sb.from("cp_discovered").select("domain,name,status").eq("domain", body.domain).maybeSingle();
+    if (!d) return json({ error: "That company was not found" }, 404);
+    const { data: have } = await sb.from("cp_accounts").select("id").eq("domain", d.domain).maybeSingle();
+    let id = have?.id as string | undefined;
+    if (!id) {
+      const ins = await sb.from("cp_accounts").insert({ domain: d.domain, name: d.name ?? d.domain, source: "discovered", status: "new" }).select("id").single();
+      if (ins.error || !ins.data) return json({ error: "Could not add it" }, 500);
+      id = ins.data.id;
+    }
+    await sb.from("cp_discovered").update({ status: "added", account_id: id, reason: "Added by you after it was skipped" }).eq("domain", d.domain);
+    return json({ mode: "live", id, name: d.name });
+  }
+  if (body.action === "usage_log") {
+    if (!admin) return json({ mode: "dry_run", message: "Owner only." }, 403);
+    const { data } = await sb.from("cp_provider_usage").select("provider,action,credits,account,created_at").order("created_at", { ascending: false }).limit(25);
+    return json({ log: data ?? [] });
+  }
   if (body.action === "watchlist") return json({ ...(await watchlistView(admin)), admin });
   if (body.action === "watch_toggle" && (typeof body.account_id === "string" || typeof body.person_id === "string")) {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to follow companies and people." });
