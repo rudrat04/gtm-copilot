@@ -1861,15 +1861,7 @@ function drawSetup() {
       <div class="field"><label for="psite">Your website (optional)</label><input id="psite" type="text" class="tin" data-text="product.website" value="${esc(P.product.website)}" placeholder="yourcompany.com" maxlength="80"></div>
       <div class="actions" style="margin:0">${lockBtn(own, "data-suggest", "primary", "Suggest my settings", "Unlock to use this")}${own ? `<span class="meta">About 1 to 2 cents of AI. Nothing is saved until you press Save.</span>` : ""}</div>
       ${SUGGEST_NOTE ? `<div class="why" style="margin-top:12px"><b>Suggestion applied below.</b> ${esc(SUGGEST_NOTE)} Review it, then press Save.</div>` : ""}
-      <details style="margin-top:14px"><summary class="meta">Fine-tune: tools, competitors and exclusions</summary><div style="margin-top:12px">
-        ${tagField("toolsGood", "Tools that are a good sign", "Software a good customer probably uses, for example hubspot, salesforce.")}
-        ${tagField("toolsAvoid", "Tools that are a poor sign", "A company using one scores zero on tools. For example a rival's product.")}
-        ${tagField("painWords", "Problems that show a company needs you", "If a job post mentions one of these (for example crm, data quality), it counts as a signal.")}
-        ${tagField("competitors", "Your competitors", "Names or domains. Domains are never shown as prospects.")}
-        <div class="field"><label for="motion">Sales style you want</label><select id="motion" data-sel="motion">${[["any", "No preference"], ["sales_led", "Sales-led (demo and contact-sales pages)"], ["self_serve", "Self-serve (start free, sign up)"]].map(([v, t]) => `<option value="${v}"${P.motion === v ? " selected" : ""}>${t}</option>`).join("")}</select></div>
-        ${tagField("excludeWords", "Never show companies whose industry, tags, description or name contain", "For example: agency, consultancy, staffing.")}
-        ${tagField("excludeDomains", "Never show these companies", "Domains, for example partner.com.")}
-      </div></details>
+
     </article>
     <article class="card"><p class="label">Who we look for${info("How well a company fits is worked out from these choices, your product above and what we learn about the company. There is nothing to weigh.")}</p>
       
@@ -1879,6 +1871,12 @@ function drawSetup() {
       ${msField("stages", "Funding stage", d.options.stages, "Pick every stage you would sell to.")}
       ${chk("strictFit", "Only show companies inside these places and industries", "On: a company whose country or industry is known and outside your choices is treated as outside your range, hidden, and never alerted or searched. A company whose country is not known yet is never held against it. Off: places and industries only change the score.")}
       ${msField("regions", "Where they are based", d.options.regions, "Pick a region or country, or type a city name to add it. Companies elsewhere show as Outside range.", d.options.region_groups)}
+        ${tagField("toolsGood", "Tools that are a good sign", "Software a good customer probably uses, for example hubspot, salesforce.")}
+        ${tagField("toolsAvoid", "Tools that are a poor sign", "A company using one scores zero on tools. For example a rival's product.")}
+        <div class="field"><label for="motion">Sales style you want</label><select id="motion" data-sel="motion">${[["any", "No preference"], ["sales_led", "Sales-led (demo and contact-sales pages)"], ["self_serve", "Self-serve (start free, sign up)"]].map(([v, t]) => `<option value="${v}"${P.motion === v ? " selected" : ""}>${t}</option>`).join("")}</select></div>
+        ${tagField("competitors", "Your competitors", "Names or domains. Domains are never shown as prospects.")}
+        ${tagField("excludeWords", "Never show companies whose industry, tags, description or name contain", "For example: staffing, recruitment. Leave empty to allow every kind of company.")}
+        ${tagField("excludeDomains", "Never show these companies", "Domains, for example partner.com.")}
     </article>
     <article class="card" id="icpcard"><p class="label">What your customers look like</p><p class="meta" style="margin:0">${own ? "Loading…" : "Unlock to read your HubSpot customers."}</p></article>
     <article class="card"><p class="label">Who we contact</p>
@@ -1894,6 +1892,7 @@ function drawSetup() {
       <div class="actions" style="margin:6px 0 0"><button type="button" class="btn ghost" data-padd${P.personas.length >= 8 ? " disabled" : ""}>Add a buyer type</button><span class="meta">Up to 8.</span></div>
     </article>
     <article class="card"><p class="label">What counts as a buying signal</p>
+        ${tagField("painWords", "Problems that show a company needs you", "If a job post mentions one of these (for example crm, data quality), it counts as a signal.")}
       <div class="toggles">
         <label class="toggle"><input type="checkbox" data-sig="hiring" ${P.signals.hiring ? "checked" : ""}><span>Hiring sales or RevOps roles<small>Public job boards and Hacker News hiring posts</small></span></label>
         <label class="toggle"><input type="checkbox" data-sig="news" ${P.signals.news ? "checked" : ""}><span>Funding and company news<small>Last 60 days; older news counts less</small></span></label>
