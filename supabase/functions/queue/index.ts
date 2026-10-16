@@ -524,8 +524,9 @@ serve("queue", async (req) => {
     if (!a) return json({ error: "Account not found" }, 404);
     const restoring = body.action === "restore_account";
     if (!restoring && ["contacted", "replied", "meeting"].includes(a.outreach_status)) return json({ error: "You have already been in touch with this company. Use Not now or Not a fit instead." }, 400);
-    await sb.from("cp_accounts").update(restoring ? { removed_at: null } : { removed_at: new Date().toISOString(), watched_at: null }).eq("id", a.id); // a removed company is no longer followed
-    await log("info", restoring ? "account_restored" : "account_removed", { account: a.domain });
+    if (restoring) await sb.from("cp_accounts").update({ removed_at: null }).eq("id", a.id);
+    else await sb.rpc("cp_purge_accounts", { ids: [a.id] }); // permanent: the company and everything about it are deleted; only the domain is remembered so it is not found again
+    await log("info", restoring ? "account_restored" : "account_purged", { account: a.domain });
     return json({ mode: "live", ok: true });
   }
   if (body.action === "company" && typeof body.account_id === "string") return json(await companyView(body.account_id, admin) ?? { error: "Company not found" }, 200);
@@ -661,13 +662,20 @@ serve("queue", async (req) => {
     const r = await addToWatchlist(String(body.domain ?? ""));
     return "error" in r ? json({ error: r.error }, 400) : json({ mode: "live", ...r });
   }
+  if (body.action === "purge_removed") { // empties the Removed tab for good (companies removed before removing became permanent)
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed." });
+    const { data } = await sb.from("cp_accounts").select("id").not("removed_at", "is", null);
+    const ids = (data ?? []).map((r) => r.id);
+    if (ids.length) await sb.rpc("cp_purge_accounts", { ids });
+    return json({ mode: "live", purged: ids.length });
+  }
   if (body.action === "remove_low") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: nothing was changed. Unlock to remove companies." });
     // Only companies nobody has touched: below the bar, still open, not in HubSpot, no people stored.
     const v = await accountsView(true);
     const ids = v.accounts.filter((a) => a.low && !a.removed && a.outreach_status === "open" && !a.hubspot && !a.contacts.length && !a.lost_at).map((a) => a.id);
     if (body.dry !== false) return json({ mode: "plan", count: ids.length, names: v.accounts.filter((a) => ids.includes(a.id)).slice(0, 8).map((a) => a.name) });
-    if (ids.length) await sb.from("cp_accounts").update({ removed_at: new Date().toISOString() }).in("id", ids);
+    if (ids.length) await sb.rpc("cp_purge_accounts", { ids });
     await log("info", "accounts_removed_bulk", { detail: { count: ids.length } });
     return json({ mode: "live", removed: ids.length });
   }

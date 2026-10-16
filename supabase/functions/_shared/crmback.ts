@@ -76,6 +76,7 @@ export async function importHubspotContacts(limit = 20): Promise<number> {
     if (!domain) continue;
     let { data: acct } = await sb.from("cp_accounts").select("id,removed_at,employees").eq("domain", domain).maybeSingle();
     if (acct?.removed_at) continue;
+    if (!acct) { const { data: gone } = await sb.from("cp_discovered").select("id").eq("domain", domain).eq("source", "removed").maybeSingle(); if (gone) continue; } // deleted for good by the owner
     if (!acct) {
       const ins = await sb.from("cp_accounts").insert({ domain, name: (b?.name || c.company || domain).slice(0, 80), source: "hubspot", status: "new", hubspot_company_id: c.companyId }).select("id,removed_at,employees").single();
       if (ins.error || !ins.data) continue;

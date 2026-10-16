@@ -892,7 +892,7 @@ const VIEWS = [
   ["low", "Low fit", "Hidden by default: outside your fit bar or too low a score", (a) => a.low],
   ["watching", "Watching", "Companies you follow. They are never hidden by the fit bar and get their own alerts", (a) => a.watched && !a.removed],
   ["all", "All", "Every company except removed ones", (a) => !a.removed],
-  ["removed", "Removed", "Hidden and blocked. Restore any of them here", (a) => a.removed],
+  ["removed", "Removed", "Older removed companies. Removing now deletes for good", (a) => a.removed],
 ];
 const SELECTS = [
   ["pstage", "Stage", [["", "Any"], ["ready", "Ready"], ["active", "Active"], ["nurture", "Nurture"], ["qualified", "Qualified"], ["candidate", "Candidate"], ["closed", "Closed"]], (a, v) => a.pstage === v],
@@ -1080,7 +1080,7 @@ $("ahead").addEventListener("click", async (e) => {
       const p = await api("queue", { action: "remove_low", dry: true });
       if (p.mode === "dry_run") { say(p.message); return; }
       if (!p.count) { say("Nothing to remove: every low-fit company here already has activity."); return; }
-      if (!(await ask({ title: `Remove ${p.count} low-fit compan${p.count === 1 ? "y" : "ies"}?`, body: `${p.names.join("\n")}${p.count > p.names.length ? `\n…and ${p.count - p.names.length} more` : ""}\n\nOnly companies you have not touched, that are not in HubSpot and have no people. They can be restored from the Removed view.`, ok: "Remove", danger: true }))) return;
+      if (!(await ask({ title: `Remove ${p.count} low-fit compan${p.count === 1 ? "y" : "ies"}?`, body: `${p.names.join("\n")}${p.count > p.names.length ? `\n…and ${p.count - p.names.length} more` : ""}\n\nOnly companies you have not touched, that are not in HubSpot and have no people. They are deleted for good and cannot be restored.`, ok: "Delete for good", danger: true }))) return;
       const r = await api("queue", { action: "remove_low", dry: false });
       say(`Removed ${r.removed}.`); ACC = null; loadAccounts(true);
     } catch (err) { say(err.message); } finally { br.disabled = false; }
@@ -1194,12 +1194,12 @@ function wireCards(root, reload) {
     }
     if (act === "remove" || act === "restore") {
       const id = card.dataset.id, name = card.dataset.name;
-      if (act === "remove" && !(await ask({ title: `Remove ${name}?`, body: "It disappears from every list and is never found or imported again. Nothing is changed in HubSpot. You can bring it back from the Removed view.", ok: "Remove", danger: true }))) return;
+      if (act === "remove" && !(await ask({ title: `Remove ${name}?`, body: "This deletes the company and everything stored about it (people, signals, notes) for good. It is never found or imported again. Nothing is changed in HubSpot. This cannot be undone.", ok: "Remove", danger: true }))) return;
       btn.disabled = true;
       try {
         const r = await api("queue", { action: act === "remove" ? "remove_account" : "restore_account", account_id: id });
         if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
-        say(act === "remove" ? `${name} removed.` : `${name} restored.`, act === "remove" ? { label: "Undo", run: async () => { await api("queue", { action: "restore_account", account_id: id }); say(`${name} restored.`); reload(); } } : undefined);
+        say(act === "remove" ? `${name} deleted for good.` : `${name} restored.`);
         reload();
       } catch (err) { say(err.message); btn.disabled = false; }
       return;
