@@ -127,6 +127,8 @@ const DEFAULT: Profile = {
   plAuto: icp.predictleads.auto !== false,
 };
 
+DEFAULT.watch.sched = cleanSched(undefined, { hot: DEFAULT.watch.alertsPerDay, watchlist: 5, flags: DEFAULT.watch.urgent }); // a profile that was never saved still has a schedule
+
 const list = (v: unknown, fallback: string[], max = 25, allowEmpty = false): string[] => {
   if (!Array.isArray(v)) return fallback;
   const out = [...new Set(v.map((x) => String(x).trim().replace(/\s+/g, " ").slice(0, 40)).filter(Boolean))].slice(0, max);
