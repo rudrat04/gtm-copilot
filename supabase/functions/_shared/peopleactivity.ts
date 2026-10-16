@@ -27,6 +27,17 @@ export function cleanActivity(raw: unknown): Activity[] {
 }
 
 /** Pure: the one line shown for an item. */
+/** When did it happen? "2024-06-18" and "2025-04" are read; a bare past year is old news; anything unreadable is judged by when we found it. */
+export function whenOf(date: string | undefined, now = new Date()): { ok: boolean; at: string | null } {
+  const d = (date ?? "").trim();
+  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  if (m) return { ok: true, at: new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)).toISOString() };
+  m = /^(\d{4})-(\d{2})$/.exec(d);
+  if (m) return { ok: true, at: new Date(Date.UTC(+m[1], +m[2] - 1, 15, 12)).toISOString() };
+  m = /^(\d{4})$/.exec(d);
+  if (m) return +m[1] < now.getUTCFullYear() ? { ok: false, at: null } : { ok: true, at: null };
+  return { ok: true, at: null };
+}
 export const activityLine = (a: Activity) => [a.title, a.place, a.date].filter(Boolean).join(" · ");
 
 /** Looks up a few followed people on the web. Spends AI (about 5 cents each), never more than `activityPerDay` people a day. */
@@ -62,7 +73,9 @@ export async function personActivity(limit = (icp.watch as { activityPerDay?: nu
       let parsed: unknown = null;
       try { parsed = parseJson(raw); } catch { /* nothing found */ }
       for (const it of cleanActivity(parsed)) {
-        if (await recordEvent({ key: `activity:${p.id}:${hashStr(it.title)}`, kind: "activity", importance: it.upcoming ? "big" : "small", accountId: p.account_id, personId: p.id, subject: full, title: activityLine(it), url: it.url ?? null })) n++;
+        const w = whenOf(it.date);
+        if (!w.ok) continue;
+        if (await recordEvent({ at: w.at, key: `activity:${p.id}:${hashStr(it.title)}`, kind: "activity", importance: it.upcoming ? "big" : "small", accountId: p.account_id, personId: p.id, subject: full, title: activityLine(it), url: it.url ?? null })) n++;
       }
       await log("info", "person_activity", { account: a.domain, detail: { found: cleanActivity(parsed).length } });
     } catch (e) {

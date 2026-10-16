@@ -3,7 +3,7 @@ import { FIT_COLS } from "./firmo.ts";
 import { fitState, heatOf } from "./score.ts";
 import { aiHeat, aiMaps } from "./aiscore.ts";
 import { inTeam, isLeader } from "./peoplesignals.ts";
-import { KIND_LABEL, type EventKind } from "./movements.ts";
+import { eventDateOk, KIND_LABEL, type EventKind } from "./movements.ts";
 
 // The Signals tab: everything that happened around your companies and people, in plain categories, newest first. Each item names the company
 // and the people in it who would care (a hiring signal for sales roles goes with the sales leaders; funding goes with the founders and executives).
@@ -70,7 +70,7 @@ export async function signalsFeed(admin: boolean, days = 30) {
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
   const [{ data: sigs }, { data: evs }] = await Promise.all([
     sb.from("cp_signals").select("account_id,kind,title,url,detail,detected_at").gt("detected_at", since).order("detected_at", { ascending: false }).limit(1500),
-    sb.from("cp_watch_events").select("kind,title,url,account_id,person_id,subject,detected_at").gt("detected_at", since).order("detected_at", { ascending: false }).limit(300),
+    sb.from("cp_watch_events").select("kind,title,url,account_id,person_id,subject,detected_at,event_at").gt("detected_at", since).order("detected_at", { ascending: false }).limit(300),
   ]);
   const ids = [...new Set([...(sigs ?? []).map((s) => s.account_id), ...(evs ?? []).map((e) => e.account_id).filter(Boolean) as string[]])];
   const { data: accts } = ids.length ? await sb.from("cp_accounts").select(`id,name,domain,removed_at,${FIT_COLS}`).in("id", ids) : { data: [] };
@@ -82,15 +82,15 @@ export async function signalsFeed(admin: boolean, days = 30) {
   const sigsBy = new Map<string, typeof sigs>();
   for (const s of sigs ?? []) (sigsBy.get(s.account_id) ?? sigsBy.set(s.account_id, []).get(s.account_id)!)!.push(s);
 
-  const out: { id: string; category: Category; intent: boolean; label: string; title: string; url: string | null; at: string; company: { id: string; name: string; domain: string; fit: string; heat: string }; who: string | null; people: P[] }[] = [];
+  const out: { market?: boolean; id: string; category: Category; intent: boolean; label: string; title: string; url: string | null; at: string; company: { id: string; name: string; domain: string; fit: string; heat: string }; who: string | null; people: P[] }[] = [];
   const seen = new Set<string>();
-  const add = (accountId: string, cat: { category: Category; intent: boolean }, label: string, title: string, url: string | null, at: string, who: string | null) => {
+  const add = (accountId: string, cat: { category: Category; intent: boolean }, label: string, title: string, url: string | null, at: string, who: string | null, exempt = false) => {
     const c = a.get(accountId);
     if (!c) return;
     const key = `${accountId}|${title.toLowerCase().slice(0, 80)}`;
     if (seen.has(key)) return;
     const fit = fitState(c as never);
-    if (!c.watched_at && fit === "outside") return; // clearly outside your size or stage and not followed: not worth a signal
+    if (!c.watched_at && !exempt && fit === "outside") return; // clearly outside your size or stage and not followed: not worth a signal
     seen.add(key);
     const heat = aiCo.has(accountId) ? aiHeat(aiCo.get(accountId)!.label) : heatOf((sigsBy.get(accountId) ?? []) as never, fit);
     out.push({ id: key, ...cat, label, title, url, at, company: { id: accountId, name: c.name as string, domain: c.domain as string, fit, heat }, who, people: responsible(cat.category, title, by.get(accountId) ?? []) });
@@ -102,9 +102,23 @@ export async function signalsFeed(admin: boolean, days = 30) {
     const cat = categorize(s);
     add(s.account_id, cat, cat.category === "Buying intent" ? ((s.detail as { ruleType?: string } | null)?.ruleType === "visit" ? "Visited your website" : (s.detail as { ruleType?: string } | null)?.ruleType === "competitor" ? "Uses a competitor" : "Mentions your problem") : cat.category, s.title.replace(/^Hiring:\s*/i, ""), s.url, d.published ?? s.detected_at, null);
   }
-  for (const e of evs ?? []) if (e.account_id) {
+  const personIds = [...new Set((evs ?? []).map((e) => e.person_id).filter(Boolean) as string[])];
+  const { data: wp } = personIds.length ? await sb.from("cp_people").select("id").in("id", personIds).not("watched_at", "is", null) : { data: [] };
+  const watchedPeople = new Set((wp ?? []).map((x) => x.id));
+  const maskName = (n: string | null) => { if (admin || !n) return n; const p = n.trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[p.length - 1].charAt(0)}.` : p[0]; };
+  for (const e of evs ?? []) {
+    if (!eventDateOk(e.event_at)) continue; // old news, or a date that cannot be right
+    const at = e.event_at ?? e.detected_at; // the day it happened, when we know it
     const cat = categorizeEvent(e.kind);
-    add(e.account_id, cat, KIND_LABEL[e.kind as EventKind] ?? e.kind, e.title, e.url, e.detected_at, e.subject);
+    if (!e.account_id) { // competitor and market news belongs to no company: it gets its own card
+      if (e.kind !== "competitor_event" && e.kind !== "market") continue;
+      const key = `market|${e.title.toLowerCase().slice(0, 80)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: key, ...cat, market: true, label: KIND_LABEL[e.kind as EventKind] ?? e.kind, title: e.title, url: e.url, at, company: { id: "", name: e.subject ?? "Market", domain: "", fit: "unknown", heat: "watching" }, who: null, people: [] });
+      continue;
+    }
+    add(e.account_id, cat, KIND_LABEL[e.kind as EventKind] ?? e.kind, e.title, e.url, at, e.person_id ? maskName(e.subject) : e.subject, !!(e.person_id && watchedPeople.has(e.person_id)));
   }
   out.sort((x, y) => Date.parse(y.at) - Date.parse(x.at));
   const counts: Record<string, number> = {};

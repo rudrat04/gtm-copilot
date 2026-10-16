@@ -15,7 +15,7 @@ import icp from "./icp.json" with { type: "json" };
 // title re-check, which spends search credits inside the owner's reserve.
 
 export type EventKind = "tool_change" | "pain" | "visit" | "market" | "funding" | "leadership" | "event" | "competitor_event" | "news" | "hiring" | "tool" | "competitor_tool" | "deal" | "lead" | "people" | "mention" | "contact" | "job_change" | "activity" | "team";
-export type WatchEvent = { key: string; kind: EventKind; importance: "big" | "small"; accountId?: string | null; personId?: string | null; subject?: string | null; title: string; url?: string | null };
+export type WatchEvent = { key: string; kind: EventKind; importance: "big" | "small"; accountId?: string | null; personId?: string | null; subject?: string | null; title: string; url?: string | null; at?: string | null };
 
 export const KIND_LABEL: Record<EventKind, string> = {
   funding: "Funding", leadership: "Leadership change", event: "Hosting an event", competitor_event: "Competitor event", news: "In the news", hiring: "Hiring",
@@ -54,9 +54,33 @@ export function eventsFromSignals(account: { id: string }, fresh: Signal[]): Wat
   return out;
 }
 
+/** An event is worth showing only if it happened in the last 45 days or is coming up within 9 months. Anything else is old news or a made-up date. */
+export function eventDateOk(iso: string | null | undefined, now = Date.now()): boolean {
+  if (!iso) return true; // unknown date: judged by when we found it
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return true;
+  const d = (t - now) / 86_400_000;
+  return d >= -45 && d <= 270;
+}
+
+/** The competitors the owner listed, as written (without scheme or www) and as a brand word ("People.ai" -> "People"). */
+export function competitorNames(): { full: string; brand: string }[] {
+  return ((icp.company as { competitors?: string[] }).competitors ?? []).map((c) => c.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")).filter(Boolean)
+    .map((full) => ({ full, brand: full.replace(/\.[a-z]{2,}.*$/, "") }));
+}
+const SALES_CONTEXT = /\b(sales|software|platform|crm|saas|pipeline|revenue intelligence|gtm|sdr|prospecting|outbound|go-to-market|ai)\b/i;
+/** Is this headline really about that competitor? The full name counts; a bare brand word ("People", "Revenue", "Outreach") needs a sales-software word beside it. */
+export function competitorHit(text: string, c: { full: string; brand: string }): boolean {
+  const t = text.toLowerCase();
+  if (t.includes(c.full)) return true;
+  if (!t.includes(c.brand)) return false;
+  return c.brand.length >= 10 || SALES_CONTEXT.test(text);
+}
+
 /** Stores an event once (the key dedupes). Returns true when it is new. */
 export async function recordEvent(e: WatchEvent): Promise<boolean> {
-  const { data, error } = await sb.from("cp_watch_events").upsert({
+  if (!eventDateOk(e.at)) return false;
+  const { data, error } = await sb.from("cp_watch_events").upsert({ event_at: e.at ?? null,
     key: e.key, kind: e.kind, importance: e.importance, account_id: e.accountId ?? null, person_id: e.personId ?? null, subject: e.subject ?? null, title: e.title, url: e.url ?? null,
   }, { onConflict: "key", ignoreDuplicates: true }).select("id");
   if (error) { await log("warn", "watch_event_failed", { message: error.message, detail: { key: e.key } }); return false; }
@@ -77,12 +101,12 @@ export async function recordIfWatched(accountId: string, e: Omit<WatchEvent, "ac
 
 /** Competitors hosting events (news, free). Names come from the owner's competitor list; a domain is reduced to its name. */
 export async function competitorEvents(): Promise<number> {
-  const names = ((icp.company as { competitors?: string[] }).competitors ?? []).map((c) => c.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\.[a-z]{2,}.*$/, "")).filter(Boolean).slice(0, 5);
   let n = 0;
-  for (const name of names) {
-    const items = await newsRaw(`"${name}" (webinar OR conference OR summit OR keynote OR "launch event" OR meetup OR hosts OR hosting)`, 30);
-    for (const i of items.filter((x) => isEventHeadline(x.title, name)).slice(0, 2)) {
-      if (await recordEvent({ key: `competitor_event::${hashStr(i.title)}`, kind: "competitor_event", importance: "big", subject: name, title: i.title.slice(0, 240), url: i.url ?? null })) n++;
+  for (const c of competitorNames().slice(0, 5)) {
+    const items = await newsRaw(`("${c.full}" OR ("${c.brand}" (sales OR software OR platform))) (webinar OR conference OR summit OR keynote OR "launch event" OR meetup OR hosts OR hosting)`, 30);
+    for (const i of items.filter((x) => competitorHit(x.title, c) && isEventHeadline(x.title, c.brand)).slice(0, 2)) {
+      const at = Date.parse(i.published) ? new Date(i.published).toISOString() : null;
+      if (await recordEvent({ key: `competitor_event::${hashStr(i.title)}`, kind: "competitor_event", importance: "big", subject: c.full, title: i.title.slice(0, 240), url: i.url ?? null, at })) n++;
     }
   }
   return n;
@@ -90,17 +114,18 @@ export async function competitorEvents(): Promise<number> {
 
 /** People talking about leaving or replacing a competitor on Hacker News, free. Not tied to one company: it shows where the market is moving. */
 export async function marketSignals(): Promise<number> {
-  const names = ((icp.company as { competitors?: string[] }).competitors ?? []).map((c) => c.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\.[a-z]{2,}.*$/, "")).filter(Boolean).slice(0, 4);
+  const names = competitorNames().slice(0, 4);
   const since = Math.floor((Date.now() - 30 * 86_400_000) / 1000);
   let n = 0;
-  for (const name of names) {
+  for (const c of names) {
+    const name = c.full;
     for (const q of [`alternative to ${name}`, `switching from ${name}`]) {
       try {
         const r = await fetch(`https://hn.algolia.com/api/v1/search_by_date?query=${encodeURIComponent(`"${q}"`)}&tags=(story,comment)&numericFilters=created_at_i>${since}&hitsPerPage=4`, { signal: AbortSignal.timeout(12000) });
         const hits = r.ok ? (await r.json()).hits ?? [] : [];
         for (const h of hits as { objectID: string; title?: string; comment_text?: string; story_title?: string }[]) {
           const text = (h.title ?? h.comment_text ?? h.story_title ?? "").replace(/<[^>]+>/g, " ").replace(/&[a-z#0-9]+;/g, " ").replace(/\s+/g, " ").trim();
-          if (!text.toLowerCase().includes(name.toLowerCase())) continue;
+          if (!competitorHit(text, c)) continue;
           if (await recordEvent({ key: `market:${h.objectID}`, kind: "market", importance: "small", subject: name, title: `${name}: "${text.slice(0, 150)}"`, url: `https://news.ycombinator.com/item?id=${h.objectID}` })) n++;
         }
       } catch { /* a search that fails is skipped */ }

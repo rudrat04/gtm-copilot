@@ -1112,3 +1112,18 @@ Deno.test("message switches: off means off, everything else stays on", async () 
   (cfg.watch as { mail: Record<string, boolean> }).mail.daily = false;
   try { assertFalse(mailOn("daily")); assert(mailOn("hot")); } finally { (cfg.watch as { mail: Record<string, boolean> }).mail.daily = true; }
 });
+
+Deno.test("competitor news must really be about the competitor; event dates are the day it happened", async () => {
+  const { competitorHit, eventDateOk } = await import("../_shared/movements.ts");
+  const { whenOf } = await import("../_shared/peopleactivity.ts");
+  const c = { full: "people.ai", brand: "people" };
+  assertFalse(competitorHit("Churches Assisting People hosting anniversary gala in Conway", c));
+  assert(competitorHit("People.ai hosts its revenue summit", c));
+  assert(competitorHit("People hosts a sales software webinar", c));
+  assertFalse(competitorHit("Beyond Revenue Growth: Takeaways from The Lodging Conference", { full: "revenue.io", brand: "revenue" }));
+  const now = Date.parse("2026-10-16T00:00:00Z");
+  assert(eventDateOk(null, now)); assert(eventDateOk("2026-10-01T00:00:00Z", now)); assert(eventDateOk("2027-03-01T00:00:00Z", now));
+  assertFalse(eventDateOk("2024-06-18T00:00:00Z", now)); assertFalse(eventDateOk("2028-01-01T00:00:00Z", now));
+  assertEquals(whenOf("2024-06-18").at?.slice(0, 10), "2024-06-18");
+  assertFalse(whenOf("2025", new Date("2026-10-16")).ok); assert(whenOf("2026", new Date("2026-10-16")).ok); assert(whenOf("online").ok);
+});
