@@ -1169,3 +1169,15 @@ Deno.test("fitState: AI verdict and owner override", async () => {
   assertEquals(fitState({ ...(cur as object), fit_override: "yes" } as never), "matches");
   assertEquals(fitState({ ...(base as object), fit_override: "no" } as never), "outside");
 });
+
+Deno.test("capacity mode and quiet days", async () => {
+  const { capacityMode } = await import("../_shared/capacity.ts");
+  const { quietDays } = await import("../_shared/followed.ts");
+  assertEquals(capacityMode({ ready: 30, cap: 8, icpChanged: false }).mode, "skip");
+  assertEquals(capacityMode({ ready: 3, cap: 8, icpChanged: false }).mode, "boost");
+  assertEquals(capacityMode({ ready: 12, cap: 8, icpChanged: false }).mode, "normal");
+  assertEquals(capacityMode({ ready: 30, cap: 8, icpChanged: true }).mode, "catchup"); // a changed profile always searches
+  const now = Date.parse("2026-10-16T00:00:00Z");
+  assertEquals(quietDays(["2026-08-17T00:00:00Z", null], now), 60);
+  assertEquals(quietDays([], now), null);
+});

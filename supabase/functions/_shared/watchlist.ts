@@ -1,3 +1,4 @@
+import { quietDays } from "./followed.ts";
 import { sb } from "./db.ts";
 import { normalizeDomain } from "./db.ts";
 import { log } from "./log.ts";
@@ -169,7 +170,8 @@ export async function watchlistView(admin: boolean) {
     })),
     companies: (accts ?? []).map((a) => {
       const l = last((e) => e.account_id === a.id && !e.person_id);
-      return { id: a.id, name: a.name, domain: a.domain, since: a.watched_at, checked: a.last_scanned_at, covers: companyCovers(), notify: a.watch_notify, fit: fitState(a), heat: aiCo.has(a.id) ? aiHeat(aiCo.get(a.id)!.label) : heatOf(sigs.filter((s) => s.account_id === a.id) as never, fitState(a)), last: l ? { label: KIND_LABEL[l.kind as EventKind] ?? l.kind, title: l.title, detected_at: l.detected_at } : null, unseen: (ev ?? []).filter((e) => e.account_id === a.id && !e.seen_at).length };
+      return { id: a.id, name: a.name, domain: a.domain, since: a.watched_at, checked: a.last_scanned_at, covers: companyCovers(), notify: a.watch_notify, fit: fitState(a), heat: aiCo.has(a.id) ? aiHeat(aiCo.get(a.id)!.label) : heatOf(sigs.filter((s) => s.account_id === a.id) as never, fitState(a)), last: l ? { label: KIND_LABEL[l.kind as EventKind] ?? l.kind, title: l.title, detected_at: l.detected_at } : null, unseen: (ev ?? []).filter((e) => e.account_id === a.id && !e.seen_at).length,
+        quiet_days: (() => { const q = quietDays([...sigs.filter((x) => x.account_id === a.id).map((x) => x.detected_at), ...(ev ?? []).filter((x) => x.account_id === a.id).map((x) => x.detected_at), a.watched_at]); return q != null && q >= 45 ? q : null; })() };
     }),
     people: (ppl ?? []).map((p) => {
       const l = last((e) => e.person_id === p.id);

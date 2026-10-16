@@ -181,7 +181,7 @@ export function pickBatch<T extends { source: string }>(fresh: T[], max: number,
   return fresh.filter((c) => chosen.has(c)); // keeps the original order (strongest signal first)
 }
 
-export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?: boolean } = {}) {
+export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?: boolean; maxAi?: number } = {}) {
   const hiring = await collectHiring();
   const seenDomains = new Set(hiring.map((c) => c.domain));
   const launches = (await collectLaunches()).filter((c) => !seenDomains.has(c.domain));
@@ -203,10 +203,10 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
   const skipped: { name: string; reason: string }[] = [];
   const slots = { hunter: 12, web: 6, yc: 5, ...((cfg as { slots?: Record<string, number> }).slots ?? {}) };
   const summary = { collected: found.length, from_web: web.length, from_hunter: hunter.length, from_yc: yc.length, already_known: found.length - fresh.length, checked: 0, added: [] as string[], rejected: 0, dry: !!opts.dry };
-  if (opts.dry) return { ...summary, would_check: pickBatch(fresh, cfg.maxAiPerRun, slots).map((c) => `${c.name} (${c.domain})`) };
+  if (opts.dry) return { ...summary, would_check: pickBatch(fresh, opts.maxAi ?? cfg.maxAiPerRun, slots).map((c) => `${c.name} (${c.domain})`) };
 
   let firmoLeft = opts.firmo === false ? 0 : cfg.firmoPerRun;
-  const batch = pickBatch(fresh, cfg.maxAiPerRun, slots);
+  const batch = pickBatch(fresh, opts.maxAi ?? cfg.maxAiPerRun, slots);
   const verdicts = new Map<string, Verdict | null>();
   for (let i = 0; i < batch.length; i += 4) await Promise.all(batch.slice(i, i + 4).map(async (c) => { verdicts.set(c.domain, await qualify(c)); })); // four at a time keeps a bigger run inside the time limit
   for (const c of batch) {

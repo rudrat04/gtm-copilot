@@ -17,6 +17,9 @@ import { personActivity, teamEvents } from "./peopleactivity.ts";
 import { peekCandidates, peekPeople } from "./peoplepreview.ts";
 import { industryCheckMany, needIndustry } from "./industry.ts";
 import { judgeMany } from "./fitjudge.ts";
+import { icpChangedSinceDiscovery, markDiscoveryVersion } from "./capacity.ts";
+import { runDiscovery } from "./discover.ts";
+import { askStillFollowing } from "./followed.ts";
 import { fitState } from "./score.ts";
 import { autoRefreshPredictLeads, storedPlSignals } from "./predictleads.ts";
 import icp from "./icp.json" with { type: "json" };
@@ -182,6 +185,12 @@ export async function lightCheck(admin: boolean) {
     judged.industries = (await industryCheckMany(await needIndustry(8))).set;
     await judgeMany(25); // fit verdicts for new companies and for any made under an older profile (about 0.1 cent each)
   } catch (e) { await log("warn", "ai_refresh_failed", { message: (e as Error).message }); }
+
+  // The profile changed since discovery last ran: search once now (free sources only, no web search) instead of waiting for Monday.
+  try {
+    if ((icp.discovery as { enabled?: boolean }).enabled !== false && await icpChangedSinceDiscovery()) { await runDiscovery({ web: false, firmo: false }); await markDiscoveryVersion(); }
+  } catch (e) { await log("warn", "discovery_catchup_failed", { message: (e as Error).message }); }
+  try { await askStillFollowing(); } catch (e) { await log("warn", "still_following_failed", { message: (e as Error).message }); }
 
   try { await peekPeople(await peekCandidates(30)); } catch (e) { await log("warn", "people_peek_daily_failed", { message: (e as Error).message }); } // free: who works at the companies worth working that have nobody listed
 

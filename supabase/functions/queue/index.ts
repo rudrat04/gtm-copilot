@@ -29,6 +29,7 @@ import { aiHeat, aiMaps, aiRefresh, aiScoreCompany, aiScorePeople, candidates } 
 import { industryCheckMany, needIndustry } from "../_shared/industry.ts";
 import { judgeMany, judgeFit } from "../_shared/fitjudge.ts";
 import { icpVersion } from "../_shared/fitver.ts";
+import { capacityMode, markDiscoveryVersion, readyCount, todayCap } from "../_shared/capacity.ts";
 import { customerInsights } from "../_shared/customers.ts";
 import { suggestProfile } from "../_shared/suggest.ts";
 import { rerankPeople } from "../_shared/people.ts";
@@ -553,7 +554,8 @@ serve("queue", async (req) => {
     for (const r of all ?? []) { const x = (sources[r.source] ??= { added: 0, skipped: 0 }); if (r.status === "added") x.added++; else if (r.status === "rejected") x.skipped++; }
     const parse = (v?: string | null) => { try { return v ? JSON.parse(v) : null; } catch { return null; } };
     const { count: unknownFit } = await sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("firmo_at", null).is("removed_at", null);
-    return json({ admin, unknown_fit: unknownFit ?? 0, skipped: data ?? [], report: parse(last?.value), people_skipped: parse(sp?.value), sources, enabled: (icp.discovery as { enabled?: boolean }).enabled !== false, web: (icp.discovery as { web?: boolean }).web !== false });
+    const ready = await readyCount(); const capacity = { ready, ...capacityMode({ ready, cap: todayCap(), icpChanged: false }) };
+    return json({ admin, capacity, unknown_fit: unknownFit ?? 0, skipped: data ?? [], report: parse(last?.value), people_skipped: parse(sp?.value), sources, enabled: (icp.discovery as { enabled?: boolean }).enabled !== false, web: (icp.discovery as { web?: boolean }).web !== false });
   }
   if (body.action === "discover_hide") { // take a skipped company or person off the list (the company is still remembered, so it is not looked at again)
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to remove." });
@@ -690,7 +692,9 @@ serve("queue", async (req) => {
   }
   if (body.action === "run_discovery") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can run discovery." });
-    return json({ mode: "live", ...(await runDiscovery({ dry: body.dry === true, firmo: body.firmo !== false, web: body.web === true ? true : body.web === false ? false : undefined })) });
+    const out = await runDiscovery({ dry: body.dry === true, firmo: body.firmo !== false, web: body.web === true ? true : body.web === false ? false : undefined });
+    if (body.dry !== true) await markDiscoveryVersion();
+    return json({ mode: "live", ...out });
   }
   if (body.action === "draft" && typeof body.account_id === "string") return await draft(body.account_id, admin);
   if (body.action === "enrich_company" && typeof body.account_id === "string") {
