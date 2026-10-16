@@ -3,7 +3,7 @@ import { log } from "./log.ts";
 import { notify } from "./notify.ts";
 import { askClaude, parseJson } from "./claude.ts";
 import { fetchSite } from "./signals.ts";
-import { fetchFirmo, fitBreakdown, saveFirmo } from "./firmo.ts";
+import { fetchFirmo, fitBreakdown, inRegions, saveFirmo } from "./firmo.ts";
 import { meetsFit } from "./fitgate.ts";
 import { fitState } from "./score.ts";
 import { collectWeb } from "./websearch.ts";
@@ -193,7 +193,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
     sb.from("cp_discovered").select("domain,status,reason,found_at").in("domain", domains.length ? domains : ["-"]),
   ]);
   // A company turned down only for its size or stage gets another look after two weeks, in case you have widened the profile since.
-  const retry = (r: { status: string; reason: string | null; found_at: string }) => r.status === "rejected" && /^Below the fit bar/.test(r.reason ?? "") && Date.now() - Date.parse(r.found_at) > 14 * 86_400_000;
+  const retry = (r: { status: string; reason: string | null; found_at: string }) => r.status === "rejected" && ((/^Below the fit bar/.test(r.reason ?? "") && Date.now() - Date.parse(r.found_at) > 14 * 86_400_000) || (/^Outside your places \(([A-Za-z]{2})\)/.test(r.reason ?? "") && inRegions(/^Outside your places \(([A-Za-z]{2})\)/.exec(r.reason ?? "")![1].toUpperCase()))); // a company skipped for its place is looked at again as soon as that place is one of yours
   const known = new Set([...(have ?? []), ...(seen ?? []).filter((r) => !retry(r))].map((r) => r.domain));
   const fresh = found.filter((c) => !known.has(c.domain)); // all of them; pickBatch decides which get checked
   const addedIds: string[] = [];
