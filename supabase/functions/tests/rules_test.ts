@@ -9,7 +9,7 @@ Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test");
 const { normalizeDomain } = await import("../_shared/db.ts");
 const { redact } = await import("../_shared/log.ts");
 const { isNotFitReason, notFitLabel, NOT_FIT_REASONS } = await import("../_shared/notfit.ts");
-const { exclusion, extraFacts, fitBreakdown, fitReasons, industryScore, industryWords, motionScore, toolsScore } = await import("../_shared/firmo.ts");
+const { exclusion, extraFacts, fitBreakdown, fitReasons, industryScore, industryWords, toolsScore } = await import("../_shared/firmo.ts");
 const { fitState, heatOf, isFundingSignal, priorityScore, roundTiming, scoreAccount, tierOf } = await import("../_shared/score.ts");
 const { buildHiring, hiringTrend, isEventHeadline, isListing, siteTools, toolDiff, usesTool, jobInsights, rolesFromSnippet, salesMotion, toolsFromHiring } = await import("../_shared/signals.ts");
 const { USEFUL_NEWS } = await import("../_shared/relevance.ts");
@@ -38,6 +38,8 @@ const DAY = 86_400_000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY).toISOString();
 const facts = (o: Record<string, unknown> = {}) => ({ employees: 100, stage: "Series A", country: "US", firmo_at: "2026-01-01", ...o });
 
+// Synthetic data in the exact shape of a real PredictLeads news_events response (no real company or person data is stored in the repo).
+const plReal = JSON.parse(await Deno.readTextFile(new URL("./fixtures_predictleads.json", import.meta.url)));
 Deno.test("normalizeDomain: strips scheme, www and paths, rejects non-domains", () => {
   assertEquals(normalizeDomain("https://www.Example.com/path?x=1"), "example.com");
   assertEquals(normalizeDomain("linear.app"), "linear.app");
@@ -368,43 +370,6 @@ Deno.test("watch settings: validated, limited and complete", () => {
   assertEquals(Object.keys(w.checks).length, 10);
 });
 
-Deno.test("personas: fully editable, validated, and used by the ranking", () => {
-  // The defaults survive an empty or old-format profile, including weights, HubSpot values and the founder size limit.
-  const d = clean({}).personas;
-  assertEquals(d.map((p) => p.title), ["Head of Sales / VP Sales", "Head of RevOps", "Founder / CEO"]);
-  assertEquals(d.map((p) => p.weight), [100, 95, 90]); // the list order is the priority
-  const old = clean({ personas: [{ title: "Founder / CEO", match: ["founder"] }] }).personas;
-  assertEquals(old.length, 1);
-  assertEquals(old[0].weight, 100); // first in the list
-  assertEquals(old[0].hubspot, "Founder"); // a type with the old default name keeps its HubSpot value
-  assertEquals(old[0].onlyBelow, null);
-  // Validation: no words or no name means the type is dropped; duplicates and extras are trimmed; bad numbers are clamped.
-  const p = clean({ personas: [
-    { title: "  Marketing   lead ", match: ["CMO", "head of marketing"], weight: 500, hubspot: "  ", onlyBelow: 1 },
-    { title: "marketing lead", match: ["x"] },
-    { title: "No words", match: [] },
-    { title: "", match: ["y"] },
-  ] }).personas;
-  assertEquals(p.length, 1);
-  assertEquals(p[0], { title: "Marketing lead", match: ["CMO", "head of marketing"], weight: 100, hubspot: null, onlyBelow: null, department: "", seniority: [] });
-  assertEquals(clean({ personas: Array.from({ length: 20 }, (_, i) => ({ title: `T${i}`, match: ["w"] })) }).personas.length, 8);
-  assertEquals(clean({ personas: [{ title: "Nothing", match: [] }] }).personas.length, 3); // nothing valid: back to the defaults
-  // Ranking follows the owner's list: the best-weighted match wins, and the sales fallbacks switch off with the sales personas.
-  apply(clean({ personas: [{ title: "Marketing lead", match: ["head of marketing", "cmo"] }, { title: "Founder", match: ["founder"], hubspot: "Founder" }] }));
-  try {
-    assertEquals(rank("CMO", 80).persona, "Marketing lead");
-    assertEquals(rank("Head of Marketing", 80).relevance, 103); // weight 100 plus the seniority bonus
-    assertEquals(rank("VP Sales", 80).relevance, 0);
-    assertEquals(rank("Founder", 10).relevance, 99); // second in the list: 95, plus the seniority bonus
-  } finally {
-    apply(clean({}));
-  }
-  assertEquals(rank("VP of Sales", 80).persona, "Head of Sales / VP Sales"); // the defaults are back
-});
-
-// Synthetic data in the exact shape of a real PredictLeads news_events response (no real company or person data is stored in the repo).
-const plReal = JSON.parse(await Deno.readTextFile(new URL("./fixtures_predictleads.json", import.meta.url)));
-
 Deno.test("predictleads: a response in the real shape is read and the noise categories are ignored", () => {
   const events = normalizeEvents(plReal);
   assertEquals(events.length, 5);
@@ -544,8 +509,9 @@ Deno.test("fit model: the default weights give exactly the old size + stage + re
 
 Deno.test("fit model: industry, tools and sales style score 0 to 1 and the weights decide", () => {
   const profile = clean({ toolsGood: ["HubSpot"], toolsAvoid: ["Clay"], motion: "sales_led", industries: ["Software Development"], excludeWords: ["agency"], excludeDomains: ["rival.com"] });
-  assertEquals(profile.fitWeights, { size: 10, stage: 10, region: 5, industry: 4, tools: 5, motion: 4 }); // automatic: each extra criterion counts once there is something to compare with
+  assertEquals(profile.fitWeights, { size: 10, stage: 10, region: 5, industry: 4, tools: 5, motion: 0 }); // automatic: each extra criterion counts once there is something to compare with (sales style was removed from Setup)
   assertEquals(profile.excludeDomains, ["rival.com"]);
+  assertEquals(clean({ excludeWords: ["staffing", "partner.com"] }).excludeDomains, ["partner.com"]); // one "never show" box: domains are split out
   apply(profile);
   try {
     assertEquals(industryScore({ industry: "Information Technology / Software" }), 1);
@@ -555,14 +521,10 @@ Deno.test("fit model: industry, tools and sales style score 0 to 1 and the weigh
     assertEquals(toolsScore({ tech: ["hub spot", "clay"] }), 0); // an avoided tool wins
     assertEquals(toolsScore({ tech: ["stripe"] }), 0.5);
     assertEquals(toolsScore({}), 0.5);
-    assertEquals(motionScore({ sales_motion: "sales_led" }), 1);
-    assertEquals(motionScore({ sales_motion: "both" }), 0.75);
-    assertEquals(motionScore({ sales_motion: "self_serve" }), 0);
-    assertEquals(motionScore({}), 0.5);
     const base = { employees: 100, stage: "Series A", country: "US", firmo_at: "2026-01-01" };
     const good = fitBreakdown({ ...base, industry: "Software", tech: ["hubspot"], sales_motion: "sales_led" }).points;
     const bad = fitBreakdown({ ...base, industry: "Retail", tech: ["clay"], sales_motion: "self_serve" }).points;
-    assert(good > 24.9 && bad < 17 && good - bad > 8); // right on every criterion vs wrong on the three new ones (25 x 25/38 = 16.4)
+    assert(good > 24.9 && bad < 20 && good - bad > 5); // right on every criterion vs wrong on industry and tools
     // Exclusions: a word, a domain and a customer are never prospects, and fitState says so.
     assertEquals(exclusion({ blurb: "A digital marketing agency", name: "Pixel" }), 'Matches "agency"');
     assertEquals(exclusion({ domain: "RIVAL.com" }), "On your never-show list");
@@ -571,7 +533,7 @@ Deno.test("fit model: industry, tools and sales style score 0 to 1 and the weigh
     assertEquals(fitState({ ...base, domain: "rival.com" }), "outside");
     assertEquals(fitState({ firmo_at: null, domain: "rival.com" }), "outside"); // even before its size is known
     const r = fitReasons({ ...base, industry: "Software", tech: ["hubspot"], sales_motion: "self_serve" });
-    assertEquals(r.map((x) => `${x.key}:${x.state}`), ["size:ok", "stage:ok", "region:ok", "industry:ok", "tools:ok", "motion:no"]);
+    assertEquals(r.map((x) => `${x.key}:${x.state}`), ["size:ok", "stage:ok", "region:ok", "industry:ok", "tools:ok"]);
   } finally {
     apply(clean({}));
   }
@@ -686,20 +648,6 @@ Deno.test("bulk find: hot first, then warm, by score; watching is never searched
   assertEquals(pickTop(rows, 2).map((x) => x.name), ["d", "b"]);
   assertEquals(pickTop(Array.from({ length: 20 }, (_, i) => r(`x${i}`, "hot", i)), 99).length, 8); // never more than the cap
   assertEquals(pickTop([r("z", "watching", 99)], 5), []);
-});
-
-Deno.test("buyer types: department and seniority narrow who matches", () => {
-  apply(clean({ personas: [{ title: "Sales leader", match: ["head of sales", "vp sales"], seniority: ["vp", "head_director"] }, { title: "Ops", match: ["operations"], department: "Revenue operations" }] }));
-  try {
-    assertEquals(rank("VP Sales", 80).persona, "Sales leader");
-    assertEquals(rank("Head of Sales", 80).persona, "Sales leader");
-    assertEquals(rank("Sales Manager", 80).persona, null); // not a chosen seniority and no matching words
-    assertEquals(rank("Director of Operations", 80, "operations").persona, "Ops");
-    assertEquals(rank("Director of Operations", 80, "engineering").persona, null); // wrong department
-    assertEquals(rank("Director of Operations", 80, null).persona, "Ops"); // an unknown department never rules someone out
-  } finally {
-    apply(clean({}));
-  }
 });
 
 Deno.test("location choices: groups and single countries both resolve to country codes", async () => {
@@ -1180,4 +1128,27 @@ Deno.test("capacity mode and quiet days", async () => {
   const now = Date.parse("2026-10-16T00:00:00Z");
   assertEquals(quietDays(["2026-08-17T00:00:00Z", null], now), 60);
   assertEquals(quietDays([], now), null);
+});
+
+Deno.test("contact filters: legacy buyer types become filters, titles and levels combine", async () => {
+  const { cleanContact, personasFromContact } = await import("../_shared/profile.ts");
+  const { rank } = await import("../_shared/people.ts");
+  const icp = (await import("../_shared/icp.json", { with: { type: "json" } })).default as unknown as { personas: unknown[]; contactRules?: unknown };
+  const legacy = [{ title: "Sales", match: ["Sales", "Revenue"], department: "Sales", seniority: ["vp", "manager"] }, { title: "Ops", match: ["RevOps"], department: "Operations", seniority: ["vp"] }];
+  const c = cleanContact(undefined, legacy);
+  assertEquals(c.departments, ["Sales", "Operations"]);
+  assertEquals(c.seniority.sort(), ["manager", "vp"]);
+  assertEquals(c.titleWords.length, 3);
+  const personas = personasFromContact(c);
+  assertEquals(personas.map((p) => p.title), ["Sales", "Operations"]);
+  assertEquals(personas[0].weight > personas[1].weight, true);
+  // department-only filters (no title words): the team decides
+  icp.personas.splice(0, icp.personas.length, ...personasFromContact({ ...c, titleWords: [], seniority: [] }));
+  icp.contactRules = { excludeTitles: ["intern"], decisionOnly: false };
+  assertEquals(rank("Whatever Lead", null, "Sales").persona, "Sales");
+  assertEquals(rank("Whatever Lead", null, null).relevance, 0); // unknown team cannot match without title words
+  assertEquals(rank("Sales Intern", null, "Sales").relevance, 0); // never-contact title
+  icp.contactRules = { excludeTitles: [], decisionOnly: true };
+  assertEquals(rank("Sales Manager", null, "Sales").relevance, 0); // below decision-maker level
+  assertEquals(rank("Director of Sales", null, "Sales").persona, "Sales");
 });

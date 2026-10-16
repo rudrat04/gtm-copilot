@@ -33,6 +33,10 @@ export const migrateDepartment = (v: unknown): string => { const d = String(v ??
 export const SENIORITIES = [["founder_c", "Founder / C-level"], ["vp", "VP"], ["head_director", "Head / Director"], ["manager", "Manager"], ["ic", "Individual contributor"]] as const;
 export const PRODUCT_MAX = 1500;
 
+/** Who to contact, as separate filters that combine: a person must be in one of the departments, at one of the levels, and (when words are given) have one of the title words. */
+export type ContactRules = { departments: string[]; seniority: string[]; titleWords: string[]; excludeTitles: string[]; maxPerCompany: number; verifiedOnly: boolean; decisionOnly: boolean };
+export type CompanyAge = { min: number | null; max: number | null };
+
 /** A signal the owner added: what kind, what to look for, and whether it is on. Weights are automatic by kind. */
 export type SignalRule = { id: string; type: string; words: string[]; on: boolean };
 export const MAX_RULES = 12;
@@ -51,7 +55,13 @@ export type Profile = {
   regions: string[];
   hiringRoles: string[];                    // job titles that count as a sales or RevOps hiring signal
   signals: { hiring: boolean; news: boolean; community: boolean };
-  personas: Persona[];                      // the kinds of buyer we look for, fully editable
+  personas: Persona[];                      // worked out from `contact` (one per department, in order); kept so the rest of the system reads the same shape
+  contact: ContactRules;                    // the filters the owner sets in "Who we contact"
+  excludeIndustries: string[];              // all industries except these
+  excludeRegions: string[];                 // places never wanted, even inside a chosen region
+  companyAge: CompanyAge;                   // years since founding
+  businessModel: "any" | "b2b" | "b2c";
+  companyType: "any" | "private" | "public";
   discovery: boolean;                       // weekly auto-discovery on or off
   strictFit: boolean;                       // places and industries are hard filters: a known mismatch is "outside", hidden and never alerted
   minFit: MinFit;                           // the fit bar: companies below it are hidden everywhere
@@ -85,6 +95,8 @@ const DEFAULT: Profile = {
   hiringRoles: [...icp.signals.hiringRoles],
   signals: { hiring: true, news: true, community: true },
   personas: icp.personas.map((p, i) => ({ title: p.title, match: [...p.match], weight: Math.max(60, 100 - 5 * i), hubspot: p.hubspot, onlyBelow: null, department: "", seniority: [] })),
+  contact: { departments: [], seniority: [], titleWords: [], excludeTitles: [], maxPerCompany: 2, verifiedOnly: false, decisionOnly: false },
+  excludeIndustries: [], excludeRegions: [], companyAge: { min: null, max: null }, businessModel: "any", companyType: "any",
   discovery: true,
   minFit: icp.fit.minFit as MinFit,
   minScore: icp.fit.minScore,
@@ -180,6 +192,34 @@ function cleanWatch(raw: unknown): Watch {
   };
 }
 
+
+const isDomain = (w: string) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(w.trim()) && !/\s/.test(w);
+const optYears = (v: unknown): number | null => { if (v === null || v === undefined || v === "") return null; const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(200, Math.max(0, n)) : null; };
+
+/** Pure: the contact filters from what was sent. An older saved profile (buyer types only) is turned into filters so nothing is lost. */
+export function cleanContact(raw: unknown, legacy: unknown): ContactRules {
+  const c = (raw && typeof raw === "object" ? raw : null) as Record<string, unknown> | null;
+  const old = Array.isArray(legacy) ? (legacy as Record<string, unknown>[]) : [];
+  const fromOld = !c && old.length;
+  const departments = c ? (Array.isArray(c.departments) ? c.departments : []).map(migrateDepartment).filter(Boolean) : fromOld ? old.map((g) => migrateDepartment(g?.department)).filter(Boolean) : [];
+  const seniority = c ? (Array.isArray(c.seniority) ? c.seniority : []) : fromOld ? old.flatMap((g) => (Array.isArray(g?.seniority) ? g.seniority : [])) : [];
+  const titleWords = c ? list(c.titleWords, [], 30, true) : fromOld ? list(old.flatMap((g) => (Array.isArray(g?.match) ? g.match : [])), [], 30, true) : [];
+  return {
+    departments: [...new Set(departments)].slice(0, MAX_PERSONAS),
+    seniority: [...new Set(seniority.map(String).filter((x) => SENIORITIES.some(([k]) => k === x)))],
+    titleWords, excludeTitles: list(c?.excludeTitles, [], 20, true),
+    maxPerCompany: num(c?.maxPerCompany, DEFAULT.contact.maxPerCompany, 1, 5), verifiedOnly: c?.verifiedOnly === true, decisionOnly: c?.decisionOnly === true,
+  };
+}
+
+/** Pure: the buyer groups the rest of the system reads, one per chosen department in order (or one general group), from the filters. */
+export function personasFromContact(c: ContactRules, previous: Persona[] = []): Persona[] {
+  if (!c.departments.length && !c.titleWords.length && !c.seniority.length) return DEFAULT.personas.map((p) => ({ ...p, match: [...p.match], seniority: [] }));
+  const keep = (t: string) => previous.find((p) => p.title.toLowerCase() === t.toLowerCase())?.hubspot ?? DEFAULT.personas.find((p) => p.title.toLowerCase() === t.toLowerCase())?.hubspot ?? null;
+  const groups = c.departments.length ? c.departments : [""];
+  return groups.map((d, i) => ({ title: d || "Buyer", match: [...c.titleWords], weight: Math.max(60, 100 - 5 * i), hubspot: keep(d || "Buyer"), onlyBelow: null, department: d, seniority: [...c.seniority] }));
+}
+
 /** Validates anything coming from the page. Unknown or invalid values fall back to the defaults. */
 export function clean(input: unknown): Profile {
   const i = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
@@ -190,12 +230,13 @@ export function clean(input: unknown): Profile {
   const hiring = sig.hiring !== false || (!news && !community); // at least one signal has to count
   const stages = (Array.isArray(i.stages) ? i.stages : []).map(String).filter((s) => STAGES.includes(s));
   const regions = (Array.isArray(i.regions) ? i.regions : []).map(String).map((s) => (/^city:/i.test(s) ? `city:${s.slice(5).trim().slice(0, 50)}` : s)).filter((s) => REGIONS.includes(s) || /^city:.{2,50}$/.test(s)).slice(0, 25);
-  const personas = cleanPersonas(i.personas);
+  const contact = cleanContact(i.contact, i.personas);
+  const personas = personasFromContact(contact, Array.isArray(i.personas) ? cleanPersonas(i.personas) : []);
   const industries = (Array.isArray(i.industries) ? i.industries : []).map(String);
   const industriesMigrated = migrateIndustries(industries).slice(0, 25); // an industry saved under an older name becomes the matching Hunter industry
   const pr = (i.product && typeof i.product === "object" ? i.product : {}) as Record<string, unknown>;
   const toolsGood = list(i.toolsGood, [], 20, true), toolsAvoid = list(i.toolsAvoid, [], 20, true);
-  const motion = (["any", "sales_led", "self_serve"] as const).find((m) => m === i.motion) ?? "any";
+  const motion = "any" as const; // sales style was removed from Setup; it no longer affects fit
   const industriesOut = industriesMigrated.length ? industriesMigrated : DEFAULT.industries;
   return {
     product: { name: String(pr.name ?? "").replace(/[<>\p{C}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 40), description: String(pr.description ?? "").trim().slice(0, PRODUCT_MAX), website: cleanSite(pr.website) },
@@ -211,6 +252,12 @@ export function clean(input: unknown): Profile {
     hiringRoles: list(i.hiringRoles, DEFAULT.hiringRoles, 30),
     signals: { hiring, news, community },
     personas,
+    contact,
+    excludeIndustries: migrateIndustries(Array.isArray(i.excludeIndustries) ? i.excludeIndustries.map(String) : []).slice(0, 25),
+    excludeRegions: (Array.isArray(i.excludeRegions) ? i.excludeRegions : []).map(String).filter((x) => REGIONS.includes(x)),
+    companyAge: (() => { const a = i.companyAge as Record<string, unknown> | undefined; const mn = optYears(a?.min), mx = optYears(a?.max); return { min: mn, max: mx != null && mn != null ? Math.max(mn, mx) : mx }; })(),
+    businessModel: (["any", "b2b", "b2c"] as const).find((m) => m === i.businessModel) ?? "any",
+    companyType: (["any", "private", "public"] as const).find((m) => m === i.companyType) ?? "any",
     discovery: i.discovery !== false,
     strictFit: i.strictFit !== false,
     minFit: MIN_FITS.find((m) => m === i.minFit) ?? DEFAULT.minFit,
@@ -220,8 +267,8 @@ export function clean(input: unknown): Profile {
     toolsGood,
     toolsAvoid,
     motion,
-    excludeWords: list(i.excludeWords, [], 20, true),
-    excludeDomains: list(i.excludeDomains, [], 30, true).map((d) => d.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")).filter(Boolean),
+    excludeWords: list(i.excludeWords, [], 30, true).filter((w) => !isDomain(w)),
+    excludeDomains: [...list(i.excludeDomains, [], 30, true), ...list(i.excludeWords, [], 30, true).filter(isDomain)].map((d) => d.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")).filter(Boolean),
     roundWindow: cleanWindow(i.roundWindow),
     plAuto: i.plAuto !== false,
   };
@@ -246,6 +293,9 @@ export function apply(p: Profile) {
   icp.signals.weights.news = p.signals.news ? BASE_WEIGHTS.news : 0;
   icp.signals.weights.tech = p.signals.community ? BASE_WEIGHTS.tech : 0;
   (icp.personas as Persona[]).splice(0, icp.personas.length, ...p.personas.map((x) => ({ ...x, match: [...x.match] }))); // the list itself is replaced, so every module sees it
+  Object.assign(icp.company, { excludeIndustries: p.excludeIndustries, excludeRegions: p.excludeRegions, companyAge: p.companyAge, businessModel: p.businessModel, companyType: p.companyType });
+  (icp as { contactRules?: ContactRules }).contactRules = p.contact;
+  (icp.contacts as { perItem: number }).perItem = p.contact.maxPerCompany;
   (icp.discovery as { enabled?: boolean }).enabled = p.discovery;
   icp.fit.minFit = p.minFit;
   icp.fit.minScore = p.minScore;
@@ -257,7 +307,8 @@ export function apply(p: Profile) {
   icp.timing.roundWindowDays = [p.roundWindow[0], p.roundWindow[1]];
   const c = icp.company as { toolsGood: string[]; toolsAvoid: string[]; motion: string; excludeWords: string[]; excludeDomains: string[] };
   (c as { competitors?: string[] }).competitors = p.competitors;
-  c.toolsGood = p.toolsGood; c.toolsAvoid = p.toolsAvoid; c.motion = p.motion; c.excludeWords = p.excludeWords;
+  c.toolsGood = p.toolsGood; c.toolsAvoid = [...new Set([...p.toolsAvoid, ...p.competitors])]; // a competitor's product in use is a poor sign too
+  c.motion = p.motion; c.excludeWords = p.excludeWords;
   // competitors written as domains are never shown either
   c.excludeDomains = [...new Set([...p.excludeDomains, ...p.competitors.map((x) => x.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "")).filter((x) => /\.[a-z]{2,}$/.test(x))])];
 }

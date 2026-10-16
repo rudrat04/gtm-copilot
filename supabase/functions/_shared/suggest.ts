@@ -7,7 +7,7 @@ import { fetchSite } from "./signals.ts";
 
 type Raw = Partial<{
   summary: string; industries: string[]; keywords: string[]; employeesMin: number; employeesMax: number; stages: string[]; regions: string[];
-  personas: { title: string; match: string[]; department?: string; seniority?: string[] }[];
+  contact: { departments?: string[]; seniority?: string[]; titleWords?: string[]; excludeTitles?: string[] }; excludeIndustries: string[]; businessModel: string;
   hiringRoles: string[]; painWords: string[]; toolsGood: string[]; toolsAvoid: string[]; competitors: string[]; excludeWords: string[]; motion: string;
 }>;
 
@@ -29,7 +29,9 @@ Return JSON with these keys:
 - "employeesMin", "employeesMax": the company size (people) that fits best
 - "stages": 1 to 5 of: ${STAGES.join("; ")}
 - "regions": 1 to 4 of: ${Object.keys(REGION_GROUPS).join("; ")} (or a country name)
-- "personas": 2 to 5 buyer types in priority order, each {"title": short name, "match": 3 to 7 job-title phrases people actually have, "department": one of ${DEPARTMENTS.join("; ")} or "", "seniority": any of ${SENIORITIES.map(([k]) => k).join(", ")}}
+- "contact": who to contact, as filters: {"departments": 1 to 4 of ${DEPARTMENTS.join("; ")} in priority order, "seniority": any of ${SENIORITIES.map(([k]) => k).join(", ")}, "titleWords": 3 to 10 job-title phrases people actually have, "excludeTitles": 0 to 5 title words to never contact (for example intern, assistant)}
+- "excludeIndustries": industries to never target, from the same list as "industries" (empty is fine)
+- "businessModel": "b2b", "b2c" or "any"
 - "hiringRoles": 4 to 10 job titles that, when a company hires them, show it needs this seller
 - "toolsGood": tools (software names) a good customer probably uses, up to 8
 - "toolsAvoid": only software that directly competes with what the seller offers, up to 4 (empty is fine)
@@ -39,7 +41,6 @@ Return JSON with these keys:
 - "motion": "any", "sales_led" or "self_serve"`,
   });
   const r = parseJson<Raw>(raw);
-  const keepHubspot = (t: string) => current.personas.find((p) => p.title.toLowerCase() === t.toLowerCase())?.hubspot ?? null;
   const merged = {
     ...current,
     industries: r.industries?.length ? r.industries : current.industries,
@@ -48,7 +49,10 @@ Return JSON with these keys:
     employeesMax: r.employeesMax ?? current.employeesMax,
     stages: r.stages?.length ? r.stages : current.stages,
     regions: r.regions?.length ? r.regions : current.regions,
-    personas: r.personas?.length ? r.personas.map((p) => ({ ...p, hubspot: keepHubspot(p.title) })) : current.personas,
+    contact: r.contact && (r.contact.departments?.length || r.contact.titleWords?.length) ? { ...current.contact, ...r.contact } : current.contact,
+    personas: current.personas,
+    excludeIndustries: r.excludeIndustries ?? current.excludeIndustries,
+    businessModel: r.businessModel ?? current.businessModel,
     hiringRoles: r.hiringRoles?.length ? r.hiringRoles : current.hiringRoles,
     painWords: r.painWords?.length ? r.painWords : current.painWords,
     toolsGood: r.toolsGood ?? current.toolsGood,

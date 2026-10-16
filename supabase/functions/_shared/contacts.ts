@@ -21,6 +21,7 @@ export type Contact = {
   note: string | null; // why: "Already in your HubSpot..."
 };
 
+const verifiedOnly = () => (icp as { contactRules?: { verifiedOnly: boolean } }).contactRules?.verifiedOnly === true;
 const maskEmail = (e: string | null) => (e ? `***@${e.split("@")[1]}` : null);
 
 /** Best contact first, then the best one from a different persona, then the next best. */
@@ -31,6 +32,7 @@ export async function contactsFor(accountIds: string[], admin: boolean, limit = 
     .select("id,account_id,first_name,last_name,title,persona,email,email_status,relevance,email_confidence,email_revealed,hubspot_contact_id,hs_status,hs_note,watched_at,preview")
     .in("account_id", accountIds).gte("relevance", 50) // individual contributors are not the buyer
     .or("hs_status.is.null,hs_status.eq.known") // never suggest someone who opted out or whose address bounced
+    .or(verifiedOnly() ? "email_status.is.null,email_status.eq.valid" : "id.not.is.null") // "verified emails only" in Setup: drop anyone whose address is checked and not valid
     .order("relevance", { ascending: false }).order("email_confidence", { ascending: false, nullsFirst: false });
 
   const by = new Map<string, NonNullable<typeof data>>();

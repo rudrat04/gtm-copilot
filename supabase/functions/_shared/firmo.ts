@@ -106,11 +106,11 @@ export async function saveFirmo(accountId: string, f: Firmo) {
 export type FitRow = {
   employees?: number | null; stage?: string | null; country?: string | null; hq_city?: string | null; firmo_at?: string | null; light_source?: string | null; employee_band?: string | null;
   tech?: string[] | null; industry?: string | null; tags?: string[] | null; blurb?: string | null; sales_motion?: string | null;
-  domain?: string | null; name?: string | null; known_as?: string | null; last_round_date?: string | null; industry_ai?: string | null;
+  domain?: string | null; name?: string | null; known_as?: string | null; last_round_date?: string | null; industry_ai?: string | null; founded_year?: number | null;
   fit_ai?: string | null; fit_ai_conf?: number | null; fit_ai_ver?: string | null; fit_override?: string | null;
 };
 /** The columns to select wherever fit is computed, so a new criterion takes effect everywhere. */
-export const FIT_COLS = "employees,stage,country,hq_city,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date,watched_at,industry_ai,fit_ai,fit_ai_conf,fit_ai_reason,fit_ai_ver,fit_override,fit_override_note";
+export const FIT_COLS = "employees,stage,country,hq_city,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date,watched_at,industry_ai,founded_year,fit_ai,fit_ai_conf,fit_ai_reason,fit_ai_ver,fit_override,fit_override_note";
 
 /** Is this funding stage one of the stages we target? Each stage the owner picked has its own pattern (see lists.ts). */
 const stageWanted = (s: string) => icp.company.stages.some((w) => (STAGE_OPTIONS.find((o) => o.name === w)?.re ?? new RegExp(w.toLowerCase().replace(/[^a-z0-9 ]/g, ""))).test(s));
@@ -165,6 +165,9 @@ export function exclusion(a: FitRow): string | null {
   if (a.known_as === "customer") return "Already a customer";
   const domain = (a.domain ?? "").toLowerCase();
   if (domain && (icp.company.excludeDomains as string[]).some((d) => domain === d.toLowerCase())) return "On your never-show list";
+  const ind = (a.industry_ai ?? a.industry ?? "").toLowerCase();
+  const exInd = ((icp.company as { excludeIndustries?: string[] }).excludeIndustries ?? []).find((x) => ind && ind === x.toLowerCase());
+  if (exInd) return `Industry is on your exclude list (${exInd})`;
   const text = `${textOf(a)} ${(a.name ?? "").toLowerCase()}`;
   const hit = (icp.company.excludeWords as string[]).find((w) => w && new RegExp(`\\b${w.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(text));
   return hit ? `Matches "${hit}"` : null;
@@ -185,7 +188,12 @@ export function fitBreakdown(a: FitRow): { points: number; known: boolean; size:
   // Places and industries are hard filters once a company's country or industry is actually known (an unknown one is never held against it).
   const strict = (icp.company as { strictFit?: boolean }).strictFit !== false;
   const cc0 = (a.country ?? "").toUpperCase();
-  const placeMiss = strict && !!cc0 && icp.company.regions.length > 0 && !inRegions(cc0, a.hq_city);
+  const co = icp.company as { excludeRegions?: string[]; companyAge?: { min: number | null; max: number | null } };
+  const placeOut = !!cc0 && icp.company.regions.length > 0 && !inRegions(cc0, a.hq_city);
+  const placeBarred = !!cc0 && (co.excludeRegions ?? []).some((r) => codesFor(r).includes(cc0));
+  const age = a.founded_year ? new Date().getFullYear() - a.founded_year : null; // years since founding, when known
+  const ageOut = age != null && ((co.companyAge?.min != null && age < co.companyAge.min) || (co.companyAge?.max != null && age > co.companyAge.max));
+  const placeMiss = strict && (placeOut || placeBarred || ageOut); // too far away, a barred place or the wrong age: all "outside" while strict fit is on
   const industryMiss = strict && (icp.fitWeights as { industry: number }).industry > 0 && !!(a.industry_ai || textOf(a).trim()) && industryScore(a) === 0;
   const none: FitParts = { size: 0.5, stage: 0.5, region: 0.5, industry: 0.5, tools: 0.5, motion: 0.5 };
   const light = hasLightFacts(a);

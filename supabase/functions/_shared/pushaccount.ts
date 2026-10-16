@@ -102,7 +102,7 @@ export async function autoPushOnContact(accountId: string): Promise<"pushed" | "
     if (!a || a.hubspot_company_id || a.removed_at || a.known_as === "customer") return "skipped";
     const { data: ppl } = await sb.from("cp_people").select("id,hs_status").eq("account_id", accountId).eq("email_revealed", true).eq("preview", false).gte("relevance", 50)
       .order("relevance", { ascending: false }).limit(6);
-    const ids = (ppl ?? []).filter((p) => p.hs_status !== "opted_out" && p.hs_status !== "bounced").slice(0, 2).map((p) => p.id);
+    const ids = (ppl ?? []).filter((p) => p.hs_status !== "opted_out" && p.hs_status !== "bounced").slice(0, icp.contacts.perItem).map((p) => p.id);
     if (!ids.length) return "skipped";
     const r = await pushAccount(accountId, ids);
     await log("info", "auto_push", { detail: { ok: r.ok, people: ids.length } });

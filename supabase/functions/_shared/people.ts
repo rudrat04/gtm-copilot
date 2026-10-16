@@ -74,9 +74,13 @@ export function explainRank(title: string, department?: string | null): string {
   const t = norm(title);
   const seniority = seniorityOf(title);
   const personas = icp.personas as PersonaRule[];
-  const matched = personas.filter((p) => p.match.some((m) => t.includes(norm(m))) && allowed(p, seniority, department)).sort((a, b) => b.weight - a.weight)[0];
+  const matched = personas.filter((p) => titleOk(p, t, department) && allowed(p, seniority, department)).sort((a, b) => b.weight - a.weight)[0];
+  const barred = excludedTitle(t);
+  if (barred) return `The title has "${barred}", which you asked never to contact.`;
+  if (decisionBlocked(seniority)) return "You asked for decision makers only, and this title is below that level.";
   if (matched) {
     const word = matched.match.find((m) => t.includes(norm(m)));
+    if (!word) return `The team is ${matched.department}${matched.seniority?.length ? ", at the level you asked for" : ""} (${matched.title}).`;
     return `The title has "${word}" (${matched.title})${matched.department ? `, and the team is ${matched.department}` : ""}${matched.seniority?.length ? ", at the level you asked for" : ""}.`;
   }
   const near = personas.find((p) => p.match.some((m) => t.includes(norm(m))));
@@ -85,11 +89,21 @@ export function explainRank(title: string, department?: string | null): string {
   return `None of the title words of your buyer types (${personas.slice(0, 3).map((p) => p.title).join(", ")}${personas.length > 3 ? "…" : ""}) are in this title.`;
 }
 
+/** A title word list that is empty means "any title": the department and level decide. An unknown department then cannot match. */
+function titleOk(p: PersonaRule, t: string, department?: string | null): boolean {
+  return p.match.length ? p.match.some((m) => t.includes(norm(m))) : !!p.department && !!department;
+}
+const rules = () => ((icp as { contactRules?: { excludeTitles: string[]; decisionOnly: boolean } }).contactRules ?? { excludeTitles: [], decisionOnly: false });
+/** Pure: the "never contact" word a title contains, if any. */
+export const excludedTitle = (t: string): string | null => rules().excludeTitles.find((w) => norm(w) && t.includes(norm(w))) ?? null;
+const decisionBlocked = (seniority: string) => rules().decisionOnly && ["ic", "manager"].includes(seniority);
+
 export function rank(title: string, employees?: number | null, department?: string | null): { persona: string | null; relevance: number; seniority: string } {
   const t = norm(title);
   const seniority = seniorityOf(title);
+  if (excludedTitle(t) || decisionBlocked(seniority)) return { persona: null, relevance: 0, seniority };
   // The best-weighted persona whose words appear in the title (and whose department and seniority fit) wins.
-  const matched = (icp.personas as PersonaRule[]).filter((p) => p.match.some((m) => t.includes(norm(m))) && allowed(p, seniority, department)).sort((a, b) => b.weight - a.weight)[0];
+  const matched = (icp.personas as PersonaRule[]).filter((p) => titleOk(p, t, department) && allowed(p, seniority, department)).sort((a, b) => b.weight - a.weight)[0];
   let relevance = 0;
   if (matched) {
     relevance = matched.weight;

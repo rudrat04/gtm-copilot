@@ -1777,7 +1777,7 @@ function msField(path, label, options, help, groups) {
   return `<div class="field"><label>${esc(label)}</label><div class="ms" data-ms="${esc(path)}"${groups ? ` data-groups="${groups}"` : ""}></div>${help ? `<p class="help">${esc(help)}</p>` : ""}</div>`;
 }
 function msDraw(el) {
-  const path = el.dataset.ms, sel = getPath(P, path) || [], opts = path === "industries" ? SETUP.options.industries : path === "stages" ? SETUP.options.stages : SETUP.options.regions;
+  const path = el.dataset.ms, sel = getPath(P, path) || [], opts = path === "industries" || path === "excludeIndustries" ? SETUP.options.industries : path === "stages" ? SETUP.options.stages : path === "contact.departments" ? SETUP.options.departments : SETUP.options.regions;
   const q = (el.querySelector(".mspop input")?.value || "").trim().toLowerCase(), g = Number(el.dataset.groups || 0);
   const open = MS_OPEN === path;
   const items = opts.map((o, i) => [o, i]).filter(([o]) => !q || o.toLowerCase().includes(q));
@@ -1820,7 +1820,7 @@ function setupSteps() {
   const d = SETUP;
   return [
     ["Describe what you sell", (P.product.description || "").trim().length >= 20, "sell", "One sentence, then press Suggest my settings."],
-    ["Choose your buyers and signals", P.personas.length > 0 && (P.signalRules.length > 0 || P.competitors.length > 0), "contact", "Who to contact, and what counts as a reason to reach out."],
+    ["Choose your buyers and signals", (P.contact.departments.length > 0 || P.contact.titleWords.length > 0) && (P.signalRules.length > 0 || P.competitors.length > 0), "contact", "Who to contact, and what counts as a reason to reach out."],
     ["Find companies", !!d.discovery.last, "discover", "Open Discover and run it to pull in companies and list the people who work there."],
     ["Check size and stage", d.unknown_fit === 0, "discover", d.unknown_fit ? `${d.unknown_fit} companies still need it (0.2 credit each).` : "All companies have it."],
   ];
@@ -1832,6 +1832,23 @@ function setupChecklistHtml() {
   return `<article class="card" data-sec="start"><p class="label">Getting started</p><p class="help" style="margin:0 0 8px">Four steps and F1rstword has everything it needs. Each one takes a minute.</p>
     ${setupSteps().map(([t, ok, sec, hint], i) => `<div class="check${ok ? " done" : ""}"><span class="tick">${ok ? "✓" : i + 1}</span><div class="ct"><b>${esc(t)}</b><div class="meta">${esc(hint)}</div></div>${ok ? "" : `<a class="btn ghost sm" href="${sec === "discover" ? "#/discover" : `#/setup/${sec}`}">Go</a>`}</div>`).join("")}
     <p class="meta" style="margin:10px 0 0">Then open <a href="#/people">People</a> to see who to contact.</p></article>`;
+}
+/** Reads the description and website and fills in the settings below (nothing is saved until Save). Runs by itself when either box changes. */
+let SUGGESTING = false, SUGGEST_LAST = "";
+async function runSuggest(auto) {
+  const pd = $("pdesc"), ps = $("psite"); if (!pd || SUGGESTING) return;
+  const description = pd.value.trim(), website = ps ? ps.value.trim() : "", key = description + "|" + website, sg = document.querySelector("[data-suggest]");
+  if (description.length < 20) { if (!auto) { say("Describe what you sell in a sentence or two first."); pd.focus(); } return; }
+  if (auto && (key === SUGGEST_LAST || !(SETUP && SETUP.admin))) return;
+  if (auto && (SUGGEST_LAST || (SETUP.profile.product.description || "").trim()) && !(await ask({ title: "Fill in the settings from this?", body: "This replaces your industries, size, places, teams and other choices below with new suggestions. Nothing is saved until you press Save.", ok: "Fill them in" }))) { SUGGEST_LAST = key; return; }
+  SUGGESTING = true; SUGGEST_LAST = key; if (sg) { sg.disabled = true; sg.textContent = "Thinking…"; } say("Filling in your settings…");
+  try {
+    const r = await api("queue", { action: "profile_suggest", description, website });
+    if (r.mode === "dry_run") { say(r.message); return; }
+    const k = r.proposal; for (const f of ["industries", "excludeIndustries", "businessModel", "keywords", "employeesMin", "employeesMax", "stages", "regions", "contact", "hiringRoles", "painWords", "toolsGood", "toolsAvoid", "competitors", "excludeWords"]) P[f] = k[f];
+    P.excludeWords = [...(k.excludeWords || []), ...(k.excludeDomains || [])]; P.excludeDomains = [];
+    P.product = k.product; SUGGEST_NOTE = r.summary || "Settings filled in from your description."; SUGGESTING = false; drawSetup(); say("Settings filled in. Review them, then press Save.");
+  } catch (err) { say(err.message); } finally { SUGGESTING = false; if (sg) { sg.disabled = false; sg.textContent = "Suggest my settings"; } }
 }
 function applySetupSection() {
   const box = $("setupbody"); if (!box || !SETUP) return;
@@ -1866,30 +1883,30 @@ function drawSetup() {
     <article class="card"><p class="label">Who we look for${info("How well a company fits is worked out from these choices, your product above and what we learn about the company. There is nothing to weigh.")}</p>
       
       ${msField("industries", "Industries", d.options.industries, "Hunter's own industry names. Most software companies are under Software Development; narrow it with the words below.")}
-      ${tagField("keywords", "Words that describe them", "What these companies make or do, for example crm, sales enablement, revenue operations. They narrow the company search.")}
       <div class="field"><span class="lbl">Company size (people)</span><div class="numrow"><input type="number" min="1" data-num="employeesMin" value="${esc(P.employeesMin)}" aria-label="Minimum people"> to <input type="number" min="1" data-num="employeesMax" value="${esc(P.employeesMax)}" aria-label="Maximum people"></div></div>
       ${msField("stages", "Funding stage", d.options.stages, "Pick every stage you would sell to.")}
       ${chk("strictFit", "Only show companies inside these places and industries", "On: a company whose country or industry is known and outside your choices is treated as outside your range, hidden, and never alerted or searched. A company whose country is not known yet is never held against it. Off: places and industries only change the score.")}
       ${msField("regions", "Where they are based", d.options.regions, "Pick a region or country, or type a city name to add it. Companies elsewhere show as Outside range.", d.options.region_groups)}
+      ${msField("excludeIndustries", "All except these industries", d.options.industries, "Use this when you want every industry except a few. These are never shown.")}
+      ${msField("excludeRegions", "Never in these places", d.options.regions, "Even inside a region you chose, these countries or regions are left out.", d.options.region_groups)}
+      <div class="field"><span class="lbl">Company age (years since founded)</span><div class="numrow"><input type="number" min="0" data-num="companyAge.min" value="${P.companyAge.min ?? ""}" placeholder="any" aria-label="Minimum age"> to <input type="number" min="0" data-num="companyAge.max" value="${P.companyAge.max ?? ""}" placeholder="any" aria-label="Maximum age"></div><p class="help">Leave a box empty for no limit. A company with no known founding year is never held against it.</p></div>
+      <div class="field"><label for="bmodel">Who they sell to</label><select id="bmodel" data-sel="businessModel">${[["any", "Any"], ["b2b", "Other businesses (B2B)"], ["b2c", "Consumers (B2C)"]].map(([v, l]) => `<option value="${v}"${P.businessModel === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="field"><label for="ctype">Company type</label><select id="ctype" data-sel="companyType">${[["any", "Any"], ["private", "Privately held"], ["public", "Publicly traded"]].map(([v, l]) => `<option value="${v}"${P.companyType === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="field"><span class="lbl">Best time after a funding round (days)</span><div class="numrow"><input type="number" min="0" data-num="roundWindow.0" value="${esc(P.roundWindow[0])}" aria-label="From day"> to <input type="number" min="1" data-num="roundWindow.1" value="${esc(P.roundWindow[1])}" aria-label="To day"></div><p class="help">A company whose last round falls in this window scores a little higher on timing.</p></div>
         ${tagField("toolsGood", "Tools that are a good sign", "Software a good customer probably uses, for example hubspot, salesforce.")}
-        ${tagField("toolsAvoid", "Tools that are a poor sign", "A company using one scores zero on tools. For example a rival's product.")}
-        <div class="field"><label for="motion">Sales style you want</label><select id="motion" data-sel="motion">${[["any", "No preference"], ["sales_led", "Sales-led (demo and contact-sales pages)"], ["self_serve", "Self-serve (start free, sign up)"]].map(([v, t]) => `<option value="${v}"${P.motion === v ? " selected" : ""}>${t}</option>`).join("")}</select></div>
-        ${tagField("competitors", "Your competitors", "Names or domains. Domains are never shown as prospects.")}
-        ${tagField("excludeWords", "Never show companies whose industry, tags, description or name contain", "For example: staffing, recruitment. Leave empty to allow every kind of company.")}
-        ${tagField("excludeDomains", "Never show these companies", "Domains, for example partner.com.")}
+          ${tagField("competitors", "Your competitors", "Names or domains. Domains are never shown as prospects.")}
+        ${tagField("excludeWords", "Never show (words, company names or websites)", "A company whose industry, tags, description or name has one of these words, or whose website is listed, is never shown. For example: staffing, recruitment, partner.com. Leave empty to allow every kind of company.")}
     </article>
     <article class="card" id="icpcard"><p class="label">What your customers look like</p><p class="meta" style="margin:0">${own ? "Loading…" : "Unlock to read your HubSpot customers."}</p></article>
     <article class="card"><p class="label">Who we contact</p>
       <p class="help" style="margin:0 0 12px">The buyers you want to reach, best first.${info("The order is the priority. A person matches when their job title contains one of the title words and, if set, their department and seniority fit. Saving re-ranks the people you already have. Departments are Hunter's, so they also steer its people search; the levels here come from the job title and are mapped to Hunter's Junior, Senior and Executive.")}</p>
-      ${P.personas.map((x, i) => `<div class="persona" data-pi="${i}">
-        <div class="phead"><span class="pn">#${i + 1}</span><input type="text" maxlength="40" data-text="personas.${i}.title" value="${esc(x.title)}" aria-label="Name of this buyer type" placeholder="Name, for example Head of Sales">
-          <span class="pmove"><button type="button" class="btn ghost sm" data-pup="${i}" aria-label="Move up"${i === 0 ? " disabled" : ""}>↑</button><button type="button" class="btn ghost sm" data-pdown="${i}" aria-label="Move down"${i === P.personas.length - 1 ? " disabled" : ""}>↓</button></span>
-          <button type="button" class="btn ghost sm" data-premove="${i}"${P.personas.length <= 1 ? " disabled" : ""}>Remove</button></div>
-        ${tagField(`personas.${i}.match`, "Job titles", "For example: vp sales, chief revenue officer. Matching ignores of, the, and punctuation.")}
-        <div class="field"><label for="pd${i}">Department</label><select id="pd${i}" data-sel="personas.${i}.department"><option value="">Any department</option>${d.options.departments.map((o) => `<option${x.department === o ? " selected" : ""}>${esc(o)}</option>`).join("")}</select></div>
-        <div class="field" style="margin-bottom:0"><span class="lbl">Seniority</span><div class="chips" style="margin:0">${d.options.seniorities.map(([k, l]) => `<button type="button" class="chip${(x.seniority || []).includes(k) ? " sel" : ""}" data-psen="${i}" data-val="${esc(k)}">${esc(l)}</button>`).join("")}</div><p class="help">Leave all off to accept any seniority.</p></div>
-      </div>`).join("")}
-      <div class="actions" style="margin:6px 0 0"><button type="button" class="btn ghost" data-padd${P.personas.length >= 8 ? " disabled" : ""}>Add a buyer type</button><span class="meta">Up to 8.</span></div>
+      ${msField("contact.departments", "Teams (most wanted first)", d.options.departments, "The order you add them is the priority. Leave empty to include every team.")}
+      <div class="field"><span class="lbl">Level</span><div class="chips" style="margin:0">${d.options.seniorities.map(([k, l]) => `<button type="button" class="chip${P.contact.seniority.includes(k) ? " sel" : ""}" data-csen="${esc(k)}">${esc(l)}</button>`).join("")}</div><p class="help">Leave all off to include every level.</p></div>
+      ${tagField("contact.titleWords", "Job titles that count", "For example: vp sales, revops, head of growth. A person needs one of these in their title. Leave empty to go by team and level only.")}
+      ${tagField("contact.excludeTitles", "Never contact titles with", "For example: intern, assistant, student.")}
+      <div class="field"><span class="lbl">People to show per company</span><div class="numrow"><input type="number" min="1" max="5" data-num="contact.maxPerCompany" value="${esc(P.contact.maxPerCompany)}" aria-label="People per company"></div></div>
+      ${chk("contact.verifiedOnly", "Verified emails only", "Leaves out anyone whose email Hunter has checked and found not valid.")}
+      ${chk("contact.decisionOnly", "Decision makers only", "Leaves out managers and individual contributors; keeps directors, heads, VPs and C-level.")}
     </article>
     <article class="card"><p class="label">What counts as a buying signal</p>
         ${tagField("painWords", "Problems that show a company needs you", "If a job post mentions one of these (for example crm, data quality), it counts as a signal.")}
@@ -2083,7 +2100,7 @@ async function loadHealth() {
 
 async function loadSetup() {
   $("setupbody").innerHTML = skeleton(5);
-  try { SETUP = await api("queue", { action: "setup" }); P = JSON.parse(JSON.stringify(SETUP.profile)); if (BRAND) BRAND_DRAFT = { ...BRAND }; drawSetup(); loadHealth(); }
+  try { SETUP = await api("queue", { action: "setup" }); P = JSON.parse(JSON.stringify(SETUP.profile)); P.excludeWords = [...P.excludeWords, ...P.excludeDomains]; P.excludeDomains = []; if (BRAND) BRAND_DRAFT = { ...BRAND }; drawSetup(); loadHealth(); }
   catch (e) { $("setupbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 
@@ -2104,7 +2121,8 @@ async function loadSetup() {
       try { BRAND_DRAFT.logo = await logoFromFile(t.files[0]); drawSetup(); say("Logo ready. Press Save name and logo."); } catch (err) { say(err.message); }
       return;
     }
-    if (t.dataset.num) setPath(P, t.dataset.num, t.value === "" && t.dataset.num.endsWith(".onlyBelow") ? null : Number(t.value));
+    if (t.id === "pdesc" || t.id === "psite") { setPath(P, t.dataset.text, t.value.trim()); runSuggest(true); return; }
+    if (t.dataset.num) setPath(P, t.dataset.num, t.value === "" && (t.dataset.num.endsWith(".onlyBelow") || t.dataset.num.startsWith("companyAge.")) ? null : Number(t.value));
     if (t.dataset.sel) setPath(P, t.dataset.sel, t.value);
     if (t.dataset.text) setPath(P, t.dataset.text, t.value.trim());
     if (t.dataset.chk) setPath(P, t.dataset.chk, t.checked);
@@ -2128,21 +2146,11 @@ async function loadSetup() {
     }
     const pu = e.target.closest("[data-pup],[data-pdown]");
     if (pu) { const i = Number(pu.dataset.pup ?? pu.dataset.pdown), j = pu.dataset.pup !== undefined ? i - 1 : i + 1; [P.personas[i], P.personas[j]] = [P.personas[j], P.personas[i]]; drawSetup(); return; }
+    const cs = e.target.closest("[data-csen]");
+    if (cs) { const v = cs.dataset.csen, l = P.contact.seniority; P.contact.seniority = l.includes(v) ? l.filter((y) => y !== v) : [...l, v]; drawSetup(); return; }
     const ps = e.target.closest("[data-psen]");
     if (ps) { const x = P.personas[Number(ps.dataset.psen)], v = ps.dataset.val; x.seniority = (x.seniority || []).includes(v) ? x.seniority.filter((y) => y !== v) : [...(x.seniority || []), v]; drawSetup(); return; }
-    const sg = e.target.closest("[data-suggest]");
-    if (sg) {
-      const description = $("pdesc").value.trim(), website = $("psite").value.trim();
-      if (description.length < 20) { say("Describe what you sell in a sentence or two first."); $("pdesc").focus(); return; }
-      sg.disabled = true; sg.textContent = "Thinking…";
-      try {
-        const r = await api("queue", { action: "profile_suggest", description, website });
-        if (r.mode === "dry_run") { say(r.message); sg.disabled = false; sg.textContent = "Suggest my settings"; return; }
-        const k = r.proposal; for (const f of ["industries", "keywords", "employeesMin", "employeesMax", "stages", "regions", "personas", "hiringRoles", "toolsGood", "toolsAvoid", "competitors", "excludeWords", "motion"]) P[f] = k[f];
-        P.product = k.product; SUGGEST_NOTE = r.summary || "Settings filled in from your description."; drawSetup(); say("Suggestions applied. Review, then save.");
-      } catch (err) { say(err.message); sg.disabled = false; sg.textContent = "Suggest my settings"; }
-      return;
-    }
+    if (e.target.closest("[data-suggest]")) { runSuggest(false); return; }
     if (e.target.closest("[data-logorm]")) { BRAND_DRAFT.logo = ""; drawSetup(); return; }
     const bs = e.target.closest("[data-brandsave]");
     if (bs) {
@@ -2187,13 +2195,11 @@ async function loadSetup() {
     if (tg) { const l = P[tg.dataset.toggle], v = tg.dataset.val; P[tg.dataset.toggle] = l.includes(v) ? l.filter((x) => x !== v) : [...l, v]; drawSetup(); return; }
     const btn = e.target.closest("button"); if (!btn) return;
     if (btn.matches("[data-save]")) {
-      const bad = P.personas.findIndex((x) => !x.title.trim() || !x.match.length);
-      if (bad >= 0) { say("Each buyer type needs a name and at least one job title word."); box.querySelector(`[data-pi="${bad}"]`)?.scrollIntoView({ block: "center" }); return; }
       btn.disabled = true; say("Saving…");
       try {
         const r = await api("queue", { action: "profile_save", profile: P, digest_time_ist: DIGEST_TIME || undefined }); DIGEST_TIME = null;
         if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
-        SETUP = { ...r, admin: true }; P = JSON.parse(JSON.stringify(r.profile)); drawSetup(); drawHealth(); say(`Saved. Recalculated ${r.rescored} companies.`); ACC = null;
+        SETUP = { ...r, admin: true }; P = JSON.parse(JSON.stringify(r.profile)); P.excludeWords = [...P.excludeWords, ...P.excludeDomains]; P.excludeDomains = []; drawSetup(); drawHealth(); say(`Saved. Recalculated ${r.rescored} companies.`); ACC = null;
       } catch (err) { say(err.message); btn.disabled = false; }
     }
     if (btn.matches("[data-hsrefresh]")) {
