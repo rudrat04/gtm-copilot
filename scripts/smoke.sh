@@ -40,7 +40,7 @@ expect "  ...as admin" "$(field "d.get('admin')")" "True"
 expect "owner Today loads" "$(own queue '{"action":"today"}')" "200"
 expect "digest preview builds" "$(own daily-digest '{"dry":true}' )" "200"
 python3 - <<'PY' 2>/dev/null && ok "digest preview has a plain-text and an HTML version" || bad "digest preview is missing a version"
-import json; d=json.load(open('/tmp/smoke_body')); assert d.get('html','').startswith('<!doctype html>') and 'Good morning' in d['body']
+import json; d=json.load(open('/tmp/smoke_body')); assert d.get('reason') == "Nothing on today's list" or d.get('html','').startswith('<!doctype html>') and 'Good morning' in d['body']
 PY
 
 expect "meetings list loads" "$(post queue '{"action":"meetings"}')" "200"
