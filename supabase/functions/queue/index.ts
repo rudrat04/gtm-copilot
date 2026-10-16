@@ -27,6 +27,8 @@ import { peopleRows } from "../_shared/peoplerows.ts";
 import { peekCandidates, peekPeople } from "../_shared/peoplepreview.ts";
 import { aiHeat, aiMaps, aiRefresh, aiScoreCompany, aiScorePeople, candidates } from "../_shared/aiscore.ts";
 import { industryCheckMany, needIndustry } from "../_shared/industry.ts";
+import { judgeMany, judgeFit } from "../_shared/fitjudge.ts";
+import { icpVersion } from "../_shared/fitver.ts";
 import { customerInsights } from "../_shared/customers.ts";
 import { suggestProfile } from "../_shared/suggest.ts";
 import { rerankPeople } from "../_shared/people.ts";
@@ -596,6 +598,21 @@ serve("queue", async (req) => {
     const todo = ids.filter((id) => !have.has(id)).slice(0, 25);
     if (body.dry !== false) return json({ mode: "plan", companies: todo.length, cost_usd: +(todo.length * 0.003).toFixed(3) });
     return json({ mode: "live", ...(await aiRefresh({ ids: todo, maxCompanies: 25, maxPeopleCompanies: 25 })) });
+  }
+  if (body.action === "fit_judge") { // AI fit verdicts: dry shows how many are waiting (profile changed or never judged)
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can run this." });
+    const { count } = await sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("removed_at", null).is("fit_override", null).or(`fit_ai_ver.is.null,fit_ai_ver.neq.${icpVersion()}`);
+    if (body.dry !== false) return json({ mode: "plan", waiting: count ?? 0, cost_usd: +(Math.min(count ?? 0, 25) * 0.0015).toFixed(3) });
+    if (typeof body.account_id === "string") return json({ mode: "live", result: await judgeFit(body.account_id, true), rescored: (await enrichCompanies(true)).rescored });
+    const r = await judgeMany(25);
+    return json({ mode: "live", ...r, rescored: (await enrichCompanies(true)).rescored });
+  }
+  if (body.action === "fit_override" && typeof body.account_id === "string") { // the owner's word beats the AI and the rules; null clears it
+    if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to change a company's fit." });
+    const v = body.value === "yes" || body.value === "no" ? body.value : null;
+    await sb.from("cp_accounts").update({ fit_override: v, fit_override_note: v ? String(body.note ?? "").slice(0, 200) : null }).eq("id", body.account_id);
+    await sb.from("cp_outcomes").insert({ account_id: body.account_id, kind: `fit_override_${v ?? "cleared"}`, note: String(body.note ?? "").slice(0, 200) }).then(() => {}, () => {});
+    return json({ mode: "live", rescored: (await enrichCompanies(true)).rescored });
   }
   if (body.action === "industry_check") {
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can run this." });

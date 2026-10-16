@@ -1154,3 +1154,18 @@ Deno.test("daily cap: only new outreach is limited, dated items never are", asyn
   assertEquals(items.filter((i) => i.type === "hot" && i.lane === "later").map((i) => i.priority), [87, 86]);
   assertEquals(items.filter((i) => i.type !== "hot").every((i) => i.lane !== "later"), true);
 });
+
+Deno.test("fitState: AI verdict and owner override", async () => {
+  const { fitState } = await import("../_shared/score.ts");
+  const { icpVersion } = await import("../_shared/fitver.ts");
+  const base = { employees: 50, stage: "Seed", country: "US", firmo_at: new Date().toISOString(), domain: "x.com", name: "X" } as never;
+  const v = icpVersion();
+  const stale = { ...(base as object), fit_ai: "no", fit_ai_conf: 0.9, fit_ai_ver: "old" } as never;
+  const cur = { ...(base as object), fit_ai: "no", fit_ai_conf: 0.9, fit_ai_ver: v } as never;
+  const low = { ...(base as object), fit_ai: "no", fit_ai_conf: 0.4, fit_ai_ver: v } as never;
+  assertEquals(fitState(cur), "outside");
+  assertEquals(fitState(stale) === "outside", fitState(base) === "outside"); // stale verdict ignored
+  assertEquals(fitState(low) === "outside", fitState(base) === "outside"); // low confidence ignored
+  assertEquals(fitState({ ...(cur as object), fit_override: "yes" } as never), "matches");
+  assertEquals(fitState({ ...(base as object), fit_override: "no" } as never), "outside");
+});

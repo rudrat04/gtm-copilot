@@ -16,6 +16,7 @@ import { hunterBalance } from "./people.ts";
 import { personActivity, teamEvents } from "./peopleactivity.ts";
 import { peekCandidates, peekPeople } from "./peoplepreview.ts";
 import { industryCheckMany, needIndustry } from "./industry.ts";
+import { judgeMany } from "./fitjudge.ts";
 import { fitState } from "./score.ts";
 import { autoRefreshPredictLeads, storedPlSignals } from "./predictleads.ts";
 import icp from "./icp.json" with { type: "json" };
@@ -179,6 +180,7 @@ export async function lightCheck(admin: boolean) {
     const r = await aiRefresh({ maxCompanies: 30, maxPeopleCompanies: 10 });
     judged.companies = r.companies; judged.people = r.people;
     judged.industries = (await industryCheckMany(await needIndustry(8))).set;
+    await judgeMany(25); // fit verdicts for new companies and for any made under an older profile (about 0.1 cent each)
   } catch (e) { await log("warn", "ai_refresh_failed", { message: (e as Error).message }); }
 
   try { await peekPeople(await peekCandidates(30)); } catch (e) { await log("warn", "people_peek_daily_failed", { message: (e as Error).message }); } // free: who works at the companies worth working that have nobody listed

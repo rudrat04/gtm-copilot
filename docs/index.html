@@ -776,6 +776,7 @@ function actionsHtml({ outreach, hasContacts, hasDraft, primary: custom, compact
     parked ? "" : `<hr>${touched ? `<button data-life="reopen">Clear status (reopen)</button>` : ""}<button data-life="replied">They replied</button><button data-life="meeting">Meeting booked</button>
       <button data-life="snooze" data-days="7">Snooze 1 week</button><button data-life="snooze" data-days="14">Snooze 2 weeks</button><button data-life="snooze" data-days="30">Snooze 1 month</button>
       <hr><button data-life="not_now">Not now</button><button data-act="notfit">Not a fit…</button>`,
+    `<hr><button data-act="fitov" data-v="yes" title="Treat as a good fit whatever the rules and the AI say">Always a fit</button><button data-act="fitov" data-v="no">Never a fit</button><button data-act="fitov" data-v="">Let the AI decide again</button>`,
     removable ? `<button data-act="remove">Remove this company…</button>` : "",
   ].join("");
   return `<div class="actions">${primary}${compact && hasContacts && removable ? `<button class="btn ghost sm" data-act="morepeople" title="Searches again for more people. Uses 1 to 2 search credits">Find more people</button>` : ""}${compact ? "" : `<button class="btn ghost" data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>`}
@@ -1200,6 +1201,15 @@ function wireCards(root, reload) {
         if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
         say(act === "remove" ? `${name} removed.` : `${name} restored.`, act === "remove" ? { label: "Undo", run: async () => { await api("queue", { action: "restore_account", account_id: id }); say(`${name} restored.`); reload(); } } : undefined);
         reload();
+      } catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
+    if (act === "fitov") {
+      const card = btn.closest(".card"); if (!card) return; btn.disabled = true; say("Saving…");
+      try {
+        const r = await api("queue", { action: "fit_override", account_id: card.dataset.id, value: btn.dataset.v || null });
+        if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; }
+        say(btn.dataset.v ? "Saved. Your choice beats the AI." : "Back to the AI's call."); reload();
       } catch (err) { say(err.message); btn.disabled = false; }
       return;
     }
@@ -2833,7 +2843,7 @@ $("cobody").addEventListener("click", (e) => { const r = e.target.closest("[data
 const PAL_PAGES = [["To-do", { view: "today" }], ["People", { view: "people" }], ["Companies", { view: "accounts" }], ["Signals", { view: "signals" }], ["Discover", { view: "discover" }], ["Watchlist", { view: "watchlist" }], ["Inbound leads", { view: "conversations", sub: "leads" }], ["Meetings", { view: "conversations", sub: "meetings" }], ["People (everyone searched)", { view: "people" }],
   ["Research a company", { view: "research" }], ["Setup: what you sell", { view: "setup", sub: "sell" }], ["Setup: who we look for", { view: "setup", sub: "look" }], ["Setup: who we contact", { view: "setup", sub: "contact" }], ["Setup: signals", { view: "setup", sub: "signals" }],
   ["Setup: alerts and email", { view: "setup", sub: "alerts" }], ["Setup: finding companies and credits", { view: "setup", sub: "find" }], ["Setup: HubSpot, name and health", { view: "setup", sub: "conn" }]];
-const PAL_ACTIONS = [["Check size and stage for companies without it", () => { PENDING_CLICK = "[data-bulkfacts]"; showView({ view: "accounts" }); }], ["Find people for the top companies", () => { PENDING_CLICK = "[data-bulkfind]"; showView({ view: "accounts" }); }],
+const PAL_ACTIONS = [["Re-check fit with AI (25 companies)", async () => { const p = await api("queue", { action: "fit_judge" }); if (!p.waiting) { say("Every company has a current AI fit read."); return; } if (!(await ask({ title: `Re-check fit for ${Math.min(p.waiting, 25)} companies?`, body: `${p.waiting} are waiting. AI cost: about ${(p.cost_usd * 100).toFixed(0)} cents. No credits.` }))) return; say("Judging…"); const r = await api("queue", { action: "fit_judge", dry: false }); say(`Judged ${r.judged}; ${r.left} still waiting.`); }], ["Check size and stage for companies without it", () => { PENDING_CLICK = "[data-bulkfacts]"; showView({ view: "accounts" }); }], ["Find people for the top companies", () => { PENDING_CLICK = "[data-bulkfind]"; showView({ view: "accounts" }); }],
   ["Follow a company", () => { WLV = "companies"; showView({ view: "watchlist" }); setTimeout(() => { const f = document.querySelector("#wlbody details.fdet"); if (f) { f.open = true; $("wlsite")?.focus(); } }, 700); }], ["Find new companies (open Discover)", () => showView({ view: "discover" })]];
 async function openPalette() {
   if ($("pal")) return;

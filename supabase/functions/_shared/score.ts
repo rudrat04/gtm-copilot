@@ -1,3 +1,4 @@
+import { verdictCurrent } from "./fitver.ts";
 import icp from "./icp.json" with { type: "json" };
 import type { Signal } from "./signals.ts";
 import { fitBreakdown, type FitRow } from "./firmo.ts";
@@ -125,12 +126,17 @@ export type Heat = "hot" | "warm" | "watching";
 
 /** Is this the right kind of company? Needs the company facts; "unknown" until they are looked up. */
 export function fitState(a: FitRow): FitState {
+  if (a.fit_override === "yes") return "matches"; // the owner's word beats everything
+  if (a.fit_override === "no") return "outside";
   const f = fitBreakdown(a);
+  const ai = verdictCurrent(a) ? a.fit_ai : null;
   if (f.excluded) return "outside"; // a competitor, an agency, an existing customer: never a prospect, whatever its size
-  if (f.placeMiss || f.industryMiss) return "outside"; // a known country or industry outside what the owner chose (the strict-fit switch in Setup)
+  if (f.placeMiss || (f.industryMiss && !ai)) return "outside"; // once the AI has judged the business, its verdict replaces the word-match industry gate
+  if (ai === "no" && Number(a.fit_ai_conf ?? 0) >= 0.7) return "outside"; // a known country or industry outside what the owner chose (the strict-fit switch in Setup)
   if (!f.known) return "unknown";
   if (f.size === 0 || f.stage === 0) return "outside";
-  return f.matches ? "matches" : "close";
+  if (ai === "partial") return "close";
+  return f.matches || ai === "yes" ? "matches" : "close";
 }
 
 type Sig = { kind: string; title: string; detail?: Record<string, unknown> | null; detected_at: string };

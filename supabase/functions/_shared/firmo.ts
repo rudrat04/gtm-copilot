@@ -1,3 +1,4 @@
+import { icpVersion } from "./fitver.ts";
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import icp from "./icp.json" with { type: "json" };
@@ -106,9 +107,10 @@ export type FitRow = {
   employees?: number | null; stage?: string | null; country?: string | null; hq_city?: string | null; firmo_at?: string | null; light_source?: string | null; employee_band?: string | null;
   tech?: string[] | null; industry?: string | null; tags?: string[] | null; blurb?: string | null; sales_motion?: string | null;
   domain?: string | null; name?: string | null; known_as?: string | null; last_round_date?: string | null; industry_ai?: string | null;
+  fit_ai?: string | null; fit_ai_conf?: number | null; fit_ai_ver?: string | null; fit_override?: string | null;
 };
 /** The columns to select wherever fit is computed, so a new criterion takes effect everywhere. */
-export const FIT_COLS = "employees,stage,country,hq_city,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date,watched_at,industry_ai";
+export const FIT_COLS = "employees,stage,country,hq_city,firmo_at,light_source,employee_band,tech,industry,tags,blurb,sales_motion,domain,name,known_as,last_round_date,watched_at,industry_ai,fit_ai,fit_ai_conf,fit_ai_reason,fit_ai_ver,fit_override,fit_override_note";
 
 /** Is this funding stage one of the stages we target? Each stage the owner picked has its own pattern (see lists.ts). */
 const stageWanted = (s: string) => icp.company.stages.some((w) => (STAGE_OPTIONS.find((o) => o.name === w)?.re ?? new RegExp(w.toLowerCase().replace(/[^a-z0-9 ]/g, ""))).test(s));
@@ -227,6 +229,8 @@ export function fitReasons(a: FitRow): { key: string; label: string; state: "ok"
   const w = icp.fitWeights as Record<keyof FitParts, number>;
   const out: { key: string; label: string; state: "ok" | "partly" | "no" | "unknown"; text: string }[] = [];
   if (b.excluded) out.push({ key: "excluded", label: "Excluded", state: "no", text: b.excluded });
+  if (a.fit_override) out.push({ key: "override", label: "Your call", state: a.fit_override === "yes" ? "ok" : "no", text: a.fit_override === "yes" ? "Marked as always a fit" : "Marked as never a fit" });
+  else if (a.fit_ai && a.fit_ai_ver === icpVersion()) out.push({ key: "ai_fit", label: "AI read", state: a.fit_ai === "yes" ? "ok" : a.fit_ai === "no" ? "no" : "partly", text: (a as { fit_ai_reason?: string }).fit_ai_reason ?? a.fit_ai });
   if (!a.firmo_at && !hasLightFacts(a)) return out.concat([{ key: "facts", label: "Company facts", state: "unknown", text: "Size and stage not looked up yet" }]);
   if (!a.firmo_at) { // size known from the company search, stage not looked up
     const sz = b.parts.size; return out.concat([{ key: "size", label: "Size", state: sz >= 1 ? "ok" : sz > 0 ? "partly" : "no", text: a.employees != null ? `${a.employees} people` : `${a.employee_band} people` }, { key: "stage", label: "Stage", state: "unknown", text: "not looked up yet" }]);
