@@ -184,7 +184,7 @@ export function pickBatch<T extends { source: string }>(fresh: T[], max: number,
 /** Pure: cuts a reason at the end of a word (never mid-word) and adds an ellipsis only when something was cut. */
 export const tidy = (t: string, n: number): string => { const x = t.replace(/\s+/g, " ").trim(); if (x.length <= n) return x; const cut = x.slice(0, n); const sp = cut.lastIndexOf(" "); return `${cut.slice(0, sp > n * 0.6 ? sp : n).replace(/[,;:.\s]+$/, "")}…`; };
 
-export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?: boolean; maxAi?: number } = {}) {
+export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?: boolean; maxAi?: number; trigger?: string } = {}) {
   const hiring = await collectHiring();
   const seenDomains = new Set(hiring.map((c) => c.domain));
   const launches = (await collectLaunches()).filter((c) => !seenDomains.has(c.domain));
@@ -208,6 +208,8 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
   const summary = { collected: found.length, from_web: web.length, from_hunter: hunter.length, from_yc: yc.length, already_known: found.length - fresh.length, checked: 0, added: [] as string[], rejected: 0, dry: !!opts.dry };
   if (opts.dry) return { ...summary, would_check: pickBatch(fresh, opts.maxAi ?? cfg.maxAiPerRun, slots).map((c) => `${c.name} (${c.domain})`) };
 
+  const { data: runRow } = await sb.from("cp_discovery_runs").insert({ trigger: opts.trigger ?? "manual", summary: { collected: found.length } }).select("id").single();
+  const runId: string | null = runRow?.id ?? null;
   let firmoLeft = opts.firmo === false ? 0 : cfg.firmoPerRun;
   const batch = pickBatch(fresh, opts.maxAi ?? cfg.maxAiPerRun, slots);
   const verdicts = new Map<string, Verdict | null>();
@@ -216,7 +218,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
     const v = verdicts.get(c.domain) ?? null;
     if (!v) continue; // a failure is not a verdict; it is retried next week
     summary.checked++;
-    const row = { domain: c.domain, name: (v.name || c.name).slice(0, 80), source: c.source, source_url: c.sourceUrl, snippet: c.snippet };
+    const row = { domain: c.domain, name: (v.name || c.name).slice(0, 80), source: c.source, source_url: c.sourceUrl, snippet: c.snippet, run_id: runId };
     if (!v.fit) {
       { const reason = tidy(v.reason ?? "Not a B2B software company", 220); await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason, category: skipCategory(reason) }, { onConflict: "domain" }); }
       summary.rejected++;
@@ -258,6 +260,10 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
   Object.assign(summary, { people_searched: ready.searched, judged: ready.judged, skipped: skipped.slice(0, 20) });
   await save(ready);
   if (summary.checked > 0) await notify({ key: `discovery:${new Date().toISOString().slice(0, 13)}`, kind: "discovery", title: `Discovery: ${summary.added.length} companies added, ${summary.rejected} skipped`, body: summary.added.slice(0, 6).join(", "), route: "#/discover" });
+  if (runId) { // keep the run only when it looked at something new; its summary is what the Discover page lists
+    if (summary.checked > 0) await sb.from("cp_discovery_runs").update({ summary: { collected: summary.collected, checked: summary.checked, added: summary.added.length, skipped_n: summary.rejected, from_hunter: summary.from_hunter, from_yc: summary.from_yc, from_web: summary.from_web, already_known: summary.already_known, people_searched: ready.searched, judged: ready.judged } }).eq("id", runId);
+    else await sb.from("cp_discovery_runs").delete().eq("id", runId);
+  }
   await log("info", "discover_done", { detail: summary });
   return summary;
 }

@@ -21,7 +21,7 @@ serve("discover", async (req) => {
     if (cap.mode === "skip") return json({ skipped: cap.why });
     if (cap.mode === "boost") maxAi = Math.round(((icp.discovery as { maxAiPerRun: number }).maxAiPerRun) * 1.5);
   }
-  const result = await runDiscovery({ dry: owner && body.dry === true, firmo: !(owner && body.firmo === false), web: owner && body.web === true ? true : owner && body.web === false ? false : undefined, maxAi });
+  const result = await runDiscovery({ dry: owner && body.dry === true, firmo: !(owner && body.firmo === false), web: owner && body.web === true ? true : owner && body.web === false ? false : undefined, maxAi, trigger: owner ? "manual" : "weekly" });
   if (!(owner && body.dry === true)) await markDiscoveryVersion();
   return json(result);
 });

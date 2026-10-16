@@ -322,6 +322,7 @@
   .blk .why { margin: 0; }
   .blk .contact { margin: 0; }
   .acard .sigs { margin: 0; }
+  .vsbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; } .vsbar .viewsw { margin-bottom: 0; }
   .dhead { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
   .dreason { margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   details.ddet > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; } details.ddet > summary::-webkit-details-marker { display: none; } details.ddet > summary::before { content: "▸"; color: var(--muted); font-size: 12px; } details.ddet[open] > summary::before { content: "▾"; }
@@ -633,6 +634,7 @@ function ago(iso) {
   if (h < 1) return "just now"; if (h < 24) return `${Math.floor(h)}h ago`;
   const d = Math.floor(h / 24); return d === 1 ? "yesterday" : `${d} days ago`;
 }
+const dayTime = (iso) => new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 const scoreColor = (n) => (n >= 70 ? "var(--good)" : n >= 40 ? "var(--warn)" : "var(--bad)");
 const money = (n) => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${Math.round(n / 1e6)}M` : `$${Math.round(n / 1e3)}K`);
@@ -2524,7 +2526,28 @@ function personCard(p, o = {}) {
 }
 
 
-const viewSwitch = (cur) => `<div class="seg viewsw" role="tablist" aria-label="People or companies"><button role="tab" class="${cur === "people" ? "on" : ""}" aria-selected="${cur === "people"}" data-vsw="people">People${PPL ? `<i>${PPL.people.length}</i>` : ""}</button><button role="tab" class="${cur === "companies" ? "on" : ""}" aria-selected="${cur === "companies"}" data-vsw="accounts">Companies</button></div>`;
+/** Runs (or previews) discovery from any page. Progress shows in the Discover page when it is open, otherwise as a toast. */
+let DISC_RUNNING = false;
+async function runDisc(dry, btn) {
+  if (DISC_RUNNING) { say("Discovery is already running."); return; }
+  if (!dry && !(await ask({ title: "Run discovery now?", body: "About 15 cents of AI (the web search is most of it) and up to 1.6 search credits for size lookups. People are listed free.", ok: "Run" }))) return;
+  const out = $("druneout"); DISC_RUNNING = true; if (btn) btn.disabled = true;
+  if (out) out.innerHTML = `<p class="meta">${dry ? "Checking sources…" : "Running. This takes about two minutes."}</p>`; else say(dry ? "Checking sources…" : "Running discovery. This takes about two minutes…");
+  try {
+    const r = await api("queue", { action: "run_discovery", dry });
+    if (r.mode === "dry_run") { say(r.message); if (out) out.innerHTML = ""; }
+    else if (dry) { const t = `${r.collected} candidates found, ${r.already_known} already seen. Would check: ${(r.would_check || []).join(", ") || "nothing new"}.`; if (out) out.innerHTML = `<p class="meta">${esc(t)}</p>`; else say(t); }
+    else {
+      if (out) out.innerHTML = "";
+      ACC = null; PPL = null;
+      say(`Discovery done: ${r.added.length} added, ${r.rejected} skipped.`, { label: "Open the run", run: () => showView({ view: "discover" }) });
+      if (CUR.view === "discover") loadDiscover(true); else if (CUR.view === "people") loadPeople(true); else if (CUR.view === "accounts") loadAccounts(true);
+    }
+  } catch (err) { if (out) out.innerHTML = `<p class="err">${esc(err.message)}</p>`; else say(err.message); }
+  DISC_RUNNING = false; if (btn) btn.disabled = false;
+}
+const viewSwitch = (cur) => `<div class="vsbar">${viewSwitchSeg(cur)}${lockBtn(IS_OWNER, "data-rundisc", "primary sm", "Run discovery", "Unlock to run discovery")}</div>`;
+const viewSwitchSeg = (cur) => `<div class="seg viewsw" role="tablist" aria-label="People or companies"><button role="tab" class="${cur === "people" ? "on" : ""}" aria-selected="${cur === "people"}" data-vsw="people">People${PPL ? `<i>${PPL.people.length}</i>` : ""}</button><button role="tab" class="${cur === "companies" ? "on" : ""}" aria-selected="${cur === "companies"}" data-vsw="accounts">Companies</button></div>`;
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-vsw]"); if (b) showView({ view: b.dataset.vsw }); });
 async function loadPeople(quiet) {
   if (!quiet) { $("phead").innerHTML = ""; $("plist").innerHTML = skeleton(4); }
@@ -2683,23 +2706,29 @@ function drawDiscover() {
       ${own ? `<div class="actions" style="margin:0"><button class="btn ghost" data-drun="preview">Preview</button><button class="btn primary" data-drun="live">Run discovery now</button>${info("It reads Hacker News hiring and launch posts, Hunter's company database, Y Combinator companies that are hiring and a web search. New companies are screened, scanned for signals, and the people who work there are listed free. About 15 cents of AI for a full run (11 cents is the web search). Search credits only for the size lookups of companies from older sources, up to 1.6.")}</div>` : ""}</div>
     ${tiles}${capLine}${own && d.unknown_fit ? `<div class="actions" style="margin:12px 0 0"><button class="btn ghost sm" data-dfacts>Check size and stage for ${esc(d.unknown_fit)} companies · 0.2 credit each</button></div>` : ""}<div id="druneout"></div></article>`;
   const rows = d.added_rows || [];
-  const found = `<article class="card"><p class="label">Found by discovery (${esc(rows.length)})</p>
-    ${rows.length ? rows.map((x) => `<div class="wrow"><div class="wmain"><b><a class="cname" href="#/company/${esc(x.id)}">${esc(x.name)}</a></b> <a class="meta" href="https://${esc(x.domain)}" target="_blank" rel="noopener noreferrer">${esc(x.domain)}</a> <span class="badge ${(FITB[x.fit] || FITB.unknown)[1]}">${(FITB[x.fit] || FITB.unknown)[0]}</span>
-      ${x.about ? `<div class="meta dreason" title="${esc(x.about)}">${esc(x.about)}</div>` : ""}<div class="meta">${esc(SRC[x.source] || x.source)} · ${esc(day(x.found_at))}${x.country ? ` · ${esc(x.country)}` : ""}${x.size ? ` · ${esc(x.size)} people` : ""}</div></div></div>`).join("") : `<p class="meta" style="margin:0">Nothing found yet. Run discovery to look for companies.</p>`}
-    ${rows.length ? `<p class="meta" style="margin:10px 0 0"><a href="#/companies" data-newones>See them in Companies</a></p>` : ""}</article>`;
+  const CAT = { "Outside your size or stage": "warn", "Services or agency": "", "Consumer product": "", "Not a software company": "", "Website did not load": "bad", "Not a fit for what you sell": "" };
+  const TRIG = { weekly: "Weekly run", manual: "Run by you", "profile change": "After a profile change", earlier: "Earlier run" };
+  const tag = (t, cls) => (t ? `<span class="badge ${cls || ""}">${esc(t)}</span>` : "");
+  const addedRow = (x) => `<div class="wrow"><div class="wmain"><b>${x.id ? `<a class="cname" href="#/company/${esc(x.id)}">${esc(x.name)}</a>` : esc(x.name)}</b> <a class="meta" href="https://${esc(x.domain)}" target="_blank" rel="noopener noreferrer">${esc(x.domain)}</a>
+      <div class="tagrow" style="margin:6px 0 0">${x.deleted ? tag("Deleted", "bad") : tag((FITB[x.fit] || FITB.unknown)[0], (FITB[x.fit] || FITB.unknown)[1])}${tag(x.size ? `${x.size} people` : "")}${tag(x.stage)}${tag(x.country)}${tag(x.industry)}${x.in_hubspot ? tag("In HubSpot", "good") : ""}</div>
+      ${x.about ? `<div class="meta dreason" title="${esc(x.about)}">${esc(x.about)}</div>` : ""}<div class="meta" style="margin-top:4px"><b>Why added:</b> ${esc(x.why || "")}</div>
+      <div class="meta">Found via ${x.source_url ? `<a href="${esc(x.source_url)}" target="_blank" rel="noopener noreferrer">${esc(SRC[x.source] || x.source)}</a>` : esc(SRC[x.source] || x.source)}</div></div></div>`;
+  const skipRow = (x) => `<div class="wrow" data-dom="${esc(x.domain)}"><div class="wmain"><b>${esc(x.name || x.domain)}</b> <a class="meta" href="https://${esc(x.domain)}" target="_blank" rel="noopener noreferrer">${esc(x.domain)}</a> <span class="badge ${CAT[x.category] || ""}">${esc(x.category || "Skipped")}</span>
+      <div class="meta dreason" title="${esc(x.reason || "")}">${esc(x.reason || "")}</div>
+      <div class="meta">Found via ${x.source_url ? `<a href="${esc(x.source_url)}" target="_blank" rel="noopener noreferrer">${esc(SRC[x.source] || x.source)}</a>` : esc(SRC[x.source] || x.source)}${x.snippet ? ` · “${esc(x.snippet.slice(0, 110))}”` : ""}</div></div>${own ? `<div class="wside"><button class="btn ghost sm" data-addskip>Add anyway</button><button class="btn link sm" data-hideskip>Dismiss</button></div>` : ""}</div>`;
+  const runs = (d.runs || []).map((r, i) => { const m = r.summary || {};
+    return `<details class="card ddet" ${i === 0 ? "open" : ""}><summary><span class="label" style="margin:0">${esc(dayTime(r.at))}</span><span class="badge">${esc(TRIG[r.trigger] || r.trigger)}</span><span class="meta"><b style="color:var(--good)">${esc(r.added.length)}</b> added · <b>${esc(r.skipped.length)}</b> skipped${m.collected ? ` · ${esc(m.collected)} looked at` : ""}${m.people_searched ? ` · ${esc(m.people_searched)} people listed` : ""}</span></summary>
+      <p class="label" style="margin:14px 0 4px">Added (${esc(r.added.length)})</p>${r.added.length ? r.added.map(addedRow).join("") : `<p class="meta" style="margin:0">Nothing was added.</p>`}
+      <p class="label" style="margin:16px 0 4px">Skipped (${esc(r.skipped.length)})</p>${r.skipped.length ? `<p class="help" style="margin:0 0 6px">${own ? "<b>Add anyway</b> puts one in your Companies. <b>Dismiss</b> hides it here (it is still remembered, so it is not looked at again)." : ""}</p>${r.skipped.map(skipRow).join("")}` : `<p class="meta" style="margin:0">Nothing was skipped.</p>`}</details>`; }).join("");
+  const found = `<p class="label" style="margin:20px 2px 8px">Every run</p>${runs || `<article class="card"><p class="meta" style="margin:0">No runs yet. Press Run discovery.</p></article>`}`;
   const src = Object.entries(d.sources || {}).sort((a, b) => b[1].added - a[1].added);
   const sources = `<details class="card ddet"><summary><span class="label" style="margin:0">Where companies come from</span></summary><p class="help" style="margin:8px 0">Every source is public or free. Totals since the start.</p>
     ${src.length ? src.map(([k, v]) => `<div class="wrow"><div class="wmain"><b>${esc(SRC[k] || k)}</b> <span class="meta">${esc(v.added)} added · ${esc(v.skipped)} skipped</span></div></div>`).join("") : `<p class="meta" style="margin:0">No companies yet.</p>`}
     <p class="meta" style="margin:10px 0 0">Search for new companies every week is <b>${d.enabled ? "on" : "off"}</b>${d.web ? "" : ", web search is off"}. Change it, and your industries, size and places, in <a href="#/setup/find">Setup</a>.</p></details>`;
-  const CAT = { "Outside your size or stage": "warn", "Services or agency": "", "Consumer product": "", "Not a software company": "", "Website did not load": "bad", "Not a fit for what you sell": "" };
-  const skipped = `<details class="card ddet"><summary><span class="label" style="margin:0">Skipped companies (${esc(d.skipped.length)})</span></summary><p class="help" style="margin:8px 0">Companies discovery looked at and turned down, with the reason. <b>Add back</b> puts one in your list. <b>Remove</b> clears it from here (it is still remembered, so it is not looked at again).</p>
-    ${d.skipped.length ? d.skipped.map((x) => `<div class="wrow" data-dom="${esc(x.domain)}"><div class="wmain"><b>${esc(x.name || x.domain)}</b> <a class="meta" href="https://${esc(x.domain)}" target="_blank" rel="noopener noreferrer">${esc(x.domain)}</a> <span class="badge ${CAT[x.category] || ""}">${esc(x.category || "Skipped")}</span>
-      <div class="meta dreason" title="${esc(x.reason || "")}">${esc(x.reason || "")}</div>
-      <div class="meta">Found via ${x.source_url ? `<a href="${esc(x.source_url)}" target="_blank" rel="noopener noreferrer">${esc(SRC[x.source] || x.source)}</a>` : esc(SRC[x.source] || x.source)} · ${esc(day(x.found_at))}${x.snippet ? ` · “${esc(x.snippet.slice(0, 110))}”` : ""}</div></div>${own ? `<div class="wside"><button class="btn ghost sm" data-addskip>Add back</button><button class="btn link sm" data-hideskip>Remove</button></div>` : ""}</div>`).join("") : `<p class="meta" style="margin:0">Nothing skipped yet.</p>`}</details>`;
   const people = `<details class="card ddet"><summary><span class="label" style="margin:0">Skipped people${ps ? ` (${esc(ps.items.length)})` : ""}</span></summary><p class="help" style="margin:8px 0">People the free list showed at your companies but who do not match your contact filters, so they are not kept. Change the filters in <a href="#/setup/contact">Setup</a>. <b>Remove</b> clears one from here.</p>
     ${ps?.items?.length ? ps.items.slice(0, 40).map((x) => `<div class="wrow" data-pkey="${esc(x.key || "")}"><div class="wmain"><b>${esc(x.name)}</b> <span class="meta">${esc(x.title)} at ${esc(x.company)}</span> <span class="badge ${x.label === "Too junior" ? "" : "warn"}">${esc(x.label || "Skipped")}</span>
       <div class="meta" style="margin-top:4px">${esc(x.reason)}${x.department ? ` · team: ${esc(x.department)}` : ""}${x.level ? ` · level: ${esc(LEVEL[x.level] || x.level)}` : ""}</div></div>${own && x.key ? `<div class="wside"><button class="btn link sm" data-hidepeople>Remove</button></div>` : ""}</div>`).join("") : `<p class="meta" style="margin:0">Nobody skipped in the last listing.</p>`}</details>`;
-  $("dbody").innerHTML = `${status}${found}${skipped}${people}${sources}`;
+  $("dbody").innerHTML = `${status}${found}${people}${sources}`;
 }
 $("dbody").addEventListener("click", async (e) => {
   const hs = e.target.closest("[data-hideskip], [data-hidepeople]");
@@ -2725,22 +2754,8 @@ $("dbody").addEventListener("click", async (e) => {
     catch (err) { say(err.message); f.disabled = false; }
     return;
   }
-  const btn = e.target.closest("[data-drun]"); if (!btn) return;
-  const dry = btn.dataset.drun === "preview";
-  if (!dry && !(await ask({ title: "Run discovery now?", body: "About 15 cents of AI (the web search is most of it) and up to 1.6 search credits for size lookups. People are listed free.", ok: "Run" }))) return;
-  btn.disabled = true; $("druneout").innerHTML = `<p class="meta">${dry ? "Checking sources…" : "Running. This takes about two minutes."}</p>`;
-  try {
-    const r = await api("queue", { action: "run_discovery", dry });
-    if (r.mode === "dry_run") { say(r.message); $("druneout").innerHTML = ""; }
-    else if (dry) $("druneout").innerHTML = `<p class="meta">${esc(r.collected)} candidates found, ${esc(r.already_known)} already seen. Would check: ${esc((r.would_check || []).join(", ") || "nothing new")}.</p>`;
-    else {
-      $("druneout").innerHTML = "";
-      ACC = null; PPL = null;
-      say(`Discovery done: ${r.added.length} added, ${r.rejected} skipped.`, { label: "See them", run: () => { AF = { ...AF_DEFAULT, view: "all", origin: "new" }; saveAF(); showView({ view: "accounts" }); } });
-      loadDiscover(true);
-    }
-  } catch (err) { $("druneout").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
-  btn.disabled = false;
+  const btn = e.target.closest("[data-drun], [data-rundisc]"); if (!btn) return;
+  runDisc(btn.dataset.drun === "preview", btn);
 });
 
 /* ============ navigation: every view has its own address, so Back, bookmarks and email links work ============ */

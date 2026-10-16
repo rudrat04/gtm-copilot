@@ -555,11 +555,23 @@ serve("queue", async (req) => {
     for (const r of all ?? []) { const x = (sources[r.source] ??= { added: 0, skipped: 0 }); if (r.status === "added") x.added++; else if (r.status === "rejected") x.skipped++; }
     const parse = (v?: string | null) => { try { return v ? JSON.parse(v) : null; } catch { return null; } };
     const { count: unknownFit } = await sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("firmo_at", null).is("removed_at", null);
+    const { data: runRows } = await sb.from("cp_discovery_runs").select("id,started_at,trigger,summary").order("started_at", { ascending: false }).limit(15);
+    const runIds = (runRows ?? []).map((r) => r.id);
+    const { data: runItems } = runIds.length ? await sb.from("cp_discovered").select("domain,name,source,source_url,snippet,status,reason,category,account_id,run_id,found_at").in("run_id", runIds).is("hidden_at", null).limit(800) : { data: [] };
+    const { data: runAccts } = (runItems ?? []).some((i) => i.account_id) ? await sb.from("cp_accounts").select(`id,name,domain,segment,removed_at,stage,hubspot_company_id,${FIT_COLS}`).in("id", (runItems ?? []).map((i) => i.account_id).filter(Boolean) as string[]) : { data: [] };
+    const runs = (runRows ?? []).map((r) => ({
+      id: r.id, at: r.started_at, trigger: r.trigger, summary: r.summary,
+      added: (runItems ?? []).filter((i) => i.run_id === r.id && i.status === "added").map((i) => {
+        const a = (runAccts ?? []).find((x) => x.id === i.account_id);
+        return { domain: i.domain, name: i.name, source: i.source, source_url: i.source_url, why: i.reason, id: a && !a.removed_at ? a.id : null, deleted: !a || !!a.removed_at, fit: a ? fitState(a as never) : null, about: a?.segment ?? a?.industry_ai ?? null, industry: a?.industry_ai ?? a?.industry ?? null, country: a?.country ?? null, size: a?.employees ?? a?.employee_band ?? null, stage: a?.stage ?? null, in_hubspot: !!a?.hubspot_company_id, found_at: i.found_at };
+      }),
+      skipped: (runItems ?? []).filter((i) => i.run_id === r.id && i.status === "rejected").map((i) => ({ domain: i.domain, name: i.name, source: i.source, source_url: i.source_url, snippet: i.snippet, reason: i.reason, category: i.category, found_at: i.found_at })),
+    }));
     const { data: addedLog } = await sb.from("cp_discovered").select("domain,source,found_at,account_id").eq("status", "added").not("account_id", "is", null).order("found_at", { ascending: false }).limit(30);
     const { data: addedAcc } = (addedLog ?? []).length ? await sb.from("cp_accounts").select(`id,name,domain,segment,removed_at,${FIT_COLS}`).in("id", (addedLog ?? []).map((r) => r.account_id)) : { data: [] };
     const addedRows = (addedLog ?? []).map((r) => { const a = (addedAcc ?? []).find((x) => x.id === r.account_id); return a && !a.removed_at ? { id: a.id, name: a.name, domain: a.domain, about: a.segment ?? a.industry_ai ?? null, fit: fitState(a as never), country: a.country ?? null, size: a.employees ?? a.employee_band ?? null, source: r.source, found_at: r.found_at } : null; }).filter(Boolean);
     const ready = await readyCount(); const capacity = { ready, ...capacityMode({ ready, cap: todayCap(), icpChanged: false }) };
-    return json({ admin, added_rows: addedRows, capacity, unknown_fit: unknownFit ?? 0, skipped: data ?? [], report: parse(last?.value), people_skipped: parse(sp?.value), sources, enabled: (icp.discovery as { enabled?: boolean }).enabled !== false, web: (icp.discovery as { web?: boolean }).web !== false });
+    return json({ admin, runs, added_rows: addedRows, capacity, unknown_fit: unknownFit ?? 0, skipped: data ?? [], report: parse(last?.value), people_skipped: parse(sp?.value), sources, enabled: (icp.discovery as { enabled?: boolean }).enabled !== false, web: (icp.discovery as { web?: boolean }).web !== false });
   }
   if (body.action === "discover_hide") { // take a skipped company or person off the list (the company is still remembered, so it is not looked at again)
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to remove." });

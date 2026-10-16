@@ -188,7 +188,7 @@ export async function lightCheck(admin: boolean) {
 
   // The profile changed since discovery last ran: search once now (free sources only, no web search) instead of waiting for Monday.
   try {
-    if ((icp.discovery as { enabled?: boolean }).enabled !== false && await icpChangedSinceDiscovery()) { await runDiscovery({ web: false, firmo: false }); await markDiscoveryVersion(); }
+    if ((icp.discovery as { enabled?: boolean }).enabled !== false && await icpChangedSinceDiscovery()) { await runDiscovery({ web: false, firmo: false, trigger: "profile change" }); await markDiscoveryVersion(); }
   } catch (e) { await log("warn", "discovery_catchup_failed", { message: (e as Error).message }); }
   try { await askStillFollowing(); } catch (e) { await log("warn", "still_following_failed", { message: (e as Error).message }); }
 
