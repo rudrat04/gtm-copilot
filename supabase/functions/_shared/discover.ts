@@ -129,6 +129,9 @@ export async function collectLaunches(): Promise<Candidate[]> {
 type Verdict = { fit?: boolean; name?: string; segment?: string; reason?: string };
 
 /** One small model call: is this a B2B software company that could buy from the seller? */
+/** If the owner chose service industries (marketing, advertising, consulting, staffing and so on) as targets, agencies are customers, not noise. */
+const wantsServices = () => icp.company.industries.some((i: string) => /(services|consult|agenc|marketing|advertising|staffing|outsourc|public relations|design)/i.test(i));
+
 async function qualify(c: Candidate): Promise<Verdict | null> {
   const site = await fetchSite(c.domain);
   if (!site) return { fit: false, reason: "Website did not load" };
@@ -147,7 +150,7 @@ Website title: ${site.title.slice(0, 120)}
 Website description: ${site.description.slice(0, 250)}
 Website text: ${site.text.slice(0, 600)}
 
-Is this a company that SELLS B2B software, developer tools or infrastructure to other businesses, with a sales team that could use the seller's product? Say false for consumer apps, agencies, consultancies, staffing, universities, non-profits, hardware, big public companies or anything unclear.
+${wantsServices() ? "Does this company operate in one of the Target industries and have a sales or growth need the seller could serve? Companies in the Target industries are a fit even when they are agencies, consultancies or service firms. Say false for consumer apps, universities, non-profits, government, hardware, big public companies, companies clearly outside the Target industries, or anything unclear." : "Is this a company that SELLS B2B software, developer tools or infrastructure to other businesses, with a sales team that could use the seller's product? Say false for consumer apps, agencies, consultancies, staffing, universities, non-profits, hardware, big public companies or anything unclear."}
 Also say false if the company is clearly based and operating only outside the Places above, or clearly belongs to a different industry than the Target (when unsure, say true).
 JSON: {"fit": true|false, "name": "proper company name", "segment": "2-4 word description, e.g. API monitoring platform", "reason": "one short plain-English sentence"}`,
     });
@@ -193,7 +196,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
     sb.from("cp_discovered").select("domain,status,reason,found_at").in("domain", domains.length ? domains : ["-"]),
   ]);
   // A company turned down only for its size or stage gets another look after two weeks, in case you have widened the profile since.
-  const retry = (r: { status: string; reason: string | null; found_at: string }) => r.status === "rejected" && ((/^Below the fit bar/.test(r.reason ?? "") && Date.now() - Date.parse(r.found_at) > 14 * 86_400_000) || (/^Outside your places \(([A-Za-z]{2})\)/.test(r.reason ?? "") && inRegions(/^Outside your places \(([A-Za-z]{2})\)/.exec(r.reason ?? "")![1].toUpperCase()))); // a company skipped for its place is looked at again as soon as that place is one of yours
+  const retry = (r: { status: string; reason: string | null; found_at: string }) => r.status === "rejected" && ((wantsServices() && skipCategory(r.reason ?? "") === "Services or agency") || (/^Below the fit bar/.test(r.reason ?? "") && Date.now() - Date.parse(r.found_at) > 14 * 86_400_000) || (/^Outside your places \(([A-Za-z]{2})\)/.test(r.reason ?? "") && inRegions(/^Outside your places \(([A-Za-z]{2})\)/.exec(r.reason ?? "")![1].toUpperCase()))); // a company skipped for its place is looked at again as soon as that place is one of yours
   const known = new Set([...(have ?? []), ...(seen ?? []).filter((r) => !retry(r))].map((r) => r.domain));
   const fresh = found.filter((c) => !known.has(c.domain)); // all of them; pickBatch decides which get checked
   const addedIds: string[] = [];
