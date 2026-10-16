@@ -236,7 +236,8 @@ export function apply(p: Profile) {
   icp.company.stages = p.stages;
   icp.company.regions = p.regions;
   icp.company.strictFit = p.strictFit;
-  icp.seller.name = p.product.name || BASE_SELLER.name; // what you sell (Setup) is what the dossiers, drafts and screening are written for
+  icp.seller.name = p.product.name || (p.product.description ? "the seller" : BASE_SELLER.name); // never the old sample name once you describe your own offer
+  // what you sell (Setup) is what the dossiers, drafts and screening are written for
   icp.seller.pitch = p.product.description || BASE_SELLER.pitch;
   icp.signals.hiringRoles = p.hiringRoles;
   icp.signals.painWords = p.painWords;
