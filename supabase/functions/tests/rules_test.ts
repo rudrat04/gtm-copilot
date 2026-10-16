@@ -1127,3 +1127,18 @@ Deno.test("competitor news must really be about the competitor; event dates are 
   assertEquals(whenOf("2024-06-18").at?.slice(0, 10), "2024-06-18");
   assertFalse(whenOf("2025", new Date("2026-10-16")).ok); assert(whenOf("2026", new Date("2026-10-16")).ok); assert(whenOf("online").ok);
 });
+
+Deno.test("stage: one stage per company from what we know", async () => {
+  const { stageOf } = await import("../_shared/stage.ts");
+  const base = { removed: false, outreach: "open", won: false, lost: false, customer: false, notFit: false, snoozed: false, fit: "matches" as const, hasBuyer: true, heat: "hot" as const, watched: false };
+  assertEquals(stageOf(base).stage, "ready");
+  assertEquals(stageOf({ ...base, heat: "watching" }).stage, "nurture");
+  assertEquals(stageOf({ ...base, hasBuyer: false }).stage, "qualified");
+  assertEquals(stageOf({ ...base, fit: "unknown" }).stage, "candidate");
+  assertEquals(stageOf({ ...base, fit: "outside" }).stage, "closed");
+  assertEquals(stageOf({ ...base, fit: "outside", watched: true }).stage, "nurture");
+  assertEquals(stageOf({ ...base, outreach: "contacted" }).stage, "active");
+  assertEquals(stageOf({ ...base, outreach: "contacted", won: true }).stage, "closed");
+  assertEquals(stageOf({ ...base, snoozed: true }).stage, "nurture");
+  assertEquals(stageOf({ ...base, notFit: true }).stage, "closed");
+});

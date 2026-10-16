@@ -34,6 +34,7 @@ import { runDiscovery } from "../_shared/discover.ts";
 import { applyLossReason, isLossReason, verifyLoss } from "../_shared/lossreason.ts";
 import { applyDebrief, endsAt, OUTCOME_LABEL, OUTCOMES, type Outcome, verify } from "../_shared/debrief.ts";
 import { countryName, refreshAllFields } from "../_shared/hsfields.ts";
+import { stageOf } from "../_shared/stage.ts";
 import { isNotFitReason, markNotFit, NOT_FIT_REASONS } from "../_shared/notfit.ts";
 import { planBulkFind, runBulkFind } from "../_shared/bulkfind.ts";
 import { guardPeople } from "../_shared/guard.ts";
@@ -155,7 +156,7 @@ function accountFacts(a: { firmo_at: string | null; employees: number | null; em
  */
 async function accountsView(admin: boolean) {
   const { data: all } = await sb.from("cp_accounts")
-    .select("id,name,domain,segment,source,created_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,light_source,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,founded_year,linkedin_handle,removed_at,watched_at,people_searched_at,industry_ai_at,pl_checked_at,hs_seen_id,hs_contacts")
+    .select("id,name,domain,segment,source,created_at,won_at,not_fit_reason,lost_at,lost_reason,priority_score,icp_score,why_now,status,hubspot_company_id,last_scanned_at,outreach_status,touches,contacted_at,next_followup_at,snoozed_until,employees,employee_band,stage,raised_usd,hq_city,country,firmo_at,light_source,tech,industry,tags,blurb,sales_motion,known_as,last_round_date,industry_ai,founded_year,linkedin_handle,removed_at,watched_at,people_searched_at,industry_ai_at,pl_checked_at,hs_seen_id,hs_contacts")
     .order("priority_score", { ascending: false, nullsFirst: false }).limit(400);
   const rows = (all ?? []).map((a) => {
     const f = fitBreakdown(a);
@@ -197,6 +198,7 @@ async function accountsView(admin: boolean) {
         tier: tierOf(a.priority_score), priority: a.priority_score, icp_score: a.icp_score, why_now: a.why_now,
         facts: accountFacts(a), firmo: firmoLine(a), outside_icp: outside, fit: fitState(a), fit_reasons: fitReasons(a), excluded: fitBreakdown(a).excluded,
         heat: aiById.has(a.id) ? aiHeat(aiById.get(a.id)!.label) : heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)), ai: aiById.get(a.id) ?? null,
+        ...(() => { const heat = aiById.has(a.id) ? aiHeat(aiById.get(a.id)!.label) : heatOf(sigsBy.get(a.id) as never ?? [], fitState(a)); const s = stageOf({ removed, outreach: a.outreach_status ?? null, won: !!a.won_at, lost: !!a.lost_at && a.outreach_status === "not_now", customer: a.known_as === "customer", notFit: !!a.not_fit_reason, snoozed: !!a.snoozed_until && Date.parse(a.snoozed_until) > Date.now(), fit: fitState(a), hasBuyer: (contactMap.get(a.id) ?? []).length > 0, heat, watched: !!a.watched_at }); return { pstage: s.stage, pstage_why: s.why }; })(),
         hs_seen: !!a.hs_seen_id, hs_contacts: a.hs_contacts ?? null, firmo_known: !!a.firmo_at, industry_read: !!a.industry_ai_at, news_checked: !!a.pl_checked_at, low, removed, watched: !!a.watched_at, is_new: isNew, hubspot: a.status === "pushed" || !!a.hubspot_company_id,
         outreach_status: a.outreach_status, touches: a.touches, contacted_at: a.contacted_at, next_followup_at: a.next_followup_at, snoozed_until: a.snoozed_until,
         lost_at: a.lost_at, lost_reason: a.lost_reason, not_fit_reason: a.not_fit_reason,

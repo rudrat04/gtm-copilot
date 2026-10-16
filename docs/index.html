@@ -636,6 +636,8 @@ const money = (n) => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${Ma
 const firmoText = (a) => !a?.firmo_at ? "" : [a.employee_band ? `${a.employee_band} people` : a.employees ? `${a.employees} people` : null, a.stage && !/^(other|unknown|undisclosed)$/i.test(a.stage) ? a.stage : null, a.raised_usd ? `${money(a.raised_usd)} raised` : null, a.hq_city || a.country].filter(Boolean).join(" · ");
 const TIERS = { tier_1: ["Tier 1", "t1"], tier_2: ["Tier 2", "t2"], tier_3: ["Tier 3", "t3"] };
 const tierHtml = (t) => (TIERS[t] ? `<span class="tier ${TIERS[t][1]}">${TIERS[t][0]}</span>` : "");
+const PSTAGE = { candidate: ["Candidate", ""], qualified: ["Qualified", ""], ready: ["Ready", "good"], active: ["Active", "accent"], nurture: ["Nurture", "warn"], closed: ["Closed", "bad"] };
+const PSTAGE_ORDER = ["ready", "active", "nurture", "qualified", "candidate", "closed"];
 const FIT = { matches: ["Fits", "good"], close: ["Partly fits", "warn"], unknown: ["Fit unknown", ""], outside: ["Outside range", "bad"] };
 const fitLine = (state, firmo) => { const f = FIT[state] || FIT.unknown; return `<div class="fit"><b class="${f[1]}">${f[0]}</b>${firmo ? ` · ${esc(firmo)}` : state === "unknown" ? " · size and stage not checked yet" : ""}</div>`; };
 const HEAT = { hot: "Hot", warm: "Warm", watching: "Quiet" }, HEAT_RANK = { hot: 0, warm: 1, watching: 2 };
@@ -892,6 +894,7 @@ const VIEWS = [
   ["removed", "Removed", "Hidden and blocked. Restore any of them here", (a) => a.removed],
 ];
 const SELECTS = [
+  ["pstage", "Stage", [["", "Any"], ["ready", "Ready"], ["active", "Active"], ["nurture", "Nurture"], ["qualified", "Qualified"], ["candidate", "Candidate"], ["closed", "Closed"]], (a, v) => a.pstage === v],
   ["heat", "Heat", [["", "Any"], ["hot", "Hot"], ["warm", "Warm"], ["watching", "Quiet"]], (a, v) => a.heat === v],
   ["fit", "Fit", [["", "Any"], ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Not checked"], ["outside", "Outside range"]], (a, v) => a.fit === v],
   ["contact", "Contact", [["", "Any"], ["has", "Has a contact"], ["none", "No contact yet"]], (a, v) => (v === "has" ? a.contacts.length > 0 : a.contacts.length === 0)],
@@ -902,7 +905,7 @@ const SELECTS = [
 const accOpts = (f) => () => [["", "Any"], ...[...new Set((ACC?.accounts || []).filter((a) => !a.removed).map(f).filter(Boolean))].sort().map((v) => [v, v])];
 const bucketOf = (n) => (n == null ? "" : n <= 10 ? "1-10" : n <= 50 ? "11-50" : n <= 200 ? "51-200" : n <= 500 ? "201-500" : "500+");
 SELECTS.push(
-  ["stage", "Stage", accOpts((a) => a.facts.stage), (a, v) => a.facts.stage === v],
+  ["stage", "Funding stage", accOpts((a) => a.facts.stage), (a, v) => a.facts.stage === v],
   ["industry", "Industry", accOpts((a) => a.facts.industry), (a, v) => a.facts.industry === v],
   ["country", "Location", accOpts((a) => (a.facts.location || "").split(",").pop().trim()), (a, v) => (a.facts.location || "").split(",").pop().trim() === v],
   ["size", "Size", [["", "Any"], ["1-10", "1 to 10"], ["11-50", "11 to 50"], ["51-200", "51 to 200"], ["201-500", "201 to 500"], ["500+", "More than 500"]], (a, v) => bucketOf(a.facts.employees) === v],
@@ -915,7 +918,7 @@ const SORTS = [
   ["size", "Biggest first", (x, y) => (y.facts.employees ?? -1) - (x.facts.employees ?? -1)],
   ["round", "Latest funding", (x, y) => (Date.parse(y.facts.last_round) || 0) - (Date.parse(x.facts.last_round) || 0)],
 ];
-const AF_DEFAULT = { view: "open", heat: "", fit: "", contact: "", hub: "", origin: "", stage: "", industry: "", country: "", size: "", sort: "best", q: "" };
+const AF_DEFAULT = { view: "open", pstage: "", heat: "", fit: "", contact: "", hub: "", origin: "", stage: "", industry: "", country: "", size: "", sort: "best", q: "" };
 let AF = { ...AF_DEFAULT };
 try { const saved = JSON.parse(localStorage.getItem("cp_acc_filters") || "null"); if (saved && typeof saved === "object") for (const k of Object.keys(AF_DEFAULT)) if (typeof saved[k] === "string") AF[k] = saved[k]; } catch {}
 const saveAF = () => { try { localStorage.setItem("cp_acc_filters", JSON.stringify(AF)); } catch {} };
@@ -970,7 +973,7 @@ function aFacts(a) {
   const motion = f.motion ? { sales_led: "Sales-led (demos)", self_serve: "Self-serve (free start)", both: "Both" }[f.motion] : "";
   return `<dl class="facts"><p class="label" style="grid-column:1/-1;margin:0">Company</p>
     ${fact("Size", f.size && esc(f.size), none)}
-    ${fact("Stage", stage, none)}
+    ${fact("Funding", stage, none)}
     ${fact("City", f.city && esc(f.city), none)}
     ${fact("Country", f.country_name && esc(f.country_name), none)}
     ${f.founded ? fact("Founded", esc(f.founded), none) : ""}
@@ -1015,7 +1018,7 @@ function aCard(a) {
       <h3 class="title"><a class="cname" href="#/company/${esc(a.id)}">${esc(a.name)}</a><a class="domain" href="https://${esc(a.domain)}" target="_blank" rel="noopener noreferrer">${esc(a.domain)}</a></h3>
       <p class="what">${a.segment ? esc(a.segment) : `<span class="unk">No description yet</span>`}</p>
     </div>
-    <div class="tags">${a.removed ? "" : watchBtn("company", a.id, a.watched, "Watch company")}<span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
+    <div class="tags">${a.removed ? "" : watchBtn("company", a.id, a.watched, "Watch company")}${a.pstage ? `<span class="badge ${PSTAGE[a.pstage][1]}" title="${esc(a.pstage_why || "")}">${PSTAGE[a.pstage][0]}</span>` : ""}<span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
     <div class="pcols">${aFacts(a)}${aPeople(a)}</div>
     ${lookupRow(a)}
     <div class="fitrow"><span class="badge ${fit[1] || ""}">${fit[0]}</span>${fitWhy(a).replace('<div class="fitwhy" aria-label="Why this fit">', '<span class="fitwhy" aria-label="Why this fit" style="margin:0">').replace(/<\/div>$/, "</span>")}</div>
@@ -2235,7 +2238,7 @@ async function loadSetup() {
 /* ============ Watchlist: follow companies and people, and see what moved ============ */
 const watchLabel = (on, noun) => `${on ? "★ Watching" : "☆ Watch"}${noun ? ` ${noun}` : ""}`;
 const watchBtn = (kind, id, on, noun = "") => `<button type="button" class="star${on ? " on" : ""}" data-watch data-kind="${kind}" data-id="${esc(id)}" data-noun="${esc(noun.replace(/^Watch /, ""))}" data-on="${on ? 1 : 0}" title="${on ? "Following. Click to stop" : kind === "person" ? "Follow this person: you are told about their activity, their team, news, HubSpot changes and job changes" : "Follow this company: never hidden, and you are told when something moves"}">${watchLabel(on, noun.replace(/^Watch /, ""))}</button>`;
-let WL = null, WLV = "people";
+let WL = null, WLV = "people"; // "What moved" lives in Signals (filter: Following only)
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-watch]"); if (!b) return;
   const on = b.dataset.on !== "1", kind = b.dataset.kind, id = b.dataset.id; b.disabled = true;
@@ -2256,7 +2259,7 @@ document.addEventListener("click", async (e) => {
   try { const r = await api("queue", { action: "watch_check", kind, id }); if (r.mode === "dry_run") { say(r.message); b.disabled = false; return; } say(r.found ? `${r.found} new movement${r.found === 1 ? "" : "s"} found.` : "Nothing new."); BOARD = null; loadWatchlist(true); }
   catch (err) { say(err.message); b.disabled = false; }
 });
-const WL_VIEWS = [["people", "People"], ["companies", "Companies"], ["moved", "What moved"]];
+const WL_VIEWS = [["people", "People"], ["companies", "Companies"]];
 const NOTIFY = [["instant", "Email me at once"], ["daily", "In the daily email"], ["off", "No email"]];
 function drawWatchlist() {
   const d = WL, own = !!d.admin;
@@ -2291,7 +2294,7 @@ function drawWatchlist() {
       : `<p class="meta" style="margin:0">No people yet. Use "☆ Watch person" on a card, or add one above.</p>`;
   }
   $("wlbody").innerHTML = `<div class="fpanel">
-      <div class="wtop"><div class="seg" role="tablist" aria-label="Watchlist">${WL_VIEWS.map(([k, l]) => `<button role="tab" aria-selected="${k === view}" class="${k === view ? "on" : ""}" data-wview="${k}">${l}<i>${counts[k]}</i></button>`).join("")}</div>${info(`You can follow up to ${d.limits.people} people and ${d.limits.companies} companies (${d.people.length} and ${d.companies.length} so far). Big movements (funding, leadership, an event, a competitor in use, a job change, a reply, a deal change) are emailed at once, at most 3 a day and grouped. The rest comes in the daily email.`)}</div>
+      <div class="wtop"><div class="seg" role="tablist" aria-label="Watchlist">${WL_VIEWS.map(([k, l]) => `<button role="tab" aria-selected="${k === view}" class="${k === view ? "on" : ""}" data-wview="${k}">${l}<i>${counts[k]}</i></button>`).join("")}</div><button type="button" class="btn ghost sm" data-wmoved title="Everything new at the people and companies you follow, in Signals">What moved${d.unseen ? ` · ${d.unseen} new` : ""}</button>${info(`You can follow up to ${d.limits.people} people and ${d.limits.companies} companies (${d.people.length} and ${d.companies.length} so far). Big movements (funding, leadership, an event, a competitor in use, a job change, a reply, a deal change) are emailed at once, at most 3 a day and grouped. The rest comes in the daily email.`)}</div>
       ${own ? `<details class="fdet" style="margin-top:12px"><summary>+ Follow someone new</summary>
         <form class="wadd" data-wlcompany style="margin-top:10px"><input type="text" id="wlsite" placeholder="A company website, for example example.com" maxlength="80" aria-label="Company website"><button type="submit" class="btn ghost">Follow company</button></form>
         <form class="wadd" data-wlperson><input type="text" id="wlpname" placeholder="Their name" maxlength="60" aria-label="Person's name"><input type="text" id="wlpsite" placeholder="Their company website" maxlength="80" aria-label="Their company website"><input type="text" id="wlptitle" placeholder="Job title (optional)" maxlength="60" aria-label="Job title"><button type="submit" class="btn ghost">Follow person</button></form></details>` : ""}
@@ -2304,6 +2307,7 @@ async function loadWatchlist(quiet) {
   catch (e) { $("wlbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 $("wlbody").addEventListener("click", async (e) => {
+  if (e.target.closest("[data-wmoved]")) { SF.intent = "follow"; SF.cat = ""; saveSF(); showView({ view: "signals" }); api("queue", { action: "watch_seen" }).then(() => loadWatchlist(true)).catch(() => {}); return; }
   const v = e.target.closest("[data-wview]"); if (v) { WLV = v.dataset.wview; drawWatchlist(); return; }
   if (e.target.closest("[data-wseen]")) { const r = await api("queue", { action: "watch_seen" }); if (r.mode === "dry_run") { say(r.message); return; } await loadWatchlist(true); }
 });
@@ -2472,7 +2476,7 @@ function personCard(p, o = {}) {
       <div class="pwatch">${watchBtn("person", p.id, p.watched, "Watch person")}${watchBtn("company", p.account_id, p.co.watched, "Watch company")}</div>
     </div>
     <div class="tagrow" aria-label="About the person"><span class="tl">Person</span><span class="badge ${LEAD[p.lead.label][0]}" title="${p.lead.ai ? "Judged by the AI. " : ""}Lead score ${esc(p.lead.score)} of 100">${LEAD[p.lead.label][1]}${p.lead.ai ? " · AI" : ""}</span>${p.decision_maker ? `<span class="badge accent" title="Hunter marks this person as a decision maker">Decision maker</span>` : ""}${p.persona ? `<span class="badge good" title="${esc(BUYER[p.lead.buyer] || "")}">${esc(p.persona)}</span>` : `<span class="badge" title="Not one of your buyer types">Not a buyer type</span>`}${p.seniority ? `<span class="badge">${esc(LEVEL[p.seniority] || p.seniority)}</span>` : ""}${blocked ? `<span class="badge bad">${p.hs_status === "opted_out" ? "Opted out" : "Bounced"}</span>` : p.in_hubspot ? `<span class="badge good">In HubSpot</span>` : ""}</div>
-    <div class="tagrow" aria-label="About the company"><span class="tl">Company</span><span class="badge ${fit[1] || ""}" title="How well the company matches who you look for">${esc(fit[0])}</span><span class="badge ${p.company_heat}" title="How much is happening at the company">${esc(HEAT[p.company_heat] || "")}</span>${p.co.size ? `<span class="badge">${esc(p.co.size)}</span>` : ""}${p.co.stage && !/^(other|unknown|undisclosed)/i.test(p.co.stage) ? `<span class="badge">${esc(p.co.stage)}</span>` : ""}${p.hs_company ? `<span class="badge ${p.hs_company.ours ? "good" : "warn"}" title="${p.hs_company.ours ? "This company is in HubSpot" : "HubSpot already has this company"}">In HubSpot</span>` : ""}</div>
+    <div class="tagrow" aria-label="About the company"><span class="tl">Company</span>${p.pstage ? `<span class="badge ${PSTAGE[p.pstage][1]}" title="${esc(p.pstage_why || "")}">${PSTAGE[p.pstage][0]}</span>` : ""}<span class="badge ${fit[1] || ""}" title="How well the company matches who you look for">${esc(fit[0])}</span><span class="badge ${p.company_heat}" title="How much is happening at the company">${esc(HEAT[p.company_heat] || "")}</span>${p.co.size ? `<span class="badge">${esc(p.co.size)}</span>` : ""}${p.co.stage && !/^(other|unknown|undisclosed)/i.test(p.co.stage) ? `<span class="badge">${esc(p.co.stage)}</span>` : ""}${p.hs_company ? `<span class="badge ${p.hs_company.ours ? "good" : "warn"}" title="${p.hs_company.ours ? "This company is in HubSpot" : "HubSpot already has this company"}">In HubSpot</span>` : ""}</div>
     ${o.headline ? `<div class="status-line${o.due ? " due" : ""}">${esc(o.headline)}</div>` : ""}
     <div class="pcols">
       <dl class="facts"><p class="label" style="grid-column:1/-1;margin:0">Person</p>
@@ -2485,7 +2489,7 @@ function personCard(p, o = {}) {
       </dl>
       <dl class="facts"><p class="label" style="grid-column:1/-1;margin:0">Company</p>
         ${pf("Size", p.co.size && esc(p.co.size), p.co.checked ? "Unknown" : "Not checked yet")}
-        ${pf("Stage", p.co.stage && esc(p.co.stage), p.co.checked ? "Unknown" : "Not checked yet")}
+        ${pf("Funding", p.co.stage && esc(p.co.stage), p.co.checked ? "Unknown" : "Not checked yet")}
         ${pf("Industry", p.co.industry && esc(p.co.industry), "Unknown")}
         ${pf("City", p.co.city && esc(p.co.city), p.co.checked ? "Unknown" : "Not checked yet")}
         ${pf("Country", p.co.country_name && esc(p.co.country_name), p.co.checked ? "Unknown" : "Not checked yet")}
@@ -2510,17 +2514,17 @@ async function loadPeople(quiet) {
   try { PPL = await api("queue", { action: "people_list" }); drawPeople(); }
   catch (e) { $("plist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
-let PPL = null, PF = { q: "", lead: "", fit: "", heat: "", persona: "", email: "", hub: "", stage: "", industry: "", country: "", dept: "", level: "", source: "", dm: "", todo: "", act: "", sort: "priority", limit: 30, company: null };
+let PPL = null, PF = { q: "", pstage: "", lead: "", fit: "", heat: "", persona: "", email: "", hub: "", stage: "", industry: "", country: "", dept: "", level: "", source: "", dm: "", todo: "", act: "", sort: "priority", limit: 30, company: null };
 try { const saved = JSON.parse(localStorage.getItem("cp_people_filters") || "null"); if (saved && typeof saved === "object") for (const k of Object.keys(PF)) if (k !== "company" && k !== "limit" && typeof saved[k] === "string") PF[k] = saved[k]; } catch {}
 const savePF = () => { try { localStorage.setItem("cp_people_filters", JSON.stringify(PF)); } catch {} };
-const PF_KEYS = ["lead", "fit", "heat", "persona", "email", "hub", "stage", "industry", "country", "dept", "level", "source", "dm", "todo", "act"];
+const PF_KEYS = ["pstage", "lead", "fit", "heat", "persona", "email", "hub", "stage", "industry", "country", "dept", "level", "source", "dm", "todo", "act"];
 const PSORTS = [["priority", "Priority", (x, y) => y.priority - x.priority], ["new", "Newest first", (x, y) => Date.parse(y.added) - Date.parse(x.added)], ["fit", "Best company fit", (x, y) => (FIT_RANK[y.company_fit] - FIT_RANK[x.company_fit]) || (y.priority - x.priority)],
   ["signal", "Latest signal", (x, y) => (Date.parse(y.latest || 0) || 0) - (Date.parse(x.latest || 0) || 0)], ["lead", "Lead score", (x, y) => y.lead.score - x.lead.score], ["company", "Company A to Z", (x, y) => x.company.localeCompare(y.company)]];
 const FIT_RANK = { matches: 3, close: 2, unknown: 1, outside: 0 };
 const LEAD = { hot: ["hot", "Hot lead"], warm: ["warm", "Warm lead"], cold: ["watching", "Cold"], blocked: ["bad", "Do not contact"] };
 const BUYER = { strong: "Strong buyer match", good: "Good buyer match", partial: "Partial match", none: "Not a buyer" };
 const PEOPLE_TESTS = {
-  lead: (p, v) => p.lead.label === v, fit: (p, v) => p.company_fit === v, heat: (p, v) => p.company_heat === v,
+  pstage: (p, v) => p.pstage === v, lead: (p, v) => p.lead.label === v, fit: (p, v) => p.company_fit === v, heat: (p, v) => p.company_heat === v,
   persona: (p, v) => (v === "__none" ? !p.persona : p.persona === v),
   email: (p, v) => (v === "none" ? !p.has_email && !p.preview : v === "preview" ? p.preview : v === "found" ? p.has_email && !p.revealed && !p.preview : p.revealed),
   hub: (p, v) => (v === "yes" ? p.in_hubspot : !p.in_hubspot), stage: (p, v) => (p.co.stage || "") === v, industry: (p, v) => (p.co.industry || "") === v,
@@ -2538,13 +2542,13 @@ function drawPeople() {
   const co = PF.company ? d.people.find((p) => p.account_id === PF.company)?.company : null;
   const active = PF_KEYS.filter((k) => PF[k]).length + (q ? 1 : 0) + (PF.sort !== "priority" ? 1 : 0);
   $("phead").innerHTML = `${viewSwitch("people")}<div class="fpanel">
-    <div class="fgrid">${sel("sort", "Sort by", PSORTS.map(([k, l]) => [k, l]))}${sel("lead", "Lead", [...any, ["hot", "Hot"], ["warm", "Warm"], ["cold", "Cold"], ["blocked", "Do not contact"]])}${sel("fit", "Company fit", [...any, ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Fit unknown"], ["outside", "Outside range"]])}${sel("email", "Email", [...any, ["preview", "Not revealed (free list)"], ["found", "Found, not revealed"], ["revealed", "Revealed"], ["none", "No email"]])}</div>
+    <div class="fgrid">${sel("sort", "Sort by", PSORTS.map(([k, l]) => [k, l]))}${sel("pstage", "Stage", [...any, ...PSTAGE_ORDER.map((k) => [k, PSTAGE[k][0]])])}${sel("lead", "Lead", [...any, ["hot", "Hot"], ["warm", "Warm"], ["cold", "Cold"], ["blocked", "Do not contact"]])}${sel("fit", "Company fit", [...any, ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Fit unknown"], ["outside", "Outside range"]])}${sel("email", "Email", [...any, ["preview", "Not revealed (free list)"], ["found", "Found, not revealed"], ["revealed", "Revealed"], ["none", "No email"]])}</div>
     <input id="psearch" class="fsearch" type="search" placeholder="Search by name, title, company, department or industry" aria-label="Search people" value="${esc(PF.q)}" style="margin-top:10px">
     <details class="fdet" ${PF_KEYS.slice(4).some((k) => PF[k]) ? "open" : ""}><summary>More filters</summary><div class="fgrid">
       ${sel("heat", "Company heat", [...any, ["hot", "Hot"], ["warm", "Warm"], ["watching", "Quiet"]])}
       ${sel("persona", "Buyer type", [...any, ...d.personas.map((t) => [t, t]), ["__none", "Does not match any"]])}
       ${sel("hub", "HubSpot", [...any, ["yes", "In HubSpot"], ["no", "Not in HubSpot"]])}
-      ${sel("stage", "Stage", [...any, ...uniq(d.people, (p) => p.co.stage).map((v) => [v, v])])}
+      ${sel("stage", "Funding stage", [...any, ...uniq(d.people, (p) => p.co.stage).map((v) => [v, v])])}
       ${sel("industry", "Industry", [...any, ...uniq(d.people, (p) => p.co.industry).map((v) => [v, v])])}
       ${sel("country", "Country", [...any, ...uniq(d.people, (p) => p.co.country).map((v) => [v, countryLabel(v)])])}
       ${sel("dept", "Department", [...any, ...uniq(d.people, (p) => p.department).map((v) => [v, v])])}
@@ -2621,7 +2625,7 @@ async function loadSignals(quiet) {
 function drawSignals() {
   const d = SIGS, own = !!d.admin;
   const sorts = { new: (x, y) => Date.parse(y.at) - Date.parse(x.at), fit: (x, y) => (FIT_RANK[y.company.fit] - FIT_RANK[x.company.fit]) || (Date.parse(y.at) - Date.parse(x.at)), intent: (x, y) => (Number(y.intent) - Number(x.intent)) || (Date.parse(y.at) - Date.parse(x.at)) };
-  const list = d.items.filter((i) => (!SF.cat || i.category === SF.cat) && (!SF.intent || i.intent) && (!SF.fit || i.company.fit === SF.fit)).sort(sorts[SF.sort] || sorts.new);
+  const list = d.items.filter((i) => (!SF.cat || i.category === SF.cat) && (!SF.intent || (SF.intent === "follow" ? i.followed : i.intent)) && (!SF.fit || i.company.fit === SF.fit)).sort(sorts[SF.sort] || sorts.new);
   const shown = list.slice(0, SF.limit);
   const chip = (k, label, n) => `<button type="button" class="chip${SF.cat === k ? " sel" : ""}" data-scat="${esc(k)}" title="${esc(CAT_HELP[k] || "Everything")}">${esc(label)}${n != null ? ` <i>${n}</i>` : ""}</button>`;
   const sel = (k, label, opts) => `<label>${label}<select data-sf="${k}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${SF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
@@ -2635,7 +2639,7 @@ function drawSignals() {
   </article>`; };
   $("sbody").innerHTML = `<div class="day"><span>${esc(d.total)} in the last 30 days · ${esc(d.today)} today · <b>${esc(d.intent)}</b> buying-intent</span></div>
     <div class="fpanel"><div class="chips" style="margin:0 0 10px">${chip("", "All", d.total)}${d.categories.map((k) => chip(k, k, d.counts[k] || 0)).join("")}</div>
-      <div class="fgrid">${sel("sort", "Sort by", [["new", "Newest"], ["fit", "Best company fit"], ["intent", "Buying intent first"]])}${sel("intent", "Show", [["", "Everything"], ["1", "Buying intent only"]])}${sel("fit", "Company fit", [["", "Any"], ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Fit unknown"]])}</div>
+      <div class="fgrid">${sel("sort", "Sort by", [["new", "Newest"], ["fit", "Best company fit"], ["intent", "Buying intent first"]])}${sel("intent", "Show", [["", "Everything"], ["1", "Buying intent only"], ["follow", "Following only"]])}${sel("fit", "Company fit", [["", "Any"], ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Fit unknown"]])}</div>
       <div class="fbar"><span>Showing <b>${shown.length}</b> of ${list.length}${info("Each signal names the people at that company who would care. Buying intent is also sent to the bell.")}</span></div></div>
     ${shown.length ? `<div class="sggrid">${shown.map(card).join("")}</div>${list.length > shown.length ? `<div class="actions" style="justify-content:center;margin:14px 0"><button class="btn ghost" data-smore>Show more</button></div>` : ""}` : `<div class="card empty">No signals${SF.cat ? ` of this kind` : ""} yet. They appear as the daily check and discovery find them.</div>`}`;
 }

@@ -82,7 +82,7 @@ export async function signalsFeed(admin: boolean, days = 30) {
   const sigsBy = new Map<string, typeof sigs>();
   for (const s of sigs ?? []) (sigsBy.get(s.account_id) ?? sigsBy.set(s.account_id, []).get(s.account_id)!)!.push(s);
 
-  const out: { market?: boolean; id: string; category: Category; intent: boolean; label: string; title: string; url: string | null; at: string; company: { id: string; name: string; domain: string; fit: string; heat: string }; who: string | null; people: P[] }[] = [];
+  const out: { market?: boolean; followed?: boolean; id: string; category: Category; intent: boolean; label: string; title: string; url: string | null; at: string; company: { id: string; name: string; domain: string; fit: string; heat: string }; who: string | null; people: P[] }[] = [];
   const seen = new Set<string>();
   const add = (accountId: string, cat: { category: Category; intent: boolean }, label: string, title: string, url: string | null, at: string, who: string | null, exempt = false) => {
     const c = a.get(accountId);
@@ -93,7 +93,7 @@ export async function signalsFeed(admin: boolean, days = 30) {
     if (!c.watched_at && !exempt && fit === "outside") return; // clearly outside your size or stage and not followed: not worth a signal
     seen.add(key);
     const heat = aiCo.has(accountId) ? aiHeat(aiCo.get(accountId)!.label) : heatOf((sigsBy.get(accountId) ?? []) as never, fit);
-    out.push({ id: key, ...cat, label, title, url, at, company: { id: accountId, name: c.name as string, domain: c.domain as string, fit, heat }, who, people: responsible(cat.category, title, by.get(accountId) ?? []) });
+    out.push({ id: key, ...cat, followed: !!c.watched_at || exempt, label, title, url, at, company: { id: accountId, name: c.name as string, domain: c.domain as string, fit, heat }, who, people: responsible(cat.category, title, by.get(accountId) ?? []) });
   };
   for (const s of sigs ?? []) {
     const d = (s.detail ?? {}) as { salesOpenings?: number; published?: string };

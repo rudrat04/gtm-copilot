@@ -6,6 +6,7 @@ import { teamSignals } from "./peoplesignals.ts";
 import { aiHeat, aiMaps } from "./aiscore.ts";
 import { explainRank } from "./people.ts";
 import { COUNTRIES } from "./lists.ts";
+import { stageOf } from "./stage.ts";
 
 // One shape for a person, with everything the cards need: who they are, the company they work at (fit, heat, facts), what is happening
 // around them (their team, their activity, the company's signals), their HubSpot state, and a priority for the To-do board.
@@ -22,8 +23,10 @@ export async function peopleRows(admin: boolean, opts: { accountId?: string; per
   if (opts.personIds) q = q.in("id", opts.personIds.length ? opts.personIds : ["00000000-0000-0000-0000-000000000000"]);
   const { data: rows } = await q;
   const ids = [...new Set((rows ?? []).map((p) => p.account_id))];
-  const { data: accts } = ids.length ? await sb.from("cp_accounts").select(`id,name,domain,removed_at,source,hq_city,employee_band,industry_ai_at,outreach_status,touches,hubspot_company_id,hs_seen_id,hs_contacts,${FIT_COLS}`).in("id", ids) : { data: [] };
+  const { data: accts } = ids.length ? await sb.from("cp_accounts").select(`id,name,domain,removed_at,source,hq_city,employee_band,industry_ai_at,outreach_status,touches,hubspot_company_id,hs_seen_id,hs_contacts,won_at,lost_at,not_fit_reason,snoozed_until,${FIT_COLS}`).in("id", ids) : { data: [] };
   const a = new Map((accts ?? []).map((x) => [x.id, x]));
+  const { data: buyers } = ids.length ? await sb.from("cp_people").select("account_id").in("account_id", ids).gte("relevance", 50) : { data: [] };
+  const hasBuyer = new Set((buyers ?? []).map((x) => x.account_id));
   const since = new Date(Date.now() - 14 * DAY).toISOString();
   const [{ data: sigs }, { data: evs }, { data: coEvs }] = await Promise.all([
     ids.length ? sb.from("cp_signals").select("account_id,kind,title,url,detail,detected_at").in("account_id", ids).order("detected_at", { ascending: false }).limit(2000) : Promise.resolve({ data: [] }),
@@ -60,6 +63,7 @@ export async function peopleRows(admin: boolean, opts: { accountId?: string; per
       hs_company: c.hubspot_company_id || c.hs_seen_id ? { contacts: c.hs_contacts ?? null, ours: !!c.hubspot_company_id } : null,
       kept: !!p.kept_at, watched: !!p.watched_at, added: p.created_at, manual: p.provider === "manual", todo_state: p.todo_state ?? null,
       company_fit: fit, company_heat: heat,
+      ...(() => { const s = stageOf({ removed: !!c.removed_at, outreach: c.outreach_status ?? null, won: !!c.won_at, lost: !!c.lost_at && c.outreach_status === "not_now", customer: c.known_as === "customer", notFit: !!c.not_fit_reason, snoozed: !!c.snoozed_until && Date.parse(c.snoozed_until) > Date.now(), fit, hasBuyer: hasBuyer.has(p.account_id), heat, watched: !!c.watched_at }); return { pstage: s.stage, pstage_why: s.why }; })(),
       co: {
         stage: c.stage ?? null, industry: c.industry_ai ?? c.industry ?? null, location: place || null, city: c.hq_city ?? null, country: c.country ?? null, country_name: c.country ? (COUNTRIES.find(([k]) => k === String(c.country).toUpperCase())?.[1] ?? String(c.country)) : null, size: c.employee_band ? `${c.employee_band} people` : c.employees ? `${c.employees} people` : null,
         source: c.source, checked: !!c.firmo_at, industry_read: !!c.industry_ai_at, watched: !!c.watched_at, outreach: c.outreach_status, touches: c.touches,
