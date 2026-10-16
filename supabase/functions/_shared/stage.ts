@@ -18,7 +18,7 @@ export function stageOf(i: StageInput): { stage: Stage; why: string } {
   if (["contacted", "replied", "meeting"].includes(i.outreach ?? "")) return { stage: "active", why: "You are in contact" };
   if (i.lost) return { stage: "closed", why: "Lost; comes back on a new signal" };
   if (i.snoozed || i.outreach === "not_now" || i.outreach === "snoozed") return { stage: "nurture", why: "Parked for now" };
-  if (i.fit === "outside") return i.watched ? { stage: "nurture", why: "Outside your range, but you follow it" } : { stage: "closed", why: "Outside your range" };
+  if (i.fit === "outside") return i.watched ? { stage: "nurture", why: "Outside your range, but you watch it" } : { stage: "closed", why: "Outside your range" };
   if (i.fit === "unknown") return { stage: "candidate", why: "Size, stage and place not checked yet" };
   if (!i.hasBuyer) return { stage: "qualified", why: "Fits; no buyer-matching person yet" };
   if (i.heat === "hot" || i.heat === "warm") return { stage: "ready", why: "Fits, has a buyer-matching person and something is happening" };

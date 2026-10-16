@@ -92,7 +92,7 @@ export async function buildBoard(admin: boolean) {
     shownPeople.add(id);
     const type = pinned.includes(id) ? "pinned" : "watch";
     out.push({
-      key: `${type}-${id}`, type, label: type === "pinned" ? "Pinned by you" : "Watchlist: news about them", urgency: 0, headline: type === "pinned" ? "You added this person to your to-do" : "Something just happened to someone you follow",
+      key: `${type}-${id}`, type, label: type === "pinned" ? "Pinned by you" : "Watchlist: news about them", urgency: 0, headline: type === "pinned" ? "You added this person to your to-do" : "Something just happened to someone you watch",
       account: { id: p.account_id, name: p.company, domain: p.domain, tier: tierOf(null), priority: null, fit: null, fit_state: p.company_fit, status: "", outreach: p.co.outreach ?? "open", firmo: "", watched: p.co.watched },
       reason: "", why: null, signals: [], contacts: [], last_action: null, due: null, meeting: null,
       lane: type === "pinned" ? "now" : (p.priority >= 70 ? "now" : "week"), priority: p.priority, person: p, alt: null, why_line: whyLine(p, p.lead.reasons[0] ?? ""),

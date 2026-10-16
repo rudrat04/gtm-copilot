@@ -21,7 +21,7 @@ export async function askStillFollowing(): Promise<number> {
       sb.from("cp_watch_events").select("id", { count: "exact", head: true }).eq("account_id", a.id).gte("detected_at", cutoff),
     ]);
     if ((s ?? 0) + (e ?? 0) > 0) continue;
-    const ok = await notify({ key: `quiet:${a.id}:${Math.floor(Date.now() / (QUIET_DAYS * 864e5))}`, kind: "watch", title: `Still following ${a.name}?`, body: `Nothing new for ${QUIET_DAYS} days. Unfollow it if it is no longer interesting.`, route: "#watchlist" });
+    const ok = await notify({ key: `quiet:${a.id}:${Math.floor(Date.now() / (QUIET_DAYS * 864e5))}`, kind: "watch", title: `Still watching ${a.name}?`, body: `Nothing new for ${QUIET_DAYS} days. Unfollow it if it is no longer interesting.`, route: "#watchlist" });
     if (ok) n++;
   }
   return n;

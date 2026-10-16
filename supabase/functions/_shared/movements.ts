@@ -259,7 +259,7 @@ export async function sendMovementEmail(): Promise<number> {
     return true; // a competitor event, a visit to your website or a market signal
   });
   if (!send.length) return 0;
-  const who = (r: Row) => (r.account_id ? a.get(r.account_id)?.name ?? "A followed company" : r.subject ?? "Competitor");
+  const who = (r: Row) => (r.account_id ? a.get(r.account_id)?.name ?? "A watched company" : r.subject ?? "Competitor");
   const lines = send.map((r) => eventLine(r, who(r)));
   const first = send[0];
   const subject = send.length === 1 ? `Watchlist: ${who(first)}, ${KIND_LABEL[first.kind].toLowerCase()}` : `Watchlist: ${send.length} movements (${[...new Set(send.map((r) => who(r)))].slice(0, 3).join(", ")})`;

@@ -181,6 +181,9 @@ export function pickBatch<T extends { source: string }>(fresh: T[], max: number,
   return fresh.filter((c) => chosen.has(c)); // keeps the original order (strongest signal first)
 }
 
+/** Pure: cuts a reason at the end of a word (never mid-word) and adds an ellipsis only when something was cut. */
+export const tidy = (t: string, n: number): string => { const x = t.replace(/\s+/g, " ").trim(); if (x.length <= n) return x; const cut = x.slice(0, n); const sp = cut.lastIndexOf(" "); return `${cut.slice(0, sp > n * 0.6 ? sp : n).replace(/[,;:.\s]+$/, "")}…`; };
+
 export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?: boolean; maxAi?: number } = {}) {
   const hiring = await collectHiring();
   const seenDomains = new Set(hiring.map((c) => c.domain));
@@ -215,9 +218,9 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
     summary.checked++;
     const row = { domain: c.domain, name: (v.name || c.name).slice(0, 80), source: c.source, source_url: c.sourceUrl, snippet: c.snippet };
     if (!v.fit) {
-      { const reason = (v.reason ?? "Not a B2B software company").slice(0, 200); await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason, category: skipCategory(reason) }, { onConflict: "domain" }); }
+      { const reason = tidy(v.reason ?? "Not a B2B software company", 220); await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason, category: skipCategory(reason) }, { onConflict: "domain" }); }
       summary.rejected++;
-      skipped.push({ name: row.name, reason: (v.reason ?? "Not a B2B software company").slice(0, 120) });
+      skipped.push({ name: row.name, reason: tidy(v.reason ?? "Not a B2B software company", 140) });
       continue;
     }
     // Company facts (0.2 Hunter credit) screen out companies clearly outside the target size or stage.
@@ -245,7 +248,7 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
       continue;
     }
     if (firmo) await saveFirmo(acct.id, firmo);
-    await sb.from("cp_discovered").upsert({ ...row, status: "added", reason: (v.reason ?? "Hiring sales roles").slice(0, 200), account_id: acct.id }, { onConflict: "domain" });
+    await sb.from("cp_discovered").upsert({ ...row, status: "added", reason: tidy(v.reason ?? "Hiring sales roles", 220), account_id: acct.id }, { onConflict: "domain" });
     summary.added.push(row.name);
     addedIds.push(acct.id);
   }

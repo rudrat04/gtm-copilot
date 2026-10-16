@@ -322,6 +322,9 @@
   .blk .why { margin: 0; }
   .blk .contact { margin: 0; }
   .acard .sigs { margin: 0; }
+  .dhead { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  .dreason { margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  details.ddet > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; } details.ddet > summary::-webkit-details-marker { display: none; } details.ddet > summary::before { content: "▸"; color: var(--muted); font-size: 12px; } details.ddet[open] > summary::before { content: "▾"; }
   @media (max-width: 560px) { .acard .ahead { grid-template-columns: 1fr; } .acard .tags { justify-content: flex-start; } .seg button { padding: 8px 11px; } }
 
   /* ---- panels that open inside a card ---- */
@@ -777,7 +780,7 @@ function actionsHtml({ outreach, hasContacts, hasDraft, primary: custom, compact
       <button data-life="snooze" data-days="7">Snooze 1 week</button><button data-life="snooze" data-days="14">Snooze 2 weeks</button><button data-life="snooze" data-days="30">Snooze 1 month</button>
       <hr><button data-life="not_now">Not now</button><button data-act="notfit">Not a fit…</button>`,
     `<hr><button data-act="fitov" data-v="yes" title="Treat as a good fit whatever the rules and the AI say">Always a fit</button><button data-act="fitov" data-v="no">Never a fit</button><button data-act="fitov" data-v="">Let the AI decide again</button>`,
-    removable ? `<button data-act="remove">Remove this company…</button>` : "",
+    removable ? `<button data-act="remove">Delete this company…</button>` : "",
   ].join("");
   return `<div class="actions">${primary}${compact && hasContacts && removable ? `<button class="btn ghost sm" data-act="morepeople" title="Searches again for more people. Uses 1 to 2 search credits">Find more people</button>` : ""}${compact ? "" : `<button class="btn ghost" data-act="draft">${hasDraft ? "View draft" : "Draft email"}</button>`}
     <div class="menu"><button class="btn ghost" data-tog aria-haspopup="menu">More ▾</button><div class="menu-list" hidden>${menu}</div></div></div>
@@ -827,7 +830,7 @@ function emptyWhy(d) {
   if (b.below_fit) bits.push(`<b>${b.below_fit}</b> with a fresh signal ${b.below_fit > 1 ? "are" : "is"} below your fit bar. Change it in <a href="#/setup/fit">Setup, "Which companies to show"</a>.`);
   if (b.low_score) bits.push(`<b>${b.low_score}</b> with a fresh signal score under your minimum. Lower it in <a href="#/setup/fit">Setup</a>.`);
   if (b.parked) bits.push(`<b>${b.parked}</b> with a fresh signal ${b.parked > 1 ? "are" : "is"} parked (not now or snoozed).`);
-  const next = `<div class="actions" style="justify-content:center;margin-top:14px"><a class="btn ghost sm" href="#/accounts">Open Accounts</a><button type="button" class="btn ghost sm" data-do="discover">Find new companies</button><button type="button" class="btn ghost sm" data-do="follow">Follow a company</button></div>`;
+  const next = `<div class="actions" style="justify-content:center;margin-top:14px"><a class="btn ghost sm" href="#/accounts">Open Companies</a><button type="button" class="btn ghost sm" data-do="discover">Find new companies</button><button type="button" class="btn ghost sm" data-do="follow">Watch a company</button></div>`;
   return (bits.length ? `<ul class="whylist">${bits.map((x) => `<li>${x}</li>`).join("")}</ul>` : "") + next;
 }
 
@@ -890,7 +893,7 @@ const VIEWS = [
   ["progress", "In progress", "Contacted, replied or meeting booked", (a) => !a.removed && progressS(a)],
   ["parked", "Parked", "Snoozed, not now, or closed-lost", (a) => !a.removed && parkedS(a)],
   ["low", "Low fit", "Hidden by default: outside your fit bar or too low a score", (a) => a.low],
-  ["watching", "Watching", "Companies you follow. They are never hidden by the fit bar and get their own alerts", (a) => a.watched && !a.removed],
+  ["watching", "Watching", "Companies you watch. They are never hidden by the fit bar and get their own alerts", (a) => a.watched && !a.removed],
   ["all", "All", "Every company except removed ones", (a) => !a.removed],
   ["removed", "Removed", "Older removed companies. Removing now deletes for good", (a) => a.removed],
 ];
@@ -1015,14 +1018,18 @@ function aCard(a) {
   const reason = a.is_new && a.found_reason ? `<b>Found automatically</b> from ${a.found_via?.url ? `<a href="${esc(a.found_via.url)}" target="_blank" rel="noopener noreferrer">${VIA[a.found_via.source] || "a public source"}</a>` : esc(VIA[a.found_via?.source] || "a public source")}.` : esc(a.why_now || "");
   const fit = FIT[a.fit] || FIT.unknown, f = a.facts;
   return `<article class="card acard pcard" data-id="${esc(a.id)}" data-name="${esc(a.name)}" data-domain="${esc(a.domain)}" data-watched="${a.watched ? 1 : 0}" data-hsn="${a.hs_contacts ?? ""}">
-    <div class="ahead"><div>
-      <h3 class="title"><a class="cname" href="#/company/${esc(a.id)}">${esc(a.name)}</a><a class="domain" href="https://${esc(a.domain)}" target="_blank" rel="noopener noreferrer">${esc(a.domain)}</a></h3>
-      <p class="what">${a.segment ? esc(a.segment) : `<span class="unk">No description yet</span>`}</p>
+    <div class="phead">
+      <div class="pid">
+        <h3 class="title"><a class="cname" href="#/company/${esc(a.id)}">${esc(a.name)}</a></h3>
+        <div class="role">${a.segment ? esc(a.segment) : `<span class="unk">No description yet</span>`} <span class="at">·</span> <a class="clink" href="https://${esc(a.domain)}" target="_blank" rel="noopener noreferrer">${esc(a.domain)}</a></div>
+      </div>
+      <div class="pwatch">${a.removed ? "" : watchBtn("company", a.id, a.watched, "Watch company")}</div>
     </div>
-    <div class="tags">${a.removed ? "" : watchBtn("company", a.id, a.watched, "Watch company")}${a.pstage ? `<span class="badge ${PSTAGE[a.pstage][1]}" title="${esc(a.pstage_why || "")}">${PSTAGE[a.pstage][0]}</span>` : ""}<span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}<span class="statepill">${esc(stageText(a))}</span></div></div>
+    <div class="tagrow" aria-label="About the company"><span class="tl">Company</span>${a.pstage ? `<span class="badge ${PSTAGE[a.pstage][1]}" title="${esc(a.pstage_why || "")}">${PSTAGE[a.pstage][0]}</span>` : ""}<span class="badge ${fit[1] || ""}">${fit[0]}</span><span class="badge ${a.heat}">${HEAT[a.heat]}</span>${a.is_new ? `<span class="badge accent">New</span>` : ""}${a.hubspot ? `<span class="badge good">In HubSpot</span>` : ""}</div>
+    <div class="status-line">${esc(stageText(a))}</div>
     <div class="pcols">${aFacts(a)}${aPeople(a)}</div>
     ${lookupRow(a)}
-    <div class="fitrow"><span class="badge ${fit[1] || ""}">${fit[0]}</span>${fitWhy(a).replace('<div class="fitwhy" aria-label="Why this fit">', '<span class="fitwhy" aria-label="Why this fit" style="margin:0">').replace(/<\/div>$/, "</span>")}</div>
+    <section class="blk"><p class="label">Fit</p>${fitWhy(a)}</section>
     ${ll ? `<div class="status-line">${esc(ll)}</div>` : ""}
     ${a.not_fit_reason ? `<div class="status-line">Not a fit: ${esc(NOT_FIT[a.not_fit_reason] || a.not_fit_reason)}</div>` : ""}
     ${a.lost_at ? `<div class="status-line">Closed-lost in HubSpot ${esc(ago(a.lost_at))}${a.lost_reason ? `: ${esc(a.lost_reason)}` : ""}</div>` : ""}
@@ -1044,23 +1051,18 @@ function drawAccounts() {
   const unchecked = d.accounts.filter((a) => !a.removed && !a.firmo_known).length; // companies whose size and stage were never looked up
   
   const sel = ([k, label, optsIn]) => { const opts = typeof optsIn === "function" ? optsIn() : optsIn; return `<label>${label}<select data-f="${k}" class="${AF[k] && AF[k] !== "best" ? "set" : ""}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${AF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`; };
-  const rep = d.discovery.report, plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  const reportHtml = rep ? `<details class="fdet" style="margin:0 0 12px" ${Date.now() - Date.parse(rep.at) < 36e5 * 6 ? "open" : ""}><summary>Last discovery run · ${esc(ago(rep.at))}: ${esc(plural(rep.added.length, "company", "companies"))} added, ${esc(rep.skipped_n)} skipped</summary>
-    <div class="meta" style="margin:8px 0">Looked at ${esc(rep.collected)} companies${rep.from_web ? ` (${esc(rep.from_web)} from a web search)` : ""}; ${esc(rep.already_known)} were seen before, so ${esc(rep.checked)} new ones were checked.${rep.facts_checked ? ` Size and stage looked up for ${esc(rep.facts_checked)}.` : " Size and stage were not looked up, so these show as fit unknown."}${rep.people_searched ? ` People searched for ${esc(rep.people_searched)} that fit; they now show on Today.` : ""}${rep.judged ? ` The AI judged ${esc(rep.judged)}.` : ""}</div>
-    ${rep.added.length ? `<p class="meta" style="margin:6px 0"><b>Added</b> (in Prospects, or Low fit if size and stage are checked and outside your bar): ${esc(rep.added.join(", "))}. <button type="button" class="btn ghost sm" data-newones>Show the new ones</button></p>` : ""}
-    ${rep.skipped.length ? `<p class="meta" style="margin:6px 0 2px"><b>Skipped</b> (kept in <a href="#/setup/find">Setup, "Skipped by discovery"</a>, where you can add any back):</p><ul class="whylist">${rep.skipped.map((x) => `<li>${esc(x.name)}: ${esc(x.reason)}</li>`).join("")}</ul>` : ""}</details>` : "";
-  $("ahead").innerHTML = reportHtml + `${viewSwitch("companies")}<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""}</span>
+  $("ahead").innerHTML = `${viewSwitch("companies")}<div class="banner"><span><b>Auto-discovery:</b> ${esc(d.discovery.added_30d)} new compan${d.discovery.added_30d === 1 ? "y" : "ies"} this month${d.discovery.last ? ` · last run ${esc(ago(d.discovery.last))}` : ""} · <a href="#/discover">See what it found</a></span>
       <span>Signals refresh ${d.scan.active ? esc(d.scan.label) : "(paused)"} · next ${esc(day(d.scan.next_scan))}</span></div>
     <div class="fpanel">
       <div class="seg" role="tablist" aria-label="Companies">${VIEWS.map(([k, l, tip]) => `<button role="tab" aria-selected="${k === AF.view}" class="${k === AF.view ? "on" : ""}" data-view="${k}" title="${esc(tip)}">${l}<i>${counts[k]}</i></button>`).join("")}</div>
       <details class="fdet" ${fOpen || filtersOn() ? "open" : ""}><summary>Filters and sorting${activeCount() ? ` <span class="badge accent">${activeCount()} on</span>` : ""}</summary>
         <div class="fgrid">${SELECTS.map(sel).join("")}${sel(["sort", "Sort by", SORTS.map(([k, l]) => [k, l])])}</div></details>
-      ${d.admin ? `<form class="wadd" data-wadd><input type="text" id="wdomain" placeholder="Follow a company: type its website, for example example.com" aria-label="Website of a company to follow" maxlength="80"><button type="submit" class="btn ghost">Follow</button></form>` : ""}
+      ${d.admin ? `<form class="wadd" data-wadd><input type="text" id="wdomain" placeholder="Watch a company: type its website, for example example.com" aria-label="Website of a company to watch" maxlength="80"><button type="submit" class="btn ghost">Watch</button></form>` : ""}
       <input id="asearch" class="fsearch" type="search" placeholder="Search by name, website or what they do" aria-label="Search companies" value="${esc(AF.q)}">
       <div class="fbar"><span>Showing <b>${list.length}</b> of ${base.length} in ${esc(view[1])}</span>
-        <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin && AF.view === "low" && list.length ? `<button class="btn ghost sm" data-bulkremove title="Removes low-fit companies nobody has touched">Remove all low fit</button>` : ""}${d.admin && d.ai_missing ? `<button class="btn ghost sm" data-bulkai title="The AI judges how hot each company is, from everything we know. About 0.3 cent each">Score with AI (${d.ai_missing})</button>` : ""}${d.admin && d.industry_missing ? `<button class="btn ghost sm" data-bulkind title="Reads each company's website to find its industry. About 0.15 cent each">Check industry (${d.industry_missing})</button>` : ""}${d.admin && unchecked ? `<button class="btn ghost sm" data-bulkfacts title="Looks up company size and stage. 0.2 search credit each">Check size and stage (${unchecked})</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
+        <span class="acts">${filtersOn() ? `<button class="btn link sm" data-clear>Clear filters</button>` : ""}${d.admin && AF.view === "low" && list.length ? `<button class="btn ghost sm" data-bulkremove title="Removes low-fit companies nobody has touched">Delete all low fit</button>` : ""}${d.admin && d.ai_missing ? `<button class="btn ghost sm" data-bulkai title="The AI judges how hot each company is, from everything we know. About 0.3 cent each">Score with AI (${d.ai_missing})</button>` : ""}${d.admin && d.industry_missing ? `<button class="btn ghost sm" data-bulkind title="Reads each company's website to find its industry. About 0.15 cent each">Check industry (${d.industry_missing})</button>` : ""}${d.admin && unchecked ? `<button class="btn ghost sm" data-bulkfacts title="Looks up company size and stage. 0.2 search credit each">Check size and stage (${unchecked})</button>` : ""}${d.admin ? `<button class="btn ghost sm" data-bulkfind title="Searches your best hot companies that have nobody attached">Find people for the top companies</button>` : ""}</span></div>
     </div>`;
-  $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${filtersOn() ? "No companies match these filters." : AF.view === "open" ? "Nothing to work right now." : "No companies in this view."}${filtersOn() ? `<br><button class="btn link" data-clear>Clear filters</button>` : `<div class="actions" style="justify-content:center;margin-top:12px"><button type="button" class="btn ghost sm" data-do="discover">Find new companies</button><button type="button" class="btn ghost sm" data-do="follow">Follow a company</button></div>`}</div>`;
+  $("alist").innerHTML = list.map(aCard).join("") || `<div class="card empty">${filtersOn() ? "No companies match these filters." : AF.view === "open" ? "Nothing to work right now." : "No companies in this view."}${filtersOn() ? `<br><button class="btn link" data-clear>Clear filters</button>` : `<div class="actions" style="justify-content:center;margin-top:12px"><button type="button" class="btn ghost sm" data-do="discover">Find new companies</button><button type="button" class="btn ghost sm" data-do="follow">Watch a company</button></div>`}</div>`;
   if (PENDING_CLICK) { const el = document.querySelector(PENDING_CLICK); PENDING_CLICK = null; el?.click(); }
   const s = $("asearch"); if (AF.q && document.activeElement?.id === "asearch") { s.focus(); s.setSelectionRange(AF.q.length, AF.q.length); }
 }
@@ -1079,10 +1081,10 @@ $("ahead").addEventListener("click", async (e) => {
     try {
       const p = await api("queue", { action: "remove_low", dry: true });
       if (p.mode === "dry_run") { say(p.message); return; }
-      if (!p.count) { say("Nothing to remove: every low-fit company here already has activity."); return; }
-      if (!(await ask({ title: `Remove ${p.count} low-fit compan${p.count === 1 ? "y" : "ies"}?`, body: `${p.names.join("\n")}${p.count > p.names.length ? `\n…and ${p.count - p.names.length} more` : ""}\n\nOnly companies you have not touched, that are not in HubSpot and have no people. They are deleted for good and cannot be restored.`, ok: "Delete for good", danger: true }))) return;
+      if (!p.count) { say("Nothing to delete: every low-fit company here already has activity."); return; }
+      if (!(await ask({ title: `Delete ${p.count} low-fit compan${p.count === 1 ? "y" : "ies"}?`, body: `${p.names.join("\n")}${p.count > p.names.length ? `\n…and ${p.count - p.names.length} more` : ""}\n\nOnly companies you have not touched, that are not in HubSpot and have no people. They are deleted for good and cannot be restored.`, ok: "Delete for good", danger: true }))) return;
       const r = await api("queue", { action: "remove_low", dry: false });
-      say(`Removed ${r.removed}.`); ACC = null; loadAccounts(true);
+      say(`Deleted ${r.removed}.`); ACC = null; loadAccounts(true);
     } catch (err) { say(err.message); } finally { br.disabled = false; }
     return;
   }
@@ -1135,7 +1137,7 @@ $("ahead").addEventListener("submit", async (e) => {
   try {
     const r = await api("queue", { action: "watch_add", domain: v });
     if (r.mode === "dry_run") { say(r.message); return; }
-    say(r.created ? `Following ${r.name}. Found ${r.signals} signal${r.signals === 1 ? "" : "s"}.` : `Following ${r.name}.`);
+    say(r.created ? `Watching ${r.name}. Found ${r.signals} signal${r.signals === 1 ? "" : "s"}.` : `Watching ${r.name}.`);
     AF.view = "watching"; saveAF(); ACC = null; loadAccounts(true);
   } catch (err) { say(err.message); } finally { b.disabled = false; }
 });
@@ -1194,7 +1196,7 @@ function wireCards(root, reload) {
     }
     if (act === "remove" || act === "restore") {
       const id = card.dataset.id, name = card.dataset.name;
-      if (act === "remove" && !(await ask({ title: `Remove ${name}?`, body: "This deletes the company and everything stored about it (people, signals, notes) for good. It is never found or imported again. Nothing is changed in HubSpot. This cannot be undone.", ok: "Remove", danger: true }))) return;
+      if (act === "remove" && !(await ask({ title: `Delete ${name}?`, body: "This deletes the company and everything stored about it (people, signals, notes) for good. It is never found or imported again. Nothing is changed in HubSpot. This cannot be undone.", ok: "Delete for good", danger: true }))) return;
       btn.disabled = true;
       try {
         const r = await api("queue", { action: act === "remove" ? "remove_account" : "restore_account", account_id: id });
@@ -1548,21 +1550,21 @@ async function loadIcp() {
           <div><b>People to contact</b>${p.personas.map((x) => `<div>${esc(x.title)}${x.note ? `<div class="meta">${esc(x.note)}</div>` : ""}</div>`).join("")}</div>
         </div></article>
       <article class="card"><p class="label">How new companies are found</p>
-        <p style="margin:0">${esc(p.discovery.note)} ${p.discovery.last ? `Last run ${esc(ago(p.discovery.last))}: ${esc(p.discovery.added)} added this month.` : ""} Found companies appear in Accounts under <b>New</b>.</p></article>
+        <p style="margin:0">${esc(p.discovery.note)} ${p.discovery.last ? `Last run ${esc(ago(p.discovery.last))}: ${esc(p.discovery.added)} added this month.` : ""} Found companies appear in Companies under <b>New</b>.</p></article>
       <article class="card"><p class="label">Signals we watch</p>
         ${p.signals.map((s) => `<div class="sigrow"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(s.label)}</b><span class="badge accent">${esc(s.weight)} pts</span></div>
           <div class="bar"><i style="width:${(s.weight / max) * 100}%"></i></div><div class="why-t">${esc(s.why)}</div><div class="why-t">Source: ${esc(s.source)}</div></div>`).join("")}
         <p class="meta" style="margin:6px 0 0">Older evidence counts for less: news after 30 days counts half, after 60 days nothing.</p></article>
       <article class="card"><p class="label">How to read a company</p>
         <ul class="plain"><li><b>Fit</b>: is it the right kind of company? Size, funding stage and region against your profile. "Fit unknown" means size and stage have not been looked up yet.</li>
-          <li><b>Hot</b>: it fits and something happened in the last week, or it just raised, or it has 2+ sales roles open. <b>Warm</b>: some signal. <b>Quiet</b>: nothing right now. (Following a company is a separate thing: the star.)</li>
+          <li><b>Hot</b>: it fits and something happened in the last week, or it just raised, or it has 2+ sales roles open. <b>Warm</b>: some signal. <b>Quiet</b>: nothing right now. (Watching a company is a separate thing: the star.)</li>
           <li><b>Persona score</b>: how closely a person's title matches a target buyer.</li>
           <li>Behind the scenes a 0 to 100 score (the signals above plus fit) sorts the lists and fills the HubSpot fields.</li></ul></article>
       <article class="card"><p class="label">The daily rhythm</p>
         <ul class="plain"><li><b>Hot now</b>: a new signal in the last ${esc(p.today.hot_hours)} hours.</li>
           <li><b>Follow-up due</b>: ${esc(p.follow_up.note)}</li>
           <li><b>Meeting</b>: booked for the next day and a half, with a private brief emailed to you.</li>
-          <li>The Today list holds at most ${esc(p.today.cap)} items. Signals refresh ${esc(p.schedule.toLowerCase())}. Outreach is always manual.</li></ul></article>`;
+          <li>The To-do list holds at most ${esc(p.today.cap)} items. Signals refresh ${esc(p.schedule.toLowerCase())}. Outreach is always manual.</li></ul></article>`;
   } catch (e) { $("icpbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 
@@ -1937,7 +1939,7 @@ function drawSetup() {
       <div class="sgroup" style="margin:0 0 12px"><div class="sgh"><b>On and off</b>${info("Turn a message off and it is not built or sent at all: no searches, no AI and no credits are used for it. Nothing else changes, and you can turn it back on any time.")}</div>
         <div class="toggles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:2px 24px;margin-top:6px">
           ${chk("watch.mail.hot", "Hot alerts", "Instant emails when a company shows a new buying signal.")}
-          ${chk("watch.mail.watchlist", "Watchlist alerts", "Emails when something moves at a company or person you follow.")}
+          ${chk("watch.mail.watchlist", "Watchlist alerts", "Emails when something moves at a company or person you watch.")}
           ${chk("watch.mail.daily", "Daily email", "The morning summary. Off also stops its automatic people searches and HubSpot summary to-do.")}
           ${chk("watch.mail.flags", "Problem flags", "The checks for things slipping, the flags on your to-do, and their HubSpot to-dos.")}
           ${chk("watch.mail.briefs", "Meeting briefs", "The private brief emailed when a meeting with an outside guest is booked.")}
@@ -1949,16 +1951,16 @@ function drawSetup() {
       <div class="chips" style="margin:0 0 4px;align-items:center"><span class="meta">Style</span>${[["quiet", "Quiet", "Few emails, only big problems"], ["normal", "Normal", "The defaults"], ["busy", "Busy", "More alerts, quicker nudges"]].map(([k, l, t]) => `<button type="button" class="chip" data-preset="${k}" title="${esc(t)}">${l}</button>`).join("")}${info("A style only fills in the numbers below. Nothing changes until you press Save.")}</div>
 
       ${mailBox("hot", "Hot alert", P.watch.alertsPerDay ? `Instant · up to ${P.watch.alertsPerDay} a day` : "Off", "A company in your queue shows a new buying signal.",
-        "The company, the signal and how old it is, and up to 2 people to contact with their buyer type and whether they are already in HubSpot. Held back for the daily email if the company does not fit and you do not follow it.",
+        "The company, the signal and how old it is, and up to 2 people to contact with their buyer type and whether they are already in HubSpot. Held back for the daily email if the company does not fit and you do not watch it.",
         `<div class="srow">Send up to ${numIn("watch.alertsPerDay", 0, 10, "Hot alerts a day")} a day ${info("0 turns hot alerts off.")}</div>
-         <div class="srow">Before an alert, look for people at up to ${numIn("watch.alertSearches", 0, 10, "Searches a day before alerts")} companies a day ${info("So the email names who to contact. Only for companies that fit or that you follow, never one searched in the last 30 days. A search costs 1 credit (sometimes 2); finding nobody is free. 0 turns it off.")}</div>
+         <div class="srow">Before an alert, look for people at up to ${numIn("watch.alertSearches", 0, 10, "Searches a day before alerts")} companies a day ${info("So the email names who to contact. Only for companies that fit or that you watch, never one searched in the last 30 days. A search costs 1 credit (sometimes 2); finding nobody is free. 0 turns it off.")}</div>
          <div class="srow">Keep ${numIn("watch.alertReserve", 0, 45, "Search credits to keep")} search credits for my own use ${info("Automatic searches stop when only this many credits are left this month.")}</div>`)}
 
-      ${mailBox("watch", "Watchlist alert", P.watch.watchlistAlerts ? "Instant · up to 5 a day" : "Off", "Something happens at a company or with a person you follow.",
-        "What moved: new funding, a leader hired, an event they host, a competitor in use, a deal change, or a followed person in the news. Big movements are grouped into one email (at most 3 a day); smaller ones wait for the daily email.",
-        `${chk("watch.watchlistAlerts", "Alert me about companies I follow", "Up to 5 a day, separate from the hot alerts. Any new signal counts, whatever the score.")}
-         <div class="srow">Look up what followed people are doing, for up to ${numIn("watch.activityPerDay", 0, 6, "People a day", 56)} people a day ${info("Events they speak at or join, podcasts, posts, awards, job moves. A web search by full name: about 5 cents of AI each, each person at most every two weeks. 0 turns it off. Anything about their own team is free and always on.")}</div>
-         ${chk("watch.titleCheck", "Check job titles of followed people monthly", "Catches a job change. Uses 1 search credit per company a month, inside your reserve. Off by default.")}`)}
+      ${mailBox("watch", "Watchlist alert", P.watch.watchlistAlerts ? "Instant · up to 5 a day" : "Off", "Something happens at a company or with a person you watch.",
+        "What moved: new funding, a leader hired, an event they host, a competitor in use, a deal change, or a watched person in the news. Big movements are grouped into one email (at most 3 a day); smaller ones wait for the daily email.",
+        `${chk("watch.watchlistAlerts", "Alert me about companies I watch", "Up to 5 a day, separate from the hot alerts. Any new signal counts, whatever the score.")}
+         <div class="srow">Look up what watched people are doing, for up to ${numIn("watch.activityPerDay", 0, 6, "People a day", 56)} people a day ${info("Events they speak at or join, podcasts, posts, awards, job moves. A web search by full name: about 5 cents of AI each, each person at most every two weeks. 0 turns it off. Anything about their own team is free and always on.")}</div>
+         ${chk("watch.titleCheck", "Check job titles of watched people monthly", "Catches a job change. Uses 1 search credit per company a month, inside your reserve. Off by default.")}`)}
 
       ${mailBox("daily", "Daily email", `Every day at ${DIGEST_TIME ?? d.digest_time_ist} IST`, "Your morning summary.",
         "Since yesterday (new signals, people, replies, leads, held-back alerts), the people to contact today, a Needs attention section if there are problems, and the companies still waiting for a contact.",
@@ -1977,7 +1979,7 @@ function drawSetup() {
       ${mailBox("auto", "Background actions", "Uses credits only inside your reserve", "Things done for you between emails.",
         "Nothing is sent. These add people or companies to your lists and to HubSpot.",
         `${chk("watch.autoFix", "Fix a running-dry list automatically", "When your To-do is about to run out, search the best 3 companies without a contact and list who was found in the email. Uses 3 to 6 credits when it happens. Off by default.")}
-         ${chk("watch.autoPush", "Add to HubSpot when I start working a company", "When you mark a company contacted, replied or meeting booked and it is not in HubSpot yet, the company and its best 2 revealed people are added first, so status updates have somewhere to go. Nothing is added just for looking, revealing or following.")}`)}
+         ${chk("watch.autoPush", "Add to HubSpot when I start working a company", "When you mark a company contacted, replied or meeting booked and it is not in HubSpot yet, the company and its best 2 revealed people are added first, so status updates have somewhere to go. Nothing is added just for looking, revealing or watching.")}`)}
 
       <div class="mailfixed"><p class="lbl" style="font-weight:600;font-size:13px;margin:16px 0 6px">Always on, no settings${info("These only ever go to you, never to a prospect.")}</p>
         <ul class="mlist"><li><b>Meeting brief</b> <span>when a new meeting with an outside guest is booked: who they are, what is new, questions to ask</span></li>
@@ -2233,7 +2235,7 @@ async function loadSetup() {
           ? `<p class="meta">${esc(r.collected)} candidates found, ${esc(r.already_known)} already seen before. Would check: ${esc((r.would_check || []).join(", ") || "nothing new")}.</p>`
           : r.checked === 0 ? `<p class="meta">Looked at ${esc(r.collected)} companies from Hacker News and a web search. ${r.already_known === r.collected ? "All of them were seen in earlier runs, so there was nothing new to check." : "None could be checked this time."} New hiring posts and launches appear every few days; try again later.</p>`
           : `<p class="meta">Looked at ${esc(r.collected)} companies${r.from_web ? ` (${esc(r.from_web)} from a web search)` : ""}, ${esc(r.already_known)} already seen. Checked ${esc(r.checked)} new: <b>added ${esc(r.added.length)}</b>${r.added.length ? ` (${esc(r.added.join(", "))}), now in Accounts under Prospects` : ""}; <b>${esc(r.rejected)} skipped</b>${(r.skipped || []).length ? `: ${esc(r.skipped.slice(0, 6).map((x) => `${x.name} (${x.reason})`).join("; "))}${r.rejected > 6 ? "…" : ""}` : ""}. Skipped ones stay in the list below, and you can add any back.${r.people_searched ? ` People found for ${esc(r.people_searched)}; see Today.` : ""}</p>`;
-        if (!dry && r.mode === "live") { ACC = null; loadSkipped(); say(`Discovery done: ${r.added.length} added, ${r.rejected} skipped.`, { label: "Open Accounts", run: () => { AF = { ...AF_DEFAULT, view: "all", origin: "new" }; saveAF(); showView({ view: "accounts" }); } }); }
+        if (!dry && r.mode === "live") { ACC = null; loadSkipped(); say(`Discovery done: ${r.added.length} added, ${r.rejected} skipped.`, { label: "Open Companies", run: () => { AF = { ...AF_DEFAULT, view: "all", origin: "new" }; saveAF(); showView({ view: "accounts" }); } }); }
       } catch (err) { $("runout").innerHTML = `<p class="err">${esc(err.message)}</p>`; }
       btn.disabled = false;
     }
@@ -2252,7 +2254,7 @@ async function loadSetup() {
 
 /* ============ Watchlist: follow companies and people, and see what moved ============ */
 const watchLabel = (on, noun) => `${on ? "★ Watching" : "☆ Watch"}${noun ? ` ${noun}` : ""}`;
-const watchBtn = (kind, id, on, noun = "") => `<button type="button" class="star${on ? " on" : ""}" data-watch data-kind="${kind}" data-id="${esc(id)}" data-noun="${esc(noun.replace(/^Watch /, ""))}" data-on="${on ? 1 : 0}" title="${on ? "Following. Click to stop" : kind === "person" ? "Follow this person: you are told about their activity, their team, news, HubSpot changes and job changes" : "Follow this company: never hidden, and you are told when something moves"}">${watchLabel(on, noun.replace(/^Watch /, ""))}</button>`;
+const watchBtn = (kind, id, on, noun = "") => `<button type="button" class="star${on ? " on" : ""}" data-watch data-kind="${kind}" data-id="${esc(id)}" data-noun="${esc(noun.replace(/^Watch /, ""))}" data-on="${on ? 1 : 0}" title="${on ? "Watching. Click to stop" : kind === "person" ? "Watch this person: you are told about their activity, their team, news, HubSpot changes and job changes" : "Watch this company: never hidden, and you are told when something moves"}">${watchLabel(on, noun.replace(/^Watch /, ""))}</button>`;
 let WL = null, WLV = "people"; // "What moved" lives in Signals (filter: Following only)
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-watch]"); if (!b) return;
@@ -2290,7 +2292,7 @@ function drawWatchlist() {
   const fresh = (t) => (!t ? ["Never checked", "bad"] : Date.now() - Date.parse(t) < 2 * 864e5 ? [`Checked ${ago(t)}`, "good"] : Date.now() - Date.parse(t) < 8 * 864e5 ? [`Checked ${ago(t)}`, ""] : [`Checked ${ago(t)}`, "warn"]);
   const wcard = (o) => { const f = fresh(o.checked); return `<article class="card wcard"><div class="wc-head"><div><h4>${o.title}</h4><div class="meta">${o.sub}</div></div><div class="wc-tags">${o.tags}</div></div>
     <div class="wc-grid">
-      <div><p class="label">Last checked</p><span class="badge ${f[1]}">${esc(f[0])}</span><div class="meta" style="margin-top:6px">Watching since ${esc(day(o.since))}</div><div class="meta">${esc(o.next)}</div>${o.quiet_days ? `<div class="meta" style="color:var(--warn,#a0651a)">Quiet for ${esc(o.quiet_days)} days. Still following?</div>` : ""}</div>
+      <div><p class="label">Last checked</p><span class="badge ${f[1]}">${esc(f[0])}</span><div class="meta" style="margin-top:6px">Watching since ${esc(day(o.since))}</div><div class="meta">${esc(o.next)}</div>${o.quiet_days ? `<div class="meta" style="color:var(--warn,#a0651a)">Quiet for ${esc(o.quiet_days)} days. Still watching?</div>` : ""}</div>
       <div><p class="label">Watching for</p><div class="chipsrow">${o.covers.map((x) => `<span class="ptag">${esc(x)}</span>`).join("")}</div></div>
       <div><p class="label">Latest movements</p>${evs(o.events) || `<p class="meta" style="margin:0">Nothing has moved yet.</p>`}</div>
     </div>
@@ -2298,21 +2300,21 @@ function drawWatchlist() {
   if (view === "moved") {
     body = d.events.length ? d.events.map((e) => `<div class="wev${e.unseen ? " unseen" : ""}"><span class="dot"></span><div><div class="wt"><b>${e.company_id ? `<a class="clink" href="#/company/${esc(e.company_id)}">${esc(e.who)}</a>` : esc(e.who)}</b>${e.person ? ` · ${esc(e.person)}` : ""} <span class="badge ${e.importance === "big" ? "accent" : ""}">${esc(e.label)}</span></div>
       <div class="wt">${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a>` : esc(e.title)}</div><div class="wm">${esc(ago(e.detected_at))}</div></div></div>`).join("")
-      : `<p class="meta" style="margin:0">Nothing has moved yet. Movements at the people and companies you follow show up here.</p>`;
+      : `<p class="meta" style="margin:0">Nothing has moved yet. Movements at the people and companies you watch show up here.</p>`;
   } else if (view === "companies") {
     body = d.companies.length ? `<div class="wgrid">${d.companies.map((c) => wcard({ title: `<a class="clink" href="#/company/${esc(c.id)}">${esc(c.name)}</a>`, sub: esc(c.domain), tags: `<span class="badge ${c.heat}">${esc(HEAT[c.heat])}</span>${c.unseen ? `<span class="badge accent">${c.unseen} new</span>` : ""}`, since: c.since, checked: c.checked, next: "Checked every day with the daily watch", covers: c.covers, events: d.events.filter((e) => e.company_id === c.id && !e.person_id),
         actions: `${own ? dd("company", c.id, c.notify) : ""}${check("company", c.id)}${watchBtn("company", c.id, true)}` })).join("")}</div>`
-      : `<p class="meta" style="margin:0">No companies yet. Use "☆ Watch company" on any card in <a href="#/people">People</a>, or follow one by website above.</p>`;
+      : `<p class="meta" style="margin:0">No companies yet. Use "☆ Watch company" on any card in <a href="#/people">People</a>, or watch one by website above.</p>`;
   } else {
-    body = d.people.length ? `<div class="wgrid">${d.people.map((p) => wcard({ title: esc(p.name), sub: `${esc(p.title || "")} at <a class="clink" href="#/company/${esc(p.account_id)}">${esc(p.company)}</a>`, tags: `${p.persona ? `<span class="badge good">${esc(p.persona)}</span>` : ""}${p.preview ? `<span class="badge">Not revealed</span>` : ""}${p.unseen ? `<span class="badge accent">${p.unseen} new</span>` : ""}`, since: p.since, checked: [p.checked, p.activity_checked].filter(Boolean).sort().pop(), next: p.preview ? "Reveal them to follow their own activity" : "News daily; activity looked up at most every 2 weeks", covers: p.covers, events: d.events.filter((e) => e.person_id === p.id),
+    body = d.people.length ? `<div class="wgrid">${d.people.map((p) => wcard({ title: esc(p.name), sub: `${esc(p.title || "")} at <a class="clink" href="#/company/${esc(p.account_id)}">${esc(p.company)}</a>`, tags: `${p.persona ? `<span class="badge good">${esc(p.persona)}</span>` : ""}${p.preview ? `<span class="badge">Not revealed</span>` : ""}${p.unseen ? `<span class="badge accent">${p.unseen} new</span>` : ""}`, since: p.since, checked: [p.checked, p.activity_checked].filter(Boolean).sort().pop(), next: p.preview ? "Reveal them to watch their own activity" : "News daily; activity looked up at most every 2 weeks", covers: p.covers, events: d.events.filter((e) => e.person_id === p.id),
         actions: `${own ? dd("person", p.id, p.notify) : ""}${p.preview ? "" : check("person", p.id)}<a class="btn ghost sm" href="#/people/${esc(p.account_id)}">Open their card</a>${watchBtn("person", p.id, true)}` })).join("")}</div>`
       : `<p class="meta" style="margin:0">No people yet. Use "☆ Watch person" on a card, or add one above.</p>`;
   }
   $("wlbody").innerHTML = `<div class="fpanel">
-      <div class="wtop"><div class="seg" role="tablist" aria-label="Watchlist">${WL_VIEWS.map(([k, l]) => `<button role="tab" aria-selected="${k === view}" class="${k === view ? "on" : ""}" data-wview="${k}">${l}<i>${counts[k]}</i></button>`).join("")}</div><button type="button" class="btn ghost sm" data-wmoved title="Everything new at the people and companies you follow, in Signals">What moved${d.unseen ? ` · ${d.unseen} new` : ""}</button>${info(`You can follow up to ${d.limits.people} people and ${d.limits.companies} companies (${d.people.length} and ${d.companies.length} so far). Big movements (funding, leadership, an event, a competitor in use, a job change, a reply, a deal change) are emailed at once, at most 3 a day and grouped. The rest comes in the daily email.`)}</div>
-      ${own ? `<details class="fdet" style="margin-top:12px"><summary>+ Follow someone new</summary>
-        <form class="wadd" data-wlcompany style="margin-top:10px"><input type="text" id="wlsite" placeholder="A company website, for example example.com" maxlength="80" aria-label="Company website"><button type="submit" class="btn ghost">Follow company</button></form>
-        <form class="wadd" data-wlperson><input type="text" id="wlpname" placeholder="Their name" maxlength="60" aria-label="Person's name"><input type="text" id="wlpsite" placeholder="Their company website" maxlength="80" aria-label="Their company website"><input type="text" id="wlptitle" placeholder="Job title (optional)" maxlength="60" aria-label="Job title"><button type="submit" class="btn ghost">Follow person</button></form></details>` : ""}
+      <div class="wtop"><div class="seg" role="tablist" aria-label="Watchlist">${WL_VIEWS.map(([k, l]) => `<button role="tab" aria-selected="${k === view}" class="${k === view ? "on" : ""}" data-wview="${k}">${l}<i>${counts[k]}</i></button>`).join("")}</div><button type="button" class="btn ghost sm" data-wmoved title="Everything new at the people and companies you watch, in Signals">What moved${d.unseen ? ` · ${d.unseen} new` : ""}</button>${info(`You can watch up to ${d.limits.people} people and ${d.limits.companies} companies (${d.people.length} and ${d.companies.length} so far). Big movements (funding, leadership, an event, a competitor in use, a job change, a reply, a deal change) are emailed at once, at most 3 a day and grouped. The rest comes in the daily email.`)}</div>
+      ${own ? `<details class="fdet" style="margin-top:12px"><summary>+ Watch someone new</summary>
+        <form class="wadd" data-wlcompany style="margin-top:10px"><input type="text" id="wlsite" placeholder="A company website, for example example.com" maxlength="80" aria-label="Company website"><button type="submit" class="btn ghost">Watch company</button></form>
+        <form class="wadd" data-wlperson><input type="text" id="wlpname" placeholder="Their name" maxlength="60" aria-label="Person's name"><input type="text" id="wlpsite" placeholder="Their company website" maxlength="80" aria-label="Their company website"><input type="text" id="wlptitle" placeholder="Job title (optional)" maxlength="60" aria-label="Job title"><button type="submit" class="btn ghost">Watch person</button></form></details>` : ""}
       ${own && view === "moved" && d.unseen ? `<div class="fbar"><span></span><span class="acts"><button class="btn link sm" data-wseen>Mark all as seen</button></span></div>` : ""}
     </div>${view === "moved" ? `<article class="card">${body}</article>` : body}`;
 }
@@ -2337,11 +2339,11 @@ $("wlbody").addEventListener("submit", async (e) => {
     if (comp) {
       const v = $("wlsite").value.trim(); if (!v) return; say("Adding and reading its public signals…");
       const r = await api("queue", { action: "watch_add", domain: v }); if (r.mode === "dry_run") { say(r.message); return; }
-      say(`Following ${r.name}.`);
+      say(`Watching ${r.name}.`);
     } else if (per) {
       const name = $("wlpname").value.trim(), domain = $("wlpsite").value.trim(); if (!name || !domain) { say("Add their name and their company's website."); return; }
       say("Adding…"); const r = await api("queue", { action: "watch_add_person", name, domain, title: $("wlptitle").value.trim() }); if (r.mode === "dry_run") { say(r.message); return; }
-      say(`Following ${r.name}.`); WLV = "people";
+      say(`Watching ${r.name}.`); WLV = "people";
     }
     ACC = null; await loadWatchlist(true);
   } catch (err) { say(err.message); }
@@ -2654,7 +2656,7 @@ function drawSignals() {
   </article>`; };
   $("sbody").innerHTML = `<div class="day"><span>${esc(d.total)} in the last 30 days · ${esc(d.today)} today · <b>${esc(d.intent)}</b> buying-intent</span></div>
     <div class="fpanel"><div class="chips" style="margin:0 0 10px">${chip("", "All", d.total)}${d.categories.map((k) => chip(k, k, d.counts[k] || 0)).join("")}</div>
-      <div class="fgrid">${sel("sort", "Sort by", [["new", "Newest"], ["fit", "Best company fit"], ["intent", "Buying intent first"]])}${sel("intent", "Show", [["", "Everything"], ["1", "Buying intent only"], ["follow", "Following only"]])}${sel("fit", "Company fit", [["", "Any"], ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Fit unknown"]])}</div>
+      <div class="fgrid">${sel("sort", "Sort by", [["new", "Newest"], ["fit", "Best company fit"], ["intent", "Buying intent first"]])}${sel("intent", "Show", [["", "Everything"], ["1", "Buying intent only"], ["follow", "Watching only"]])}${sel("fit", "Company fit", [["", "Any"], ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Fit unknown"]])}</div>
       <div class="fbar"><span>Showing <b>${shown.length}</b> of ${list.length}${info("Each signal names the people at that company who would care. Buying intent is also sent to the bell.")}</span></div></div>
     ${shown.length ? `<div class="sggrid">${shown.map(card).join("")}</div>${list.length > shown.length ? `<div class="actions" style="justify-content:center;margin:14px 0"><button class="btn ghost" data-smore>Show more</button></div>` : ""}` : `<div class="card empty">No signals${SF.cat ? ` of this kind` : ""} yet. They appear as the daily check and discovery find them.</div>`}`;
 }
@@ -2674,27 +2676,30 @@ async function loadDiscover(quiet) {
 }
 function drawDiscover() {
   const d = DISC, own = !!d.admin, r = d.report, ps = d.people_skipped;
-  const rep = r ? `<article class="card"><p class="label">Last run · ${esc(ago(r.at))}</p>
-    <p class="meta" style="margin:0 0 8px">Looked at <b>${esc(r.collected)}</b> companies${r.from_hunter ? ` (${esc(r.from_hunter)} from Hunter` : ""}${r.from_yc ? `${r.from_hunter ? ", " : " ("}${esc(r.from_yc)} from Y Combinator` : ""}${r.from_web ? `${r.from_hunter || r.from_yc ? ", " : " ("}${esc(r.from_web)} from a web search` : ""}${r.from_hunter || r.from_yc || r.from_web ? ")" : ""}; ${esc(r.already_known)} were seen before, so <b>${esc(r.checked)}</b> new ones were checked.</p>
-    <div class="tiles" style="margin:0 0 10px"><div class="tile"><b style="color:var(--good)">${esc(r.added.length)}</b><span>added</span></div><div class="tile"><b>${esc(r.skipped_n)}</b><span>skipped</span></div><div class="tile"><b>${esc(r.people_searched || 0)}</b><span>people listed</span></div><div class="tile"><b>${esc(r.judged || 0)}</b><span>judged by the AI</span></div></div>
-    ${r.added.length ? `<p class="meta" style="margin:0"><b>Added:</b> ${esc(r.added.join(", "))}. <a href="#/companies" data-newones>See them in Companies</a></p>` : ""}</article>` : `<article class="card"><p class="label">Last run</p><p class="meta" style="margin:0">Nothing has been run yet.</p></article>`;
-  const capLine = d.capacity ? `<p class="meta" style="margin:0 0 10px"><b>Pipeline:</b> ${esc(d.capacity.ready)} ready to work. ${esc(({ skip: "The weekly search will skip while the queue is this full.", boost: "The weekly search looks wider while the queue is this thin.", normal: "The weekly search runs as normal." })[d.capacity.mode] || "")}</p>` : "";
+  const FITB = { matches: ["Fits", "good"], close: ["Partly fits", "warn"], unknown: ["Fit unknown", ""], outside: ["Outside range", "bad"] };
+  const capLine = d.capacity ? `<p class="meta" style="margin:10px 0 0"><b>Pipeline:</b> ${esc(d.capacity.ready)} ready to work. ${esc(({ skip: "The weekly search will skip while the queue is this full.", boost: "The weekly search looks wider while the queue is this thin.", normal: "The weekly search runs as normal." })[d.capacity.mode] || "")} Weekly search is <b>${d.enabled ? "on" : "off"}</b>.</p>` : "";
+  const tiles = r ? `<div class="tiles" style="margin:12px 0 0"><div class="tile"><b>${esc(r.collected)}</b><span>looked at</span></div><div class="tile"><b style="color:var(--good)">${esc(r.added.length)}</b><span>added</span></div><div class="tile"><b>${esc(r.skipped_n)}</b><span>skipped</span></div><div class="tile"><b>${esc(r.people_searched || 0)}</b><span>people listed</span></div><div class="tile"><b>${esc(r.judged || 0)}</b><span>read by the AI</span></div></div>` : "";
+  const status = `<article class="card dstat"><div class="dhead"><div><p class="label" style="margin:0">Discovery${r ? ` · last run ${esc(ago(r.at))}` : ""}</p><p class="meta" style="margin:4px 0 0">${r ? `${esc(r.already_known)} of the ${esc(r.collected)} were seen before, so ${esc(r.checked)} new ones were checked.` : "Nothing has been run yet."}</p></div>
+      ${own ? `<div class="actions" style="margin:0"><button class="btn ghost" data-drun="preview">Preview</button><button class="btn primary" data-drun="live">Run discovery now</button>${info("It reads Hacker News hiring and launch posts, Hunter's company database, Y Combinator companies that are hiring and a web search. New companies are screened, scanned for signals, and the people who work there are listed free. About 15 cents of AI for a full run (11 cents is the web search). Search credits only for the size lookups of companies from older sources, up to 1.6.")}</div>` : ""}</div>
+    ${tiles}${capLine}${own && d.unknown_fit ? `<div class="actions" style="margin:12px 0 0"><button class="btn ghost sm" data-dfacts>Check size and stage for ${esc(d.unknown_fit)} companies · 0.2 credit each</button></div>` : ""}<div id="druneout"></div></article>`;
+  const rows = d.added_rows || [];
+  const found = `<article class="card"><p class="label">Found by discovery (${esc(rows.length)})</p>
+    ${rows.length ? rows.map((x) => `<div class="wrow"><div class="wmain"><b><a class="cname" href="#/company/${esc(x.id)}">${esc(x.name)}</a></b> <a class="meta" href="https://${esc(x.domain)}" target="_blank" rel="noopener noreferrer">${esc(x.domain)}</a> <span class="badge ${(FITB[x.fit] || FITB.unknown)[1]}">${(FITB[x.fit] || FITB.unknown)[0]}</span>
+      ${x.about ? `<div class="meta dreason" title="${esc(x.about)}">${esc(x.about)}</div>` : ""}<div class="meta">${esc(SRC[x.source] || x.source)} · ${esc(day(x.found_at))}${x.country ? ` · ${esc(x.country)}` : ""}${x.size ? ` · ${esc(x.size)} people` : ""}</div></div></div>`).join("") : `<p class="meta" style="margin:0">Nothing found yet. Run discovery to look for companies.</p>`}
+    ${rows.length ? `<p class="meta" style="margin:10px 0 0"><a href="#/companies" data-newones>See them in Companies</a></p>` : ""}</article>`;
   const src = Object.entries(d.sources || {}).sort((a, b) => b[1].added - a[1].added);
-  const sources = `<article class="card"><p class="label">Where companies come from</p>${capLine}<p class="help" style="margin:0 0 8px">Every source is public or free. Totals since the start.</p>
+  const sources = `<details class="card ddet"><summary><span class="label" style="margin:0">Where companies come from</span></summary><p class="help" style="margin:8px 0">Every source is public or free. Totals since the start.</p>
     ${src.length ? src.map(([k, v]) => `<div class="wrow"><div class="wmain"><b>${esc(SRC[k] || k)}</b> <span class="meta">${esc(v.added)} added · ${esc(v.skipped)} skipped</span></div></div>`).join("") : `<p class="meta" style="margin:0">No companies yet.</p>`}
-    <p class="meta" style="margin:10px 0 0">Search for new companies every week is <b>${d.enabled ? "on" : "off"}</b>${d.web ? "" : ", web search is off"}. Change it, and your industries, size and places, in <a href="#/setup/find">Setup</a>.</p></article>`;
+    <p class="meta" style="margin:10px 0 0">Search for new companies every week is <b>${d.enabled ? "on" : "off"}</b>${d.web ? "" : ", web search is off"}. Change it, and your industries, size and places, in <a href="#/setup/find">Setup</a>.</p></details>`;
   const CAT = { "Outside your size or stage": "warn", "Services or agency": "", "Consumer product": "", "Not a software company": "", "Website did not load": "bad", "Not a fit for what you sell": "" };
-  const skipped = `<article class="card"><p class="label">Skipped companies (${esc(d.skipped.length)})</p><p class="help" style="margin:0 0 8px">Companies discovery looked at and turned down, with the reason. <b>Add back</b> puts one in your list. <b>Remove</b> clears it from here (it is still remembered, so it is not looked at again).</p>
+  const skipped = `<details class="card ddet"><summary><span class="label" style="margin:0">Skipped companies (${esc(d.skipped.length)})</span></summary><p class="help" style="margin:8px 0">Companies discovery looked at and turned down, with the reason. <b>Add back</b> puts one in your list. <b>Remove</b> clears it from here (it is still remembered, so it is not looked at again).</p>
     ${d.skipped.length ? d.skipped.map((x) => `<div class="wrow" data-dom="${esc(x.domain)}"><div class="wmain"><b>${esc(x.name || x.domain)}</b> <a class="meta" href="https://${esc(x.domain)}" target="_blank" rel="noopener noreferrer">${esc(x.domain)}</a> <span class="badge ${CAT[x.category] || ""}">${esc(x.category || "Skipped")}</span>
-      <div class="meta" style="margin-top:4px">${esc(x.reason || "")}</div>
-      <div class="meta">Found via ${x.source_url ? `<a href="${esc(x.source_url)}" target="_blank" rel="noopener noreferrer">${esc(SRC[x.source] || x.source)}</a>` : esc(SRC[x.source] || x.source)} · ${esc(day(x.found_at))}${x.snippet ? ` · “${esc(x.snippet.slice(0, 110))}”` : ""}</div></div>${own ? `<div class="wside"><button class="btn ghost sm" data-addskip>Add back</button><button class="btn link sm" data-hideskip>Remove</button></div>` : ""}</div>`).join("") : `<p class="meta" style="margin:0">Nothing skipped yet.</p>`}</article>`;
-  const people = `<article class="card"><p class="label">Skipped people${ps ? ` (${esc(ps.items.length)})` : ""}</p><p class="help" style="margin:0 0 8px">People the free list showed at your companies but who are not one of your buyer types, so they are not kept. Change the buyer types in <a href="#/setup/contact">Setup</a>. <b>Remove</b> clears one from here.</p>
+      <div class="meta dreason" title="${esc(x.reason || "")}">${esc(x.reason || "")}</div>
+      <div class="meta">Found via ${x.source_url ? `<a href="${esc(x.source_url)}" target="_blank" rel="noopener noreferrer">${esc(SRC[x.source] || x.source)}</a>` : esc(SRC[x.source] || x.source)} · ${esc(day(x.found_at))}${x.snippet ? ` · “${esc(x.snippet.slice(0, 110))}”` : ""}</div></div>${own ? `<div class="wside"><button class="btn ghost sm" data-addskip>Add back</button><button class="btn link sm" data-hideskip>Remove</button></div>` : ""}</div>`).join("") : `<p class="meta" style="margin:0">Nothing skipped yet.</p>`}</details>`;
+  const people = `<details class="card ddet"><summary><span class="label" style="margin:0">Skipped people${ps ? ` (${esc(ps.items.length)})` : ""}</span></summary><p class="help" style="margin:8px 0">People the free list showed at your companies but who do not match your contact filters, so they are not kept. Change the filters in <a href="#/setup/contact">Setup</a>. <b>Remove</b> clears one from here.</p>
     ${ps?.items?.length ? ps.items.slice(0, 40).map((x) => `<div class="wrow" data-pkey="${esc(x.key || "")}"><div class="wmain"><b>${esc(x.name)}</b> <span class="meta">${esc(x.title)} at ${esc(x.company)}</span> <span class="badge ${x.label === "Too junior" ? "" : "warn"}">${esc(x.label || "Skipped")}</span>
-      <div class="meta" style="margin-top:4px">${esc(x.reason)}${x.department ? ` · team: ${esc(x.department)}` : ""}${x.level ? ` · level: ${esc(LEVEL[x.level] || x.level)}` : ""}</div></div>${own && x.key ? `<div class="wside"><button class="btn link sm" data-hidepeople>Remove</button></div>` : ""}</div>`).join("") : `<p class="meta" style="margin:0">Nobody skipped in the last listing.</p>`}</article>`;
-  $("dbody").innerHTML = `
-    ${own ? `<article class="card"><p class="label">Run it</p><p class="help" style="margin:0 0 10px">It reads Hacker News hiring and launch posts, Hunter's company database, Y Combinator companies that are hiring and a web search. New companies are screened, scanned for signals, and the people who work there are listed free. About 15 cents of AI for a full run (11 cents is the web search); search credits only for the size lookups of companies from the older sources (up to 1.6).</p>
-      <div class="actions" style="margin:0"><button class="btn ghost" data-drun="preview">Preview what it would check</button><button class="btn primary" data-drun="live">Run discovery now</button>${d.unknown_fit ? `<button class="btn ghost" data-dfacts>Check size and stage for ${esc(d.unknown_fit)} companies · 0.2 credit each</button>` : ""}</div><div id="druneout"></div></article>` : ""}
-    ${rep}${people}${skipped}${sources}`;
+      <div class="meta" style="margin-top:4px">${esc(x.reason)}${x.department ? ` · team: ${esc(x.department)}` : ""}${x.level ? ` · level: ${esc(LEVEL[x.level] || x.level)}` : ""}</div></div>${own && x.key ? `<div class="wside"><button class="btn link sm" data-hidepeople>Remove</button></div>` : ""}</div>`).join("") : `<p class="meta" style="margin:0">Nobody skipped in the last listing.</p>`}</details>`;
+  $("dbody").innerHTML = `${status}${found}${skipped}${people}${sources}`;
 }
 $("dbody").addEventListener("click", async (e) => {
   const hs = e.target.closest("[data-hideskip], [data-hidepeople]");
@@ -2763,7 +2768,7 @@ const PAGE_HEAD = {
   accounts: ["Companies", () => "Every company we track, and what to do next with each."],
   research: ["Research", () => "Look up any company: a dossier, and the people who work there."],
   signals: ["Signals", () => "What changed at companies in the last 30 days."],
-  watchlist: ["Watchlist", () => "Companies and people you follow, and what moved."],
+  watchlist: ["Watchlist", () => "Companies and people you watch, and what moved."],
   discover: ["Discover", () => "New companies found for you, and the ones we skipped."],
   conversations: ["Conversations", () => "Inbound leads and meetings."],
   setup: ["Setup", () => "What you sell, who you look for and how you are told."],
@@ -2826,14 +2831,14 @@ new MutationObserver(() => { const n = Number($("c-inbound").textContent || 0) *
 async function loadCompany(id, quiet) {
   if (!quiet) $("cobody").innerHTML = skeleton(4);
   try { CO = await api("queue", { action: "company", account_id: id }); if (CO.error) throw new Error(CO.error); drawCompany(); }
-  catch (e) { $("cobody").innerHTML = `<p style="margin:0 0 12px"><a href="#/accounts">← Accounts</a></p><div class="card err">${esc(e.message)}</div>`; }
+  catch (e) { $("cobody").innerHTML = `<p style="margin:0 0 12px"><a href="#/accounts">← Companies</a></p><div class="card err">${esc(e.message)}</div>`; }
 }
 function drawCompany() {
   const d = CO, a = d.account;
   const hist = d.history.map((h) => `<div class="wev"><span class="dot"></span><div><div class="wt">${esc(String(h.kind).replace(/_/g, " "))}${h.note ? `: ${esc(h.note)}` : ""}</div><div class="wm">${esc(ago(h.at))}</div></div></div>`).join("");
   const ev = d.events.map((e) => `<div class="wev"><span class="dot"></span><div><div class="wt"><span class="badge ${e.importance === "big" ? "accent" : ""}">${esc(String(e.kind).replace(/_/g, " "))}</span> ${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a>` : esc(e.title)}</div><div class="wm">${esc(ago(e.detected_at))}</div></div></div>`).join("");
   const mt = d.meetings.map((m) => `<div class="wev"><span class="dot"></span><div><div class="wt">${esc(m.title || "Meeting")}${m.outcome ? ` · ${esc(String(m.outcome).replace(/_/g, " "))}` : ""}</div><div class="wm">${esc(day(m.starts_at))}</div></div></div>`).join("");
-  $("cobody").innerHTML = `<p style="margin:0 0 12px"><a href="#/accounts" data-back>← Accounts</a></p>${aCard({ ...a, signals: d.signals.slice(0, 3) })}
+  $("cobody").innerHTML = `<p style="margin:0 0 12px"><a href="#/accounts" data-back>← Companies</a></p>${aCard({ ...a, signals: d.signals.slice(0, 3) })}
     ${d.signals.length > 3 ? `<article class="card"><p class="label">Earlier signals</p>${sigList(d.signals.slice(3), 25)}</article>` : ""}
     <article class="card"><p class="label">People (${d.people.length})</p>${d.people.length ? d.people.map((p) => `<div class="wrow"><div class="wmain"><b>${esc(p.name)}</b> <span class="badge ${LEAD[p.lead.label][0]}">${LEAD[p.lead.label][1]}</span> <span class="meta">${esc(p.title)}</span><div class="meta">${p.persona ? `<span class="ptag">${esc(p.persona)}</span> ` : ""}${p.revealed ? `<b>${esc(p.email)}</b>` : p.has_email ? "email found, not revealed" : "no email"}${p.in_hubspot ? ` · <span class="pill ok">In HubSpot</span>` : ""}</div></div><div class="wside">${watchBtn("person", p.id, p.watched)}</div></div>`).join("") : `<p class="meta" style="margin:0">${a.searched_at ? `Searched ${esc(day(a.searched_at))}: nobody found.` : "Nobody saved yet. Use Find people above."}</p>`}</article>
     ${d.drafts.length ? `<article class="card"><p class="label">Drafts (suggestions, never sent)</p>${d.drafts.map((x) => `<div class="draft"><b>${esc(x.subject)}</b>\n\n${esc(x.body)}</div><p class="meta" style="margin:6px 0 12px">${x.persona ? `For ${esc(x.persona)} · ` : ""}${esc(day(x.created_at))}</p>`).join("")}</article>` : ""}
@@ -2850,7 +2855,7 @@ const PAL_PAGES = [["To-do", { view: "today" }], ["People", { view: "people" }],
   ["Research a company", { view: "research" }], ["Setup: what you sell", { view: "setup", sub: "sell" }], ["Setup: who we look for", { view: "setup", sub: "look" }], ["Setup: who we contact", { view: "setup", sub: "contact" }], ["Setup: signals", { view: "setup", sub: "signals" }],
   ["Setup: alerts and email", { view: "setup", sub: "alerts" }], ["Setup: finding companies and credits", { view: "setup", sub: "find" }], ["Setup: HubSpot, name and health", { view: "setup", sub: "conn" }]];
 const PAL_ACTIONS = [["Re-check fit with AI (25 companies)", async () => { const p = await api("queue", { action: "fit_judge" }); if (!p.waiting) { say("Every company has a current AI fit read."); return; } if (!(await ask({ title: `Re-check fit for ${Math.min(p.waiting, 25)} companies?`, body: `${p.waiting} are waiting. AI cost: about ${(p.cost_usd * 100).toFixed(0)} cents. No credits.` }))) return; say("Judging…"); const r = await api("queue", { action: "fit_judge", dry: false }); say(`Judged ${r.judged}; ${r.left} still waiting.`); }], ["Check size and stage for companies without it", () => { PENDING_CLICK = "[data-bulkfacts]"; showView({ view: "accounts" }); }], ["Find people for the top companies", () => { PENDING_CLICK = "[data-bulkfind]"; showView({ view: "accounts" }); }],
-  ["Follow a company", () => { WLV = "companies"; showView({ view: "watchlist" }); setTimeout(() => { const f = document.querySelector("#wlbody details.fdet"); if (f) { f.open = true; $("wlsite")?.focus(); } }, 700); }], ["Find new companies (open Discover)", () => showView({ view: "discover" })]];
+  ["Watch a company", () => { WLV = "companies"; showView({ view: "watchlist" }); setTimeout(() => { const f = document.querySelector("#wlbody details.fdet"); if (f) { f.open = true; $("wlsite")?.focus(); } }, 700); }], ["Find new companies (open Discover)", () => showView({ view: "discover" })]];
 async function openPalette() {
   if ($("pal")) return;
   const bg = document.createElement("div"); bg.className = "pal-bg"; bg.id = "pal";

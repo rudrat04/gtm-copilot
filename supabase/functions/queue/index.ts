@@ -11,7 +11,7 @@ import { revealPerson } from "../_shared/peoplepreview.ts";
 import { hunterBalance, monthlyUsed, HUNTER_MONTHLY_CAP } from "../_shared/people.ts";
 import { draftNoteHtml, noteToHubSpot } from "../_shared/hsnotes.ts";
 import { writeDraft } from "../_shared/draft.ts";
-import { fetchFirmo, firmoLine, fitBreakdown, fitReasons, saveFirmo, usdShort } from "../_shared/firmo.ts";
+import { FIT_COLS, fetchFirmo, firmoLine, fitBreakdown, fitReasons, saveFirmo, usdShort } from "../_shared/firmo.ts";
 import { fitState, heatOf, scoreAccount } from "../_shared/score.ts";
 import { contactsFor } from "../_shared/contacts.ts";
 import { fetchSite } from "../_shared/signals.ts";
@@ -555,8 +555,11 @@ serve("queue", async (req) => {
     for (const r of all ?? []) { const x = (sources[r.source] ??= { added: 0, skipped: 0 }); if (r.status === "added") x.added++; else if (r.status === "rejected") x.skipped++; }
     const parse = (v?: string | null) => { try { return v ? JSON.parse(v) : null; } catch { return null; } };
     const { count: unknownFit } = await sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("firmo_at", null).is("removed_at", null);
+    const { data: addedLog } = await sb.from("cp_discovered").select("domain,source,found_at,account_id").eq("status", "added").not("account_id", "is", null).order("found_at", { ascending: false }).limit(30);
+    const { data: addedAcc } = (addedLog ?? []).length ? await sb.from("cp_accounts").select(`id,name,domain,segment,removed_at,${FIT_COLS}`).in("id", (addedLog ?? []).map((r) => r.account_id)) : { data: [] };
+    const addedRows = (addedLog ?? []).map((r) => { const a = (addedAcc ?? []).find((x) => x.id === r.account_id); return a && !a.removed_at ? { id: a.id, name: a.name, domain: a.domain, about: a.segment ?? a.industry_ai ?? null, fit: fitState(a as never), country: a.country ?? null, size: a.employees ?? a.employee_band ?? null, source: r.source, found_at: r.found_at } : null; }).filter(Boolean);
     const ready = await readyCount(); const capacity = { ready, ...capacityMode({ ready, cap: todayCap(), icpChanged: false }) };
-    return json({ admin, capacity, unknown_fit: unknownFit ?? 0, skipped: data ?? [], report: parse(last?.value), people_skipped: parse(sp?.value), sources, enabled: (icp.discovery as { enabled?: boolean }).enabled !== false, web: (icp.discovery as { web?: boolean }).web !== false });
+    return json({ admin, added_rows: addedRows, capacity, unknown_fit: unknownFit ?? 0, skipped: data ?? [], report: parse(last?.value), people_skipped: parse(sp?.value), sources, enabled: (icp.discovery as { enabled?: boolean }).enabled !== false, web: (icp.discovery as { web?: boolean }).web !== false });
   }
   if (body.action === "discover_hide") { // take a skipped company or person off the list (the company is still remembered, so it is not looked at again)
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: unlock to remove." });
