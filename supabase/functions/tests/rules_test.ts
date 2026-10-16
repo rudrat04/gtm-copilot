@@ -1142,3 +1142,15 @@ Deno.test("stage: one stage per company from what we know", async () => {
   assertEquals(stageOf({ ...base, snoozed: true }).stage, "nurture");
   assertEquals(stageOf({ ...base, notFit: true }).stage, "closed");
 });
+
+Deno.test("daily cap: only new outreach is limited, dated items never are", async () => {
+  const { applyDailyCap } = await import("../_shared/board.ts");
+  type L = "now" | "week" | "waiting" | "later";
+  const items: { type: string; lane: L; priority: number }[] = [
+    ...Array.from({ length: 5 }, (_, i) => ({ type: "hot", lane: "now" as L, priority: 90 - i })),
+    { type: "follow_up", lane: "now", priority: 10 }, { type: "pinned", lane: "now", priority: 5 }, { type: "waiting", lane: "waiting", priority: 1 },
+  ];
+  assertEquals(applyDailyCap(items, 3), 2);
+  assertEquals(items.filter((i) => i.type === "hot" && i.lane === "later").map((i) => i.priority), [87, 86]);
+  assertEquals(items.filter((i) => i.type !== "hot").every((i) => i.lane !== "later"), true);
+});

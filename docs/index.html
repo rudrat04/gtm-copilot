@@ -850,7 +850,7 @@ function drawBoard() {
   const d = BOARD, total = d.items.length; PERSONAS = d.personas || PERSONAS;
   const sort = (BSORTS.find(([k]) => k === BSORT) || BSORTS[0])[2];
   $("thead").innerHTML = `<div class="day">
-    <span><b>${total}</b> on your board · <b>${d.lanes.now}</b> to contact now${d.hidden ? ` · ${d.hidden} not shown` : ""}${info("Each person is placed by their lead score, how well the company fits and what just happened there.")}</span></div>
+    <span><b>${total}</b> on your board · <b>${d.lanes.now}</b> to contact now${d.hidden ? ` · ${d.hidden} not shown` : ""}${d.capped ? ` · ${d.capped} held in Worth a look to keep today short` : ""}${info("Each person is placed by their lead score, how well the company fits and what just happened there.")}</span></div>
     <div class="boardbar"><label style="display:inline-flex;gap:8px;align-items:center">Sort by <select data-bsort aria-label="Sort the board">${BSORTS.map(([k, l]) => `<option value="${k}"${BSORT === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>
       <a href="#/people">All people</a></div>`;
   const nd = (st) => (d.needs || []).filter((n) => n.state === st);
@@ -2514,7 +2514,7 @@ async function loadPeople(quiet) {
   try { PPL = await api("queue", { action: "people_list" }); drawPeople(); }
   catch (e) { $("plist").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
-let PPL = null, PF = { q: "", pstage: "", lead: "", fit: "", heat: "", persona: "", email: "", hub: "", stage: "", industry: "", country: "", dept: "", level: "", source: "", dm: "", todo: "", act: "", sort: "priority", limit: 30, company: null };
+let PPL = null, PF = { q: "", pstage: "open", lead: "", fit: "", heat: "", persona: "", email: "", hub: "", stage: "", industry: "", country: "", dept: "", level: "", source: "", dm: "", todo: "", act: "", sort: "priority", limit: 30, company: null };
 try { const saved = JSON.parse(localStorage.getItem("cp_people_filters") || "null"); if (saved && typeof saved === "object") for (const k of Object.keys(PF)) if (k !== "company" && k !== "limit" && typeof saved[k] === "string") PF[k] = saved[k]; } catch {}
 const savePF = () => { try { localStorage.setItem("cp_people_filters", JSON.stringify(PF)); } catch {} };
 const PF_KEYS = ["pstage", "lead", "fit", "heat", "persona", "email", "hub", "stage", "industry", "country", "dept", "level", "source", "dm", "todo", "act"];
@@ -2524,7 +2524,7 @@ const FIT_RANK = { matches: 3, close: 2, unknown: 1, outside: 0 };
 const LEAD = { hot: ["hot", "Hot lead"], warm: ["warm", "Warm lead"], cold: ["watching", "Cold"], blocked: ["bad", "Do not contact"] };
 const BUYER = { strong: "Strong buyer match", good: "Good buyer match", partial: "Partial match", none: "Not a buyer" };
 const PEOPLE_TESTS = {
-  pstage: (p, v) => p.pstage === v, lead: (p, v) => p.lead.label === v, fit: (p, v) => p.company_fit === v, heat: (p, v) => p.company_heat === v,
+  pstage: (p, v) => (v === "open" ? p.pstage !== "closed" : p.pstage === v), lead: (p, v) => p.lead.label === v, fit: (p, v) => p.company_fit === v, heat: (p, v) => p.company_heat === v,
   persona: (p, v) => (v === "__none" ? !p.persona : p.persona === v),
   email: (p, v) => (v === "none" ? !p.has_email && !p.preview : v === "preview" ? p.preview : v === "found" ? p.has_email && !p.revealed && !p.preview : p.revealed),
   hub: (p, v) => (v === "yes" ? p.in_hubspot : !p.in_hubspot), stage: (p, v) => (p.co.stage || "") === v, industry: (p, v) => (p.co.industry || "") === v,
@@ -2540,9 +2540,9 @@ function drawPeople() {
   const sel = (k, label, opts) => `<label>${label}<select data-pf="${k}" class="${PF[k] && PF[k] !== "priority" ? "set" : ""}" aria-label="${label}">${opts.map(([v, t]) => `<option value="${esc(v)}"${PF[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`;
   const any = [["", "Any"]];
   const co = PF.company ? d.people.find((p) => p.account_id === PF.company)?.company : null;
-  const active = PF_KEYS.filter((k) => PF[k]).length + (q ? 1 : 0) + (PF.sort !== "priority" ? 1 : 0);
+  const active = PF_KEYS.filter((k) => PF[k] && !(k === "pstage" && PF[k] === "open")).length + (q ? 1 : 0) + (PF.sort !== "priority" ? 1 : 0);
   $("phead").innerHTML = `${viewSwitch("people")}<div class="fpanel">
-    <div class="fgrid">${sel("sort", "Sort by", PSORTS.map(([k, l]) => [k, l]))}${sel("pstage", "Stage", [...any, ...PSTAGE_ORDER.map((k) => [k, PSTAGE[k][0]])])}${sel("lead", "Lead", [...any, ["hot", "Hot"], ["warm", "Warm"], ["cold", "Cold"], ["blocked", "Do not contact"]])}${sel("fit", "Company fit", [...any, ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Fit unknown"], ["outside", "Outside range"]])}${sel("email", "Email", [...any, ["preview", "Not revealed (free list)"], ["found", "Found, not revealed"], ["revealed", "Revealed"], ["none", "No email"]])}</div>
+    <div class="fgrid">${sel("sort", "Sort by", PSORTS.map(([k, l]) => [k, l]))}${sel("pstage", "Stage", [["open", "Not closed"], ["", "All stages"], ...PSTAGE_ORDER.map((k) => [k, PSTAGE[k][0]])])}${sel("lead", "Lead", [...any, ["hot", "Hot"], ["warm", "Warm"], ["cold", "Cold"], ["blocked", "Do not contact"]])}${sel("fit", "Company fit", [...any, ["matches", "Fits"], ["close", "Partly fits"], ["unknown", "Fit unknown"], ["outside", "Outside range"]])}${sel("email", "Email", [...any, ["preview", "Not revealed (free list)"], ["found", "Found, not revealed"], ["revealed", "Revealed"], ["none", "No email"]])}</div>
     <input id="psearch" class="fsearch" type="search" placeholder="Search by name, title, company, department or industry" aria-label="Search people" value="${esc(PF.q)}" style="margin-top:10px">
     <details class="fdet" ${PF_KEYS.slice(4).some((k) => PF[k]) ? "open" : ""}><summary>More filters</summary><div class="fgrid">
       ${sel("heat", "Company heat", [...any, ["hot", "Hot"], ["warm", "Warm"], ["watching", "Quiet"]])}
@@ -2574,7 +2574,7 @@ $("phead").addEventListener("change", (e) => { const k = e.target.dataset?.pf; i
 $("phead").addEventListener("click", (e) => {
   if (e.target.closest("[data-peekbulk]")) { listPeople(e.target.closest("button")); return; }
   if (e.target.closest("[data-revealtop]")) { revealTop(e.target.closest("button")); return; }
-  if (e.target.closest("[data-pclear]")) { for (const k of PF_KEYS) PF[k] = ""; PF.q = ""; PF.sort = "priority"; PF.limit = 30; savePF(); drawPeople(); return; }
+  if (e.target.closest("[data-pclear]")) { for (const k of PF_KEYS) PF[k] = ""; PF.pstage = "open"; PF.q = ""; PF.sort = "priority"; PF.limit = 30; savePF(); drawPeople(); return; }
   if (e.target.closest("[data-bulkai]")) { runBulkAi(e.target.closest("button")); return; }
   if (e.target.closest("[data-pexport]")) {
     const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;

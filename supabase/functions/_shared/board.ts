@@ -3,6 +3,7 @@ import { buildToday, type TodayItem } from "./today.ts";
 import { peopleRows } from "./peoplerows.ts";
 import { contactsFor } from "./contacts.ts";
 import { tierOf } from "./score.ts";
+import icp from "./icp.json" with { type: "json" };
 
 // The To-do board: people to act on, in lanes by how soon. It is built from the same rules as the old Today list (follow-ups,
 // meetings, fresh signals, revivals), then each item is given the person to contact as a full person row, people you pinned are added,
@@ -11,6 +12,16 @@ import { tierOf } from "./score.ts";
 export type Lane = "now" | "week" | "waiting" | "later";
 type Person = Awaited<ReturnType<typeof peopleRows>>[number];
 export type BoardItem = Omit<TodayItem, "type"> & { type: TodayItem["type"] | "pinned" | "watch" | "waiting"; lane: Lane; priority: number; person: Person | null; alt: Person | null; why_line: { label: string; text: string; url?: string | null } | null };
+
+/** Things with a date or a reason of their own are never held back; only new outreach (fresh signals on companies that are Ready) counts toward the daily cap. */
+const DATED = new Set(["meeting", "follow_up", "pinned", "waiting", "revive", "watch"]);
+/** Pure: keeps today to `cap` new people to contact. The best by priority stay in Contact now or This week; the rest move to Worth a look. Returns how many moved. */
+export function applyDailyCap<T extends { type: string; lane: Lane; priority: number }>(items: T[], cap: number): number {
+  const fresh = items.filter((i) => !DATED.has(i.type) && (i.lane === "now" || i.lane === "week")).sort((a, b) => b.priority - a.priority);
+  const over = fresh.slice(Math.max(0, cap));
+  for (const i of over) i.lane = "later";
+  return over.length;
+}
 
 /** Pure: which lane an item belongs in. Things with a date (a meeting, a due follow-up, a pinned person) are now; the rest by priority. */
 export function laneOf(i: { type: string; priority: number }): Lane {
@@ -98,8 +109,9 @@ export async function buildBoard(admin: boolean) {
       lane: "waiting", priority: p?.priority ?? a.priority_score ?? 0, person: p, alt: null, why_line: null,
     } as BoardItem);
   }
+  const capped = applyDailyCap(out, (icp.today as { cap?: number }).cap ?? 8);
   out.sort((x, y) => y.priority - x.priority);
   const lanes = { now: 0, week: 0, waiting: 0, later: 0 } as Record<Lane, number>;
   for (const i of out) lanes[i.lane]++;
-  return { generated_at: t.generated_at, lanes, items: out, needs: await needsState(t.needs), debriefs: t.debriefs, leads: t.leads, blocked: t.blocked, hidden: t.hidden, attention: undefined as unknown };
+  return { generated_at: t.generated_at, lanes, items: out, needs: await needsState(t.needs), debriefs: t.debriefs, leads: t.leads, blocked: t.blocked, hidden: t.hidden, capped, attention: undefined as unknown };
 }
