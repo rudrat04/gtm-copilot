@@ -17,6 +17,7 @@ import { personActivity, teamEvents } from "./peopleactivity.ts";
 import { peekCandidates, peekPeople } from "./peoplepreview.ts";
 import { industryCheckMany, needIndustry } from "./industry.ts";
 import { judgeMany } from "./fitjudge.ts";
+import { todayCount } from "./schedule.ts";
 import { icpChangedSinceDiscovery, markDiscoveryVersion } from "./capacity.ts";
 import { runDiscovery } from "./discover.ts";
 import { askStillFollowing } from "./followed.ts";
@@ -27,7 +28,6 @@ import { mailOn } from "./switches.ts";
 
 
 const BATCH = 5;
-const WATCHLIST_ALERTS_PER_DAY = 5; // instant alerts a day for followed companies, on top of icp.alerts.maxPerDay for the rest
 const MAX_ACCOUNTS = 20;
 
 async function state(key: string) {
@@ -112,7 +112,7 @@ export async function lightCheck(admin: boolean) {
     const { data: sentToday } = await sb.from("cp_alerts").select("account_id").eq("deferred", false).gte("sent_at", dayStart.toISOString());
     const { data: followed } = sentToday?.length ? await sb.from("cp_accounts").select("id").in("id", sentToday.map((r) => r.account_id)).not("watched_at", "is", null) : { data: [] };
     const followedIds = new Set((followed ?? []).map((r) => r.id));
-    const left = { followed: icp.watch.watchlistAlerts === false ? 0 : Math.max(0, WATCHLIST_ALERTS_PER_DAY - followedIds.size), other: Math.max(0, icp.alerts.maxPerDay - ((sentToday?.length ?? 0) - followedIds.size)) };
+    const left = { followed: icp.watch.watchlistAlerts === false ? 0 : Math.max(0, todayCount("watchlist") - followedIds.size), other: Math.max(0, icp.alerts.maxPerDay - ((sentToday?.length ?? 0) - followedIds.size)) };
     for (const c of candidates.sort((x, y) => (Number(!!y.a.watched_at) - Number(!!x.a.watched_at)) || (Number(aiBy.get(y.a.id)?.label === "hot") - Number(aiBy.get(x.a.id)?.label === "hot")) || (y.score - x.score))) {
       const lane = c.a.watched_at ? "followed" : "other";
       if (left[lane] <= 0) continue;

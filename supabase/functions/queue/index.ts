@@ -19,7 +19,7 @@ import { BudgetError } from "../_shared/claude.ts";
 import { tierOf } from "../_shared/score.ts";
 import { activeFlags, flagAction } from "../_shared/flags.ts";
 import { meetsFit, queueThreshold, worthShowing } from "../_shared/fitgate.ts";
-import { clean, DEPARTMENTS, INDUSTRIES, loadProfile, REGIONS, saveProfile, SENIORITIES, STAGES } from "../_shared/profile.ts";
+import { AGE_BUCKETS, clean, DEPARTMENTS, INDUSTRIES, loadProfile, REGIONS, saveProfile, SENIORITIES, SIZE_BUCKETS, STAGES } from "../_shared/profile.ts";
 import { REGION_GROUPS, RULE_TYPES } from "../_shared/lists.ts";
 import { addPersonToWatchlist, addToWatchlist, checkNow, markSeen, setNotify, setPersonWatched, setWatched, watchlistView } from "../_shared/watchlist.ts";
 import { cleanBrand, loadBrand, saveBrand } from "../_shared/brand.ts";
@@ -29,6 +29,7 @@ import { aiHeat, aiMaps, aiRefresh, aiScoreCompany, aiScorePeople, candidates } 
 import { industryCheckMany, needIndustry } from "../_shared/industry.ts";
 import { judgeMany, judgeFit } from "../_shared/fitjudge.ts";
 import { icpVersion } from "../_shared/fitver.ts";
+import { PREVIEW_KINDS, previewMail, type PreviewKind } from "../_shared/mailpreview.ts";
 import { capacityMode, markDiscoveryVersion, readyCount, todayCap } from "../_shared/capacity.ts";
 import { customerInsights } from "../_shared/customers.ts";
 import { suggestProfile } from "../_shared/suggest.ts";
@@ -297,7 +298,7 @@ async function setupView() {
   const month = Date.now() - 30 * DAY;
   return {
     profile,
-    options: { stages: STAGES, regions: REGIONS, region_groups: Object.keys(REGION_GROUPS).length, rule_types: RULE_TYPES, industries: INDUSTRIES, departments: DEPARTMENTS, seniorities: SENIORITIES, not_fit_reasons: NOT_FIT_REASONS },
+    options: { size_buckets: SIZE_BUCKETS.map((b) => b[0]), age_buckets: AGE_BUCKETS.map((b) => b[0]), stages: STAGES, regions: REGIONS, region_groups: Object.keys(REGION_GROUPS).length, rule_types: RULE_TYPES, industries: INDUSTRIES, departments: DEPARTMENTS, seniorities: SENIORITIES, not_fit_reasons: NOT_FIT_REASONS },
     discovery: {
       schedule: "Mondays at 10:30 IST, an hour before the signal scan",
       last: disc?.[0]?.found_at ?? null,
@@ -305,6 +306,13 @@ async function setupView() {
     },
     unknown_fit: unknown ?? 0,
     fit_counts: fitCounts,
+    fit_ai: await (async () => {
+      const [{ count: waiting }, { data: ov }] = await Promise.all([
+        sb.from("cp_accounts").select("id", { count: "exact", head: true }).is("removed_at", null).is("fit_override", null).or(`fit_ai_ver.is.null,fit_ai_ver.neq.${icpVersion()}`),
+        sb.from("cp_accounts").select("id,name,fit_override,fit_override_note").not("fit_override", "is", null).is("removed_at", null).limit(50),
+      ]);
+      return { waiting: waiting ?? 0, overrides: ov ?? [] };
+    })(),
     predictleads: { configured: plConfigured(), used: plConfigured() ? await plUsed() : 0, cap: plCap() },
     digest_time_ist: await digestTimeIst(),
     ai: { today_usd: Number(ai?.usd ?? 0), cap_usd: icp.ai.dailyBudgetUsd },
@@ -616,6 +624,11 @@ serve("queue", async (req) => {
     const todo = ids.filter((id) => !have.has(id)).slice(0, 25);
     if (body.dry !== false) return json({ mode: "plan", companies: todo.length, cost_usd: +(todo.length * 0.003).toFixed(3) });
     return json({ mode: "live", ...(await aiRefresh({ ids: todo, maxCompanies: 25, maxPeopleCompanies: 25 })) });
+  }
+  if (body.action === "mail_preview") { // what each message looks like, built from made-up data; nothing is read or sent
+    const kind = String(body.kind ?? "");
+    if (!(PREVIEW_KINDS as string[]).includes(kind)) return json({ error: "Unknown message" }, 400);
+    return json({ mode: "live", ...previewMail(kind as PreviewKind) });
   }
   if (body.action === "fit_judge") { // AI fit verdicts: dry shows how many are waiting (profile changed or never judged)
     if (!admin) return json({ mode: "dry_run", message: "Demo mode: the owner can run this." });

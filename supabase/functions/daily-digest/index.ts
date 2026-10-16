@@ -18,6 +18,7 @@ async function state(key: string) {
 }
 
 import { mailOn } from "../_shared/switches.ts";
+import { dayOn } from "../_shared/schedule.ts";
 
 serve("daily-digest", async (req) => {
   const admin = await isAdmin(req);
@@ -35,6 +36,11 @@ serve("daily-digest", async (req) => {
   if (!mailOn("daily") && !(admin && opts.dry === true)) { // switched off in Setup: no email, no automatic searches, no HubSpot summary to-do
     if (mailOn("flags")) await runWatch("daily").catch(() => {}); // the problem checks still run if they are on
     return idle({ skipped: "daily email is off" });
+  }
+
+  if (!admin && !dayOn("daily")) { // a weekday you switched off in Setup: no email, no automatic searches, no HubSpot summary to-do
+    if (mailOn("flags")) await runWatch("daily").catch(() => {});
+    return idle({ skipped: "not a day for the daily email" });
   }
 
   // The list leads with people: a strong account with none gets one automatic search (limited per day).

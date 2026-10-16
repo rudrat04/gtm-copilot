@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tecgblsoylrshcqneevf.supabase.co; img-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tecgblsoylrshcqneevf.supabase.co; img-src data:; frame-src about:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <title>F1rstword</title>
@@ -419,7 +419,7 @@
   @media (prefers-reduced-motion: reduce) { .bar::before { animation: none; width: 100%; opacity: .5; } .spin { animation-duration: 2s; } }
   .logoprev { display: flex; align-items: center; gap: 14px; margin: 0 0 10px; } .logoprev .lp { width: 64px; height: 64px; border: 1px dashed var(--line); border-radius: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--bg); font-size: 11px; color: var(--muted); } .logoprev img { max-width: 100%; max-height: 100%; }
   .wrow { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--line); flex-wrap: wrap; } .wrow:first-child { border-top: 0; }
-  .wrow .wmain { flex: 1 1 320px; min-width: 0; } .wrow .wmain b { font-size: 16px; } .wrow .wside { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .wrow .dd { width: 150px; }
+  .wrow .wmain { flex: 1 1 320px; min-width: 0; } .wrow .wmain > b:first-child { font-size: 16px; } .wrow .wside { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .wrow .dd { width: 150px; }
   .wev { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); } .wev:first-child { border-top: 0; } .wev .dot { width: 10px; height: 10px; border-radius: 99px; margin-top: 7px; background: transparent; flex: none; } .wev.unseen .dot { background: var(--accent); }
   .wev .wt { font-size: 15px; } .wev .wm { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .hdr { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; } kbd { font: inherit; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; margin-left: 4px; }
@@ -488,6 +488,48 @@
     .person { flex-direction: column; gap: 8px; } .person .pact { align-self: flex-start; }
     .actions .btn { flex: 1 1 auto; }
   }
+
+  /* ---- design pass (16 Oct 2026): clearer buttons, switches, dropdowns and tags, same sizes ---- */
+  :root { --line-strong: #d8cdb5; --accent-hover: #2f3ea6; }
+  .btn { border-radius: 9px; transition: background .12s, border-color .12s, box-shadow .12s; }
+  .btn.primary { box-shadow: 0 1px 2px rgba(40, 55, 150, .35); } .btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn.ghost { border-color: var(--line-strong); color: var(--ink); } .btn.ghost:hover:not(:disabled) { background: var(--raised); border-color: color-mix(in srgb, var(--accent) 45%, var(--line-strong)); }
+  .btn.link:hover { text-decoration: underline; }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .badge { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600; padding: 2px 10px; }
+  .toggle input[type=checkbox] { appearance: none; -webkit-appearance: none; flex: none; width: 34px; height: 20px; margin: 1px 0 0; border-radius: 99px; background: #cfc5ae; position: relative; cursor: pointer; border: 0; transition: background .15s; }
+  .toggle input[type=checkbox]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s; }
+  .toggle input[type=checkbox]:checked { background: var(--accent); } .toggle input[type=checkbox]:checked::after { transform: translateX(14px); }
+  .toggle input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .dd-btn, .ms .mschips, .tagbox, .field select, .field input.tin, .numrow input { border-color: var(--line-strong); transition: border-color .12s, box-shadow .12s; }
+  .dd-btn:hover, .ms .mschips:hover, .tagbox:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line-strong)); }
+  .dd-btn:focus-visible, .dd-btn[aria-expanded="true"], .tagbox:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  .ms .mstag, .tag { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)); color: var(--ink); font-weight: 500; }
+  .ms .msopen { font-weight: 600; border-radius: 99px; padding: 3px 10px; } .ms .msopen:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .chip { border-color: var(--line-strong); } .chip:hover { border-color: var(--accent); color: var(--accent); }
+  details.ddet > summary, details.fdet > summary { padding: 4px 0; }
+  details.ddet[open] > summary { border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 4px; }
+  .wrow { border-bottom: 1px solid var(--line); } .wrow:last-child { border-bottom: 0; }
+  /* ---- Setup ---- */
+  .scard.dim { opacity: .6; } .scard .label { font-size: 11.5px; }
+  .demonote { margin: 0 0 14px; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); background: color-mix(in srgb, var(--warn) 7%, var(--surface)); border-radius: 12px; font-size: 13.5px; color: var(--soft); }
+  .fgrid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 18px; }
+  .agroup { margin: 26px 2px 8px; } .agh { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .msg { padding: 0; overflow: hidden; } .msg .mhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 16px 20px; } .msg .mhead .toggle { margin: 0; flex: none; }
+  .msg .mhead .toggle span { font-weight: 600; font-size: 13px; }
+  .msg .mbody2 { border-top: 1px solid var(--line); padding: 6px 20px 14px; } .msg.off .mbody2 { opacity: .5; }
+  .mrow { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 4px 16px; padding: 10px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; align-items: start; } .mrow:last-child { border-bottom: 0; }
+  .mrow .mk { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-top: 3px; }
+  .msets2 .srow { margin: 0 0 8px; }
+  .sched .sdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; max-width: 520px; }
+  .sd { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 7px 4px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--bg); font-size: 12px; font-weight: 700; color: var(--muted); }
+  .sd.on { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); color: var(--accent); }
+  .sd input { width: 44px; text-align: center; padding: 4px 2px; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
+  .sched .sset { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .mprev { position: fixed; inset: 0; z-index: 90; background: rgba(40, 35, 27, .45); display: grid; place-items: center; padding: 20px; }
+  .mp-box { width: min(680px, 100%); height: min(80vh, 760px); background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+  .mp-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); } .mp-box iframe { flex: 1; border: 0; background: #fff; width: 100%; }
+  @media (max-width: 640px) { .mrow { grid-template-columns: 1fr; } .sched .sdays { gap: 4px; } }
 </style>
 </head>
 <body>
@@ -1781,7 +1823,7 @@ function msField(path, label, options, help, groups) {
   return `<div class="field"><label>${esc(label)}</label><div class="ms" data-ms="${esc(path)}"${groups ? ` data-groups="${groups}"` : ""}></div>${help ? `<p class="help">${esc(help)}</p>` : ""}</div>`;
 }
 function msDraw(el) {
-  const path = el.dataset.ms, sel = getPath(P, path) || [], opts = path === "industries" || path === "excludeIndustries" ? SETUP.options.industries : path === "stages" ? SETUP.options.stages : path === "contact.departments" ? SETUP.options.departments : SETUP.options.regions;
+  const path = el.dataset.ms, sel = getPath(P, path) || [], opts = path === "industries" || path === "excludeIndustries" ? SETUP.options.industries : path === "sizeBuckets" ? SETUP.options.size_buckets : path === "ageBuckets" ? SETUP.options.age_buckets : path === "stages" ? SETUP.options.stages : path === "contact.departments" ? SETUP.options.departments : SETUP.options.regions;
   const q = (el.querySelector(".mspop input")?.value || "").trim().toLowerCase(), g = Number(el.dataset.groups || 0);
   const open = MS_OPEN === path;
   const items = opts.map((o, i) => [o, i]).filter(([o]) => !q || o.toLowerCase().includes(q));
@@ -1818,7 +1860,7 @@ const WATCH_ROWS = [
   ["system", "A scheduled job failed or is running late", "", ""],
 ];
 /* Setup is long, so it is split into sections with their own addresses (#/setup/alerts) and a short checklist for a first run. */
-const SETUP_SECS = [["start", "Getting started"], ["sell", "What you sell"], ["look", "Who we look for"], ["contact", "Who we contact"], ["signals", "Signals"], ["fit", "Fit and score"], ["alerts", "Alerts and email"], ["find", "Finding companies"], ["conn", "HubSpot, name and health"]];
+const SETUP_SECS = [["start", "Getting started"], ["sell", "What you sell"], ["look", "Who we look for"], ["contact", "Who we contact"], ["signals", "Signals"], ["fit", "Fit and score"], ["alerts", "Alerts and email"], ["usage", "Usage and credits"], ["conn", "HubSpot, name and health"]];
 const SEC_OF = [["What you sell", "sell"], ["Who we look for", "look"], ["What your customers look like", "look"], ["Who we contact", "contact"], ["What counts as a buying signal", "signals"], ["Which companies to show", "fit"], ["Alerts, daily email", "alerts"], ["Finding new companies", "find"], ["Credits and costs", "find"], ["Skipped by discovery", "find"], ["Search history", "conn"], ["HubSpot columns", "conn"], ["Name and logo", "conn"], ["Health", "conn"]];
 function setupSteps() {
   const d = SETUP;
@@ -1839,6 +1881,15 @@ function setupChecklistHtml() {
 }
 /** Reads the description and website and fills in the settings below (nothing is saved until Save). Runs by itself when either box changes. */
 let SUGGESTING = false, SUGGEST_LAST = "";
+/** Shows a sample email in a window over the page. The sample is plain HTML in a sandboxed frame. */
+function showMailPreview(subject, html) {
+  const old = document.getElementById("mprev"); if (old) old.remove();
+  const el = document.createElement("div"); el.id = "mprev"; el.className = "mprev"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Email preview");
+  el.innerHTML = `<div class="mp-box"><div class="mp-top"><div><div class="meta">Subject</div><b>${esc(subject)}</b></div><button type="button" class="btn ghost sm" data-mpclose>Close</button></div><iframe sandbox="allow-same-origin" title="Email preview"></iframe></div>`;
+  document.body.appendChild(el); el.querySelector("iframe").srcdoc = String(html).replace("<head>", `<head><style>html { color-scheme: light; background: #fff; color: #28231b; }</style>`);
+  const close = () => el.remove(); el.addEventListener("click", (e) => { if (e.target === el || e.target.closest("[data-mpclose]")) close(); });
+  document.addEventListener("keydown", function k(e) { if (e.key === "Escape") { close(); document.removeEventListener("keydown", k); } });
+}
 async function runSuggest(auto) {
   const pd = $("pdesc"), ps = $("psite"); if (!pd || SUGGESTING) return;
   const description = pd.value.trim(), website = ps ? ps.value.trim() : "", key = description + "|" + website, sg = document.querySelector("[data-suggest]");
@@ -1849,7 +1900,7 @@ async function runSuggest(auto) {
   try {
     const r = await api("queue", { action: "profile_suggest", description, website });
     if (r.mode === "dry_run") { say(r.message); return; }
-    const k = r.proposal; for (const f of ["industries", "excludeIndustries", "businessModel", "keywords", "employeesMin", "employeesMax", "stages", "regions", "contact", "hiringRoles", "painWords", "toolsGood", "toolsAvoid", "competitors", "excludeWords"]) P[f] = k[f];
+    const k = r.proposal; for (const f of ["industries", "excludeIndustries", "businessModel", "keywords", "sizeBuckets", "employeesMin", "employeesMax", "stages", "regions", "contact", "hiringRoles", "painWords", "toolsGood", "toolsAvoid", "competitors", "excludeWords"]) P[f] = k[f];
     P.excludeWords = [...(k.excludeWords || []), ...(k.excludeDomains || [])]; P.excludeDomains = [];
     P.product = k.product; SUGGEST_NOTE = r.summary || "Settings filled in from your description."; SUGGESTING = false; drawSetup(); say("Settings filled in. Review them, then press Save.");
   } catch (err) { say(err.message); } finally { SUGGESTING = false; if (sg) { sg.disabled = false; sg.textContent = "Suggest my settings"; } }
@@ -1872,10 +1923,84 @@ function applySetupSection() {
 }
 $("setupbody").addEventListener("click", (e) => { const b = e.target.closest("[data-ssec]"); if (b) showView({ view: "setup", sub: b.dataset.ssec }); });
 
+/** A Setup card in a section. `on` false greys it out (a switched-off signal type). */
+const SC = (sec, title, desc, body, on = true) => `<article class="card scard${on ? "" : " dim"}" data-sec="${sec}"><p class="label">${esc(title)}</p>${desc ? `<p class="help" style="margin:0 0 12px">${esc(desc)}</p>` : ""}${body}</article>`;
+/** The signal rules of the given groups, each with its words, an On switch and a Remove button. */
+function ruleBlock(groups) {
+  const O = SETUP.options;
+  return groups.map((g) => { const types = O.rule_types.filter((t) => t.group === g); if (!types.length) return ""; const rules = P.signalRules.map((r, i) => [r, i]).filter(([r]) => types.some((t) => t.key === r.type));
+    return `<div class="sgroup"><div class="sgh"><b>${esc(g)}</b>${info(types.map((t) => t.help).join(" "))}<span class="sadd">${P.signalRules.length >= 12 ? "" : types.map((t) => `<button type="button" class="chip" data-radd="${esc(t.key)}">+ ${esc(types.length > 1 || rules.length ? t.label : "Add words")}</button>`).join("")}</span></div>
+      ${rules.map(([r, i]) => { const t = types.find((x) => x.key === r.type); return `<div class="persona" data-ri="${i}">
+        <div class="phead"><b style="flex:1;font-size:13px">${esc(types.length > 1 || g === "Your own" ? t.label : "Words to look for")}</b><label class="toggle" style="margin:0"><input type="checkbox" data-chk="signalRules.${i}.on" ${r.on ? "checked" : ""} aria-label="On"><span>On</span></label><button type="button" class="btn ghost sm" data-rrm="${i}">Remove</button></div>
+        ${tagField(`signalRules.${i}.words`, t.words, "")}</div>`; }).join("") || `<p class="meta" style="margin:2px 0 0">Nothing set. Use the button above to add some.</p>`}</div>`; }).join("");
+}
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+/** Seven days, each with how many of this message may go out that day (0 = none). */
+function schedGrid(kind, max, unit) {
+  const v = P.watch.sched[kind];
+  return `<div class="sched" role="group" aria-label="Days and how many per day"><div class="sdays">${DAYS.map((dn, i) => `<label class="sd${v[i] ? " on" : ""}"><span>${dn}</span><input type="number" min="0" max="${max}" data-num="watch.sched.${kind}.${i}" value="${esc(v[i])}" aria-label="${dn}: ${esc(unit)}"></label>`).join("")}</div>
+    <div class="sset"><button type="button" class="chip" data-schedset="${kind}:all">Every day</button><button type="button" class="chip" data-schedset="${kind}:week">Weekdays only</button><button type="button" class="chip" data-schedset="${kind}:off">None</button><span class="meta">Most ${esc(unit)} that day; 0 = not that day. Days run in IST.</span></div></div>`;
+}
+/** One message: what it is, a switch, when it goes out, what is in it, its settings and a preview. */
+function msgCard(m) {
+  const on = getPath(P, m.toggle) !== false;
+  return `<article class="card scard msg${on ? "" : " off"}" data-sec="alerts" data-mk="${m.key}">
+    <div class="mhead"><div><p class="label" style="margin:0">${esc(m.title)}</p><p class="help" style="margin:3px 0 0">${esc(m.desc)}</p></div>${chk(m.toggle, "On", "")}</div>
+    <div class="mbody2">
+      <div class="mrow"><span class="mk">When</span><div>${m.sched ? schedGrid(m.key, m.sched[0], m.sched[1]) : `<span class="meta">${esc(m.when)}</span>`}</div></div>
+      <div class="mrow"><span class="mk">What is in it</span><span class="meta">${esc(m.contents)}</span></div>
+      ${m.settings ? `<div class="mrow"><span class="mk">Settings</span><div class="msets2">${m.settings}</div></div>` : ""}
+      <div class="mrow"><span class="mk"></span><button type="button" class="btn ghost sm" data-mailprev="${m.key}">Preview this email</button><span class="meta"> A sample with made-up names. Nothing is sent.</span></div>
+    </div></article>`;
+}
+function alertsHtml(d, own) {
+  const head = (t, desc) => `<div class="agroup" data-sec="alerts"><p class="agh">${esc(t)}</p><p class="help" style="margin:2px 0 0">${esc(desc)}</p></div>`;
+  return `${head("Alerts", "Emails that arrive as things happen. They only ever go to you, never to a prospect. Turn one off and it is not built at all: no searches, no AI and no credits are used for it.")}
+    ${msgCard({ key: "hot", toggle: "watch.mail.hot", title: "Hot alert", desc: "An instant email when a company in your queue shows a new buying signal.", sched: [10, "alerts"],
+      contents: "The company, the signal and how old it is, and up to 2 people to contact with their team and whether they are already in HubSpot. Held back for the daily email if the company does not fit and you do not watch it.",
+      settings: `<div class="srow">Before an alert, look for people at up to ${numIn("watch.alertSearches", 0, 10, "Searches a day before alerts")} companies a day ${info("So the email names who to contact. Only for companies that fit or that you watch, never one searched in the last 30 days. A search costs 1 credit.")}</div>
+        <div class="srow">Keep ${numIn("watch.alertReserve", 0, 45, "Search credits to keep")} search credits for my own use ${info("Automatic searches stop when only this many credits are left this month.")}</div>` })}
+    ${msgCard({ key: "watchlist", toggle: "watch.mail.watchlist", title: "Watchlist alert", desc: "An email when something moves at a company or person you watch.", sched: [10, "alerts"],
+      contents: "What moved: new funding, a leader hired, an event they host, a competitor in use, a deal change, or a watched person in the news. Big movements are grouped into one email (at most 3 a day); smaller ones wait for the daily email.",
+      settings: `<div class="srow">Look up what watched people are doing, for up to ${numIn("watch.activityPerDay", 0, 6, "People a day", 56)} people a day ${info("Events they speak at or join, podcasts, posts, awards, job moves. About 5 cents each.")}</div>
+        ${chk("watch.titleCheck", "Check job titles of watched people monthly", "Catches a job change. Uses 1 search credit per company a month, inside your reserve. Off by default.")}` })}
+    ${msgCard({ key: "flags", toggle: "watch.mail.flags", title: "Problem flags", desc: "Something in your pipeline looks off: a hot company left alone, a lead past its reply target, a meeting with no debrief.", sched: [8, "checks"],
+      contents: "A card on your To-do, a section in the daily email and a bell notification. The urgent checks run every 3 hours on the days and numbers you pick; the full pass runs inside the daily email.",
+      settings: `${chk("watch.todoForUrgent", "Add a HubSpot to-do for urgent problems", "Only for companies already in HubSpot, at most 3 a run.")}
+        <p class="lbl" style="font-weight:600;font-size:13px;margin:12px 0 6px">What counts as a problem</p>
+        __WATCHROWS__` })}
+    ${head("Daily summary", "One email each morning with who to contact today.")}
+    ${msgCard({ key: "daily", toggle: "watch.mail.daily", title: "Daily email", desc: "Your morning summary.", sched: [1, "email"],
+      contents: "Since yesterday (new signals, people, replies, leads, held-back alerts), the people to contact today, a Needs attention section if there are problems, and the companies still waiting for a contact. Off also stops its automatic people searches and the HubSpot summary to-do.",
+      settings: `<div class="srow">Arrives at <input type="time" data-dtime value="${esc(DIGEST_TIME ?? d.digest_time_ist)}" aria-label="Time the daily email arrives (IST)" style="width:118px"> IST ${info("Companies are re-checked 90 minutes before it arrives.")}</div>
+        <div class="srow">Show up to ${numIn("watch.todayCap", 3, 15, "Most people in the email")} people ${info("Also the most people on your To-do board.")}</div>
+        ${chk("watch.digestFlags", "Include a Needs attention section", "The problems found by the checks above.")}
+        ${own ? `<div class="srow"><button type="button" class="btn ghost sm" data-digestpreview>Preview today's real email</button><span class="meta">Built from your live data. Nothing is sent.</span></div>` : ""}` })}
+    ${head("Meetings", "Sent when something happens with a meeting on your calendar.")}
+    ${msgCard({ key: "briefs", toggle: "watch.mail.briefs", title: "Meeting brief", desc: "A private brief when a meeting with an outside guest is booked.", when: "Right after the meeting is booked.", contents: "Who they are, what is new, and questions to ask. Companies already in HubSpot also get it as an internal note." })}
+    ${msgCard({ key: "debrief", toggle: "watch.mail.debrief", title: "How did it go?", desc: "The email after a briefed meeting ends.", when: "5 minutes after a briefed meeting ends.", contents: "Four one-tap answers (went well, follow-up, no-show, not a fit). Your answer updates the company and HubSpot." })}
+    ${msgCard({ key: "calendar", toggle: "watch.mail.calendar", title: "Meeting cancelled or moved", desc: "The notice when a briefed meeting changes.", when: "When the calendar event is cancelled or its time changes.", contents: "What changed. A cancelled meeting sends the company back to your follow-up list with a reschedule task." })}
+    ${head("Leads and deals", "Sent when a lead arrives or a deal changes in HubSpot.")}
+    ${msgCard({ key: "leads", toggle: "watch.mail.leads", title: "New lead alert and reminder", desc: "The alert when someone fills in your form, and one reminder if it goes unanswered. The lead is saved either way.", when: "When the form is filled in; the reminder follows if there is no reply by the target.", contents: "Who they are, why now and a reply target." })}
+    ${msgCard({ key: "loss", toggle: "watch.mail.loss", title: "Why was it lost?", desc: "A one-time question when a deal you opened is closed lost with no reason.", when: "Once per lost deal, after HubSpot shows it as closed lost.", contents: "Five one-tap reasons. Your answer is saved and written to the deal." })}
+    ${head("Background actions", "Nothing is sent. These add people or companies to your lists and to HubSpot. Credits are used only inside your reserve.")}
+    <article class="card scard" data-sec="alerts">
+      ${chk("watch.autoFix", "Fix a running-dry list automatically", "When your To-do is about to run out, search the best 3 companies without a contact and list who was found in the email. Uses 3 to 6 credits when it happens. Off by default.")}
+      ${chk("watch.autoPush", "Add to HubSpot when I start working a company", "When you mark a company contacted, replied or meeting booked and it is not in HubSpot yet, the company and its best 2 revealed people are added first, so status updates have somewhere to go. Nothing is added just for looking, revealing or watching.")}
+    </article>`.replace("__WATCHROWS__", WATCHROWS_HTML());
+}
+const WATCHROWS_HTML = () => `${WATCH_ROWS.map(([k, before, unit, after]) => `<div class="field" style="margin-bottom:8px"><label class="toggle" style="margin:0"><input type="checkbox" data-chk="watch.checks.${k}.on" ${P.watch.checks[k].on ? "checked" : ""}><span>${esc(before)}${unit ? ` <input type="number" min="0" data-num="watch.checks.${k}.n" value="${esc(P.watch.checks[k].n)}" style="width:68px" aria-label="${esc(before)} ${esc(unit)}"> ${esc(unit)}` : ""}${after ? ` ${esc(after)}` : ""}</span></label></div>`).join("")}`;
+/** Demo mode: edits are kept in this browser only, so the page can be tried without the owner key. */
+function demoOverlay() {
+  if (!SETUP || SETUP.admin) return;
+  try { const saved = JSON.parse(localStorage.getItem("cp_demo_profile") || "null"); if (saved && typeof saved === "object") P = { ...P, ...saved }; } catch { /* a broken copy is ignored */ }
+}
 function drawSetup() {
   const d = SETUP, own = !!d.admin;
-  $("setupbody").innerHTML = `${setupNavHtml()}${setupChecklistHtml()}
-    <article class="card"><p class="label">What you sell</p>
+  const O = d.options;
+  const note = !own ? `<div class="demonote" data-sec="*">Demo mode: you can change anything here to see how it works. Changes stay in this browser and the real settings are not touched. <button type="button" class="btn link sm" data-demoreset>Reset my demo changes</button></div>` : "";
+  $("setupbody").innerHTML = `${setupNavHtml()}${note}${setupChecklistHtml()}
+    <article class="card scard" data-sec="sell"><p class="label">What you sell</p>
       <p class="help" style="margin:0 0 10px">Describe what you sell in a sentence or two. One click turns it into suggestions for the settings below.</p>
       <div class="field"><label for="pdesc">What do you sell, and to whom?</label><textarea id="pdesc" class="big" maxlength="1500" data-text="product.description" placeholder="Example: A tool that cleans up CRM data for sales teams at B2B software companies with 20 to 200 people.">${esc(P.product.description)}</textarea></div>
       <div class="field"><label for="pname">Your product's name (optional)</label><input id="pname" type="text" class="tin" data-text="product.name" value="${esc(P.product.name)}" placeholder="Used in drafts, briefs and deal names" maxlength="40"></div>
@@ -1884,153 +2009,94 @@ function drawSetup() {
       ${SUGGEST_NOTE ? `<div class="why" style="margin-top:12px"><b>Suggestion applied below.</b> ${esc(SUGGEST_NOTE)} Review it, then press Save.</div>` : ""}
 
     </article>
-    <article class="card"><p class="label">Who we look for${info("How well a company fits is worked out from these choices, your product above and what we learn about the company. There is nothing to weigh.")}</p>
-      
-      ${msField("industries", "Industries", d.options.industries, "Hunter's own industry names. Most software companies are under Software Development; narrow it with the words below.")}
-      <div class="field"><span class="lbl">Company size (people)</span><div class="numrow"><input type="number" min="1" data-num="employeesMin" value="${esc(P.employeesMin)}" aria-label="Minimum people"> to <input type="number" min="1" data-num="employeesMax" value="${esc(P.employeesMax)}" aria-label="Maximum people"></div></div>
-      ${msField("stages", "Funding stage", d.options.stages, "Pick every stage you would sell to.")}
-      ${chk("strictFit", "Only show companies inside these places and industries", "On: a company whose country or industry is known and outside your choices is treated as outside your range, hidden, and never alerted or searched. A company whose country is not known yet is never held against it. Off: places and industries only change the score.")}
-      ${msField("regions", "Where they are based", d.options.regions, "Pick a region or country, or type a city name to add it. Companies elsewhere show as Outside range.", d.options.region_groups)}
-      ${msField("excludeIndustries", "All except these industries", d.options.industries, "Use this when you want every industry except a few. These are never shown.")}
-      ${msField("excludeRegions", "Never in these places", d.options.regions, "Even inside a region you chose, these countries or regions are left out.", d.options.region_groups)}
-      <div class="field"><span class="lbl">Company age (years since founded)</span><div class="numrow"><input type="number" min="0" data-num="companyAge.min" value="${P.companyAge.min ?? ""}" placeholder="any" aria-label="Minimum age"> to <input type="number" min="0" data-num="companyAge.max" value="${P.companyAge.max ?? ""}" placeholder="any" aria-label="Maximum age"></div><p class="help">Leave a box empty for no limit. A company with no known founding year is never held against it.</p></div>
-      <div class="field"><label for="bmodel">Who they sell to</label><select id="bmodel" data-sel="businessModel">${[["any", "Any"], ["b2b", "Other businesses (B2B)"], ["b2c", "Consumers (B2C)"]].map(([v, l]) => `<option value="${v}"${P.businessModel === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
-      <div class="field"><label for="ctype">Company type</label><select id="ctype" data-sel="companyType">${[["any", "Any"], ["private", "Privately held"], ["public", "Publicly traded"]].map(([v, l]) => `<option value="${v}"${P.companyType === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
-      <div class="field"><span class="lbl">Best time after a funding round (days)</span><div class="numrow"><input type="number" min="0" data-num="roundWindow.0" value="${esc(P.roundWindow[0])}" aria-label="From day"> to <input type="number" min="1" data-num="roundWindow.1" value="${esc(P.roundWindow[1])}" aria-label="To day"></div><p class="help">A company whose last round falls in this window scores a little higher on timing.</p></div>
-        ${tagField("toolsGood", "Tools that are a good sign", "Software a good customer probably uses, for example hubspot, salesforce.")}
-          ${tagField("competitors", "Your competitors", "Names or domains. Domains are never shown as prospects.")}
-        ${tagField("excludeWords", "Never show (words, company names or websites)", "A company whose industry, tags, description or name has one of these words, or whose website is listed, is never shown. For example: staffing, recruitment, partner.com. Leave empty to allow every kind of company.")}
-    </article>
-    <article class="card" id="icpcard"><p class="label">What your customers look like</p><p class="meta" style="margin:0">${own ? "Loading…" : "Unlock to read your HubSpot customers."}</p></article>
-    <article class="card"><p class="label">Who we contact</p>
-      <p class="help" style="margin:0 0 12px">The buyers you want to reach, best first.${info("The order is the priority. A person matches when their job title contains one of the title words and, if set, their department and seniority fit. Saving re-ranks the people you already have. Departments are Hunter's, so they also steer its people search; the levels here come from the job title and are mapped to Hunter's Junior, Senior and Executive.")}</p>
-      ${msField("contact.departments", "Teams (most wanted first)", d.options.departments, "The order you add them is the priority. Leave empty to include every team.")}
-      <div class="field"><span class="lbl">Level</span><div class="chips" style="margin:0">${d.options.seniorities.map(([k, l]) => `<button type="button" class="chip${P.contact.seniority.includes(k) ? " sel" : ""}" data-csen="${esc(k)}">${esc(l)}</button>`).join("")}</div><p class="help">Leave all off to include every level.</p></div>
-      ${tagField("contact.titleWords", "Job titles that count", "For example: vp sales, revops, head of growth. A person needs one of these in their title. Leave empty to go by team and level only.")}
-      ${tagField("contact.excludeTitles", "Never contact titles with", "For example: intern, assistant, student.")}
+    ${SC("look", "Industries", "Which kinds of company count as a fit.", `
+      ${msField("industries", "Include these industries", O.industries, "Hunter's own industry names. Most software companies are under Software Development.")}
+      ${msField("excludeIndustries", "Leave out these industries", O.industries, "Use this to take in every industry except a few. These are never shown.")}`)}
+    ${SC("look", "Location", "Where the company is based.", `
+      ${msField("regions", "Include these places", O.regions, "A region, a country, or type a city name to add it. Companies elsewhere show as outside your range.", O.region_groups)}
+      ${msField("excludeRegions", "Leave out these places", O.regions, "Even inside a region you chose, these countries or regions are left out.", O.region_groups)}
+      ${chk("strictFit", "Only show companies inside these places and industries", "On: a company whose country or industry is known and outside your choices is hidden and never alerted or searched. A company whose country is not known yet is never held against it. Off: places and industries only change the score.")}`)}
+    ${SC("look", "Company size and funding", "How big the company is and how it is funded.", `
+      ${msField("sizeBuckets", "Company size (people)", O.size_buckets, "Pick every size you would sell to.")}
+      ${msField("stages", "Funding stage", O.stages, "Pick every stage you would sell to.")}
+      <div class="field"><span class="lbl">Best time after a funding round (days)</span><div class="numrow"><input type="number" min="0" data-num="roundWindow.0" value="${esc(P.roundWindow[0])}" aria-label="From day"> to <input type="number" min="1" data-num="roundWindow.1" value="${esc(P.roundWindow[1])}" aria-label="To day"></div><p class="help">A company whose last round falls in this window scores a little higher on timing.</p></div>`)}
+    ${SC("look", "Company profile", "Age, who they sell to and ownership.", `
+      ${msField("ageBuckets", "Company age (years since founded)", O.age_buckets, "Leave empty for any age. A company with no known founding year is never held against it.")}
+      <div class="fgrid2"><div class="field"><label for="bmodel">Who they sell to</label><select id="bmodel" data-sel="businessModel">${[["any", "Any"], ["b2b", "Other businesses (B2B)"], ["b2c", "Consumers (B2C)"]].map(([v, l]) => `<option value="${v}"${P.businessModel === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="field"><label for="ctype">Company type</label><select id="ctype" data-sel="companyType">${[["any", "Any"], ["private", "Privately held"], ["public", "Publicly traded"]].map(([v, l]) => `<option value="${v}"${P.companyType === v ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>`)}
+    ${SC("look", "Tools and competitors", "What a good customer already uses, and who you compete with.", `
+      ${tagField("toolsGood", "Tools that are a good sign", "Software a good customer probably uses, for example hubspot, salesforce.")}
+      ${tagField("competitors", "Your competitors", "Names or websites. Competitors are never shown as prospects, and a company using their product counts as a poor sign.")}`)}
+    ${SC("look", "Never show", "Companies you never want to see.", `
+      ${tagField("excludeWords", "Words, company names or websites", "A company whose industry, tags, description or name has one of these words, or whose website is listed, is never shown. For example: staffing, recruitment, partner.com. Leave empty to allow every kind of company.")}`)}
+    ${SC("look", "Weekly search", "Finding new companies on its own.", `
+      ${chk("discovery", "Search for new companies every week", `${d.discovery.schedule}. Reads Hacker News hiring and launch posts, Hunter's company database, Y Combinator and the public web, and keeps companies that match your profile.`)}
+      <p class="meta" style="margin:0 0 10px">${d.discovery.last ? `Last run ${esc(ago(d.discovery.last))} · ` : ""}${esc(d.discovery.added_30d)} added in the last 30 days.</p>
+      <a class="btn ghost" href="#/discover">Open Discover to run it and see every run</a>`)}
+    <article class="card scard" data-sec="look" id="icpcard"><p class="label">What your customers look like</p><p class="meta" style="margin:0">${own ? "Loading…" : "Unlock to read your HubSpot customers."}</p></article>
+    ${SC("contact", "Who to contact", "Filters that combine: a person must be in one of the teams, at one of the levels and, if you give title words, have one in their title.", `
+      ${msField("contact.departments", "Teams (most wanted first)", O.departments, "The order you add them is the priority. Leave empty to include every team.")}
+      <div class="field"><span class="lbl">Level</span><div class="chips" style="margin:0">${O.seniorities.map(([k, l]) => `<button type="button" class="chip${P.contact.seniority.includes(k) ? " sel" : ""}" data-csen="${esc(k)}">${esc(l)}</button>`).join("")}</div><p class="help">Leave all off to include every level.</p></div>
+      ${tagField("contact.titleWords", "Job titles that count", "For example: vp sales, revops, head of growth. Leave empty to go by team and level only.")}
+      ${tagField("contact.excludeTitles", "Never contact titles with", "For example: intern, assistant, student.")}`)}
+    ${SC("contact", "Limits", "How many people to show and how sure we must be.", `
       <div class="field"><span class="lbl">People to show per company</span><div class="numrow"><input type="number" min="1" max="5" data-num="contact.maxPerCompany" value="${esc(P.contact.maxPerCompany)}" aria-label="People per company"></div></div>
       ${chk("contact.verifiedOnly", "Verified emails only", "Leaves out anyone whose email Hunter has checked and found not valid.")}
-      ${chk("contact.decisionOnly", "Decision makers only", "Leaves out managers and individual contributors; keeps directors, heads, VPs and C-level.")}
-    </article>
-    <article class="card"><p class="label">What counts as a buying signal</p>
-        ${tagField("painWords", "Problems that show a company needs you", "If a job post mentions one of these (for example crm, data quality), it counts as a signal.")}
-      <div class="toggles">
-        <label class="toggle"><input type="checkbox" data-sig="hiring" ${P.signals.hiring ? "checked" : ""}><span>Hiring sales or RevOps roles<small>Public job boards and Hacker News hiring posts</small></span></label>
-        <label class="toggle"><input type="checkbox" data-sig="news" ${P.signals.news ? "checked" : ""}><span>Funding and company news<small>Last 60 days; older news counts less</small></span></label>
-        <label class="toggle"><input type="checkbox" data-sig="community" ${P.signals.community ? "checked" : ""}><span>Community buzz<small>Hacker News mentions</small></span></label>
-      </div>
-      <hr class="hr">
-      <div class="sighead"><p class="lbl" style="font-weight:600;font-size:14px;margin:0">Signals by type${info("Each signal counts the next time companies are checked: daily for companies in your queue, weekly for the rest.")}</p><span class="meta">${P.signalRules.length} of 12 custom</span></div>
-      <div class="sgroup"><div class="sgh"><b>Hiring</b>${info("A company hiring for any of these titles is treated as scaling its sales team.")}</div>
-        ${tagField("hiringRoles", "Job titles that count", "")}</div>
-      ${SIG_GROUPS.map((g) => { const types = d.options.rule_types.filter((t) => t.group === g); if (!types.length) return ""; const rules = P.signalRules.map((r, i) => [r, i]).filter(([r]) => types.some((t) => t.key === r.type));
-        return `<div class="sgroup"><div class="sgh"><b>${esc(g)}</b>${info(types.map((t) => t.help).join(" "))}<span class="sadd">${P.signalRules.length >= 12 ? "" : types.map((t) => `<button type="button" class="chip" data-radd="${esc(t.key)}">+ ${esc(types.length > 1 || rules.length ? t.label : "Add")}</button>`).join("")}</span></div>
-          ${rules.map(([r, i]) => { const t = types.find((x) => x.key === r.type); return `<div class="persona" data-ri="${i}">
-            <div class="phead"><b style="flex:1;font-size:13px">${esc(types.length > 1 || g === "Your own" ? t.label : "Words to look for")}</b><label class="toggle" style="margin:0"><input type="checkbox" data-chk="signalRules.${i}.on" ${r.on ? "checked" : ""} aria-label="On"><span>On</span></label><button type="button" class="btn ghost sm" data-rrm="${i}">Remove</button></div>
-            ${tagField(`signalRules.${i}.words`, t.words, "")}</div>`; }).join("") || `<p class="meta" style="margin:2px 0 0">Nothing set. Use the button above to add some.</p>`}</div>`; }).join("")}
-    </article>
-    <article class="card"><p class="label">Which companies to show</p>
+      ${chk("contact.decisionOnly", "Decision makers only", "Leaves out managers and individual contributors; keeps directors, heads, VPs and C-level.")}`)}
+    ${SC("signals", "Hiring", "A company hiring for the roles you sell into is usually growing that team.", `
+      ${chk("signals.hiring", "Watch hiring", "Reads public job boards (Greenhouse, Lever, Ashby) and Hacker News hiring posts. Off: none of these are read.")}
+      ${tagField("hiringRoles", "Job titles that count", "A company hiring for any of these is treated as scaling its team.")}
+      ${tagField("painWords", "Problems their job posts mention", "If a job post mentions one of these (for example crm, data quality), it counts as a signal.")}`, P.signals.hiring)}
+    ${SC("signals", "Funding and company news", "News about the company in the last 60 days; older news counts less.", `
+      ${chk("signals.news", "Watch news", "Google News for funding, leaders and launches, and PredictLeads for funding and executive hires. Off: none of this is read.")}
+      ${ruleBlock(["Press and announcements", "Company changes", "New launches", "Events"])}`, P.signals.news)}
+    ${SC("signals", "Tools and competitors in use", "Counts when a company's tools include one of these.", `
+      ${ruleBlock(["Tools and competitors"])}`)}
+    ${SC("signals", "Community buzz", "Hacker News mentions of the company.", `
+      ${chk("signals.community", "Watch community buzz", "Looks for the company in Hacker News stories and comments. Off: Hacker News mentions are not read.")}`, P.signals.community)}
+    ${SC("signals", "Your own watch phrases", "Anything else you want to catch, for example a project or a pain point.", `
+      ${ruleBlock(["Your own"])}`)}
+    ${SC("fit", "Which companies to show", "Companies below your choice move to Low fit and stay out of your lists, alerts and searches.", `
       <div class="field"><label for="minfit">Lowest fit to show</label>
-        <select id="minfit" data-sel="minFit" aria-label="Lowest fit to show">${[["matches", "Fits only"], ["close", "Fits and partly fits"], ["unknown", "Also fit unknown (not checked yet)"], ["outside", "Everything, even outside range"]].map(([v, t]) => `<option value="${v}"${P.minFit === v ? " selected" : ""}>${t}</option>`).join("")}</select>
-        <p class="help">Right now: ${esc(d.fit_counts.matches)} fit, ${esc(d.fit_counts.close)} partly fit, ${esc(d.fit_counts.unknown)} not checked, ${esc(d.fit_counts.outside)} outside range. ${info("Companies below your choice move to Low fit and never appear on your To-do, in alerts, discovery or automatic contact lookups. Hiding fit unknown also hides companies whose size has not been checked yet.")}</p></div>
-      <div class="field"><span class="lbl">Lowest score to count as ready</span><div class="numrow"><input type="number" min="0" max="90" step="5" data-num="minScore" value="${esc(P.minScore)}" aria-label="Lowest score to count as ready"> out of 100</div>
-        <p class="help">Lower it to see more companies, raise it to see fewer.</p></div>
-    </article>
-    <article class="card"><p class="label">Alerts, daily email and flags</p>
-      <p class="help" style="margin:0 0 10px">Every message you can get, when it arrives and what is in it. Open one to change its settings. Times are IST.</p>
-      <div class="sgroup" style="margin:0 0 12px"><div class="sgh"><b>On and off</b>${info("Turn a message off and it is not built or sent at all: no searches, no AI and no credits are used for it. Nothing else changes, and you can turn it back on any time.")}</div>
-        <div class="toggles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:2px 24px;margin-top:6px">
-          ${chk("watch.mail.hot", "Hot alerts", "Instant emails when a company shows a new buying signal.")}
-          ${chk("watch.mail.watchlist", "Watchlist alerts", "Emails when something moves at a company or person you watch.")}
-          ${chk("watch.mail.daily", "Daily email", "The morning summary. Off also stops its automatic people searches and HubSpot summary to-do.")}
-          ${chk("watch.mail.flags", "Problem flags", "The checks for things slipping, the flags on your to-do, and their HubSpot to-dos.")}
-          ${chk("watch.mail.briefs", "Meeting briefs", "The private brief emailed when a meeting with an outside guest is booked.")}
-          ${chk("watch.mail.debrief", "How did it go? emails", "The email after a briefed meeting ends.")}
-          ${chk("watch.mail.calendar", "Meeting cancelled or moved", "The notice when a briefed meeting changes.")}
-          ${chk("watch.mail.leads", "New lead alerts and reminders", "The alert when someone fills in your form, and the reminder if it goes unanswered. The lead is still saved.")}
-          ${chk("watch.mail.loss", "Why was it lost? emails", "The one-time question when a deal is closed lost.")}
-        </div></div>
-      <div class="chips" style="margin:0 0 4px;align-items:center"><span class="meta">Style</span>${[["quiet", "Quiet", "Few emails, only big problems"], ["normal", "Normal", "The defaults"], ["busy", "Busy", "More alerts, quicker nudges"]].map(([k, l, t]) => `<button type="button" class="chip" data-preset="${k}" title="${esc(t)}">${l}</button>`).join("")}${info("A style only fills in the numbers below. Nothing changes until you press Save.")}</div>
-
-      ${mailBox("hot", "Hot alert", P.watch.alertsPerDay ? `Instant · up to ${P.watch.alertsPerDay} a day` : "Off", "A company in your queue shows a new buying signal.",
-        "The company, the signal and how old it is, and up to 2 people to contact with their buyer type and whether they are already in HubSpot. Held back for the daily email if the company does not fit and you do not watch it.",
-        `<div class="srow">Send up to ${numIn("watch.alertsPerDay", 0, 10, "Hot alerts a day")} a day ${info("0 turns hot alerts off.")}</div>
-         <div class="srow">Before an alert, look for people at up to ${numIn("watch.alertSearches", 0, 10, "Searches a day before alerts")} companies a day ${info("So the email names who to contact. Only for companies that fit or that you watch, never one searched in the last 30 days. A search costs 1 credit (sometimes 2); finding nobody is free. 0 turns it off.")}</div>
-         <div class="srow">Keep ${numIn("watch.alertReserve", 0, 45, "Search credits to keep")} search credits for my own use ${info("Automatic searches stop when only this many credits are left this month.")}</div>`)}
-
-      ${mailBox("watch", "Watchlist alert", P.watch.watchlistAlerts ? "Instant · up to 5 a day" : "Off", "Something happens at a company or with a person you watch.",
-        "What moved: new funding, a leader hired, an event they host, a competitor in use, a deal change, or a watched person in the news. Big movements are grouped into one email (at most 3 a day); smaller ones wait for the daily email.",
-        `${chk("watch.watchlistAlerts", "Alert me about companies I watch", "Up to 5 a day, separate from the hot alerts. Any new signal counts, whatever the score.")}
-         <div class="srow">Look up what watched people are doing, for up to ${numIn("watch.activityPerDay", 0, 6, "People a day", 56)} people a day ${info("Events they speak at or join, podcasts, posts, awards, job moves. A web search by full name: about 5 cents of AI each, each person at most every two weeks. 0 turns it off. Anything about their own team is free and always on.")}</div>
-         ${chk("watch.titleCheck", "Check job titles of watched people monthly", "Catches a job change. Uses 1 search credit per company a month, inside your reserve. Off by default.")}`)}
-
-      ${mailBox("daily", "Daily email", `Every day at ${DIGEST_TIME ?? d.digest_time_ist} IST`, "Your morning summary.",
-        "Since yesterday (new signals, people, replies, leads, held-back alerts), the people to contact today, a Needs attention section if there are problems, and the companies still waiting for a contact.",
-        `<div class="srow">Arrives at <input type="time" data-dtime value="${esc(DIGEST_TIME ?? d.digest_time_ist)}" aria-label="Time the daily email arrives (IST)" style="width:118px"> IST ${info("Companies are re-checked 90 minutes before, so the email is fresh.")}</div>
-         <div class="srow">Show up to ${numIn("watch.todayCap", 3, 15, "Most people in the email")} people ${info("Also the most people on your To-do board.")}</div>
-         ${chk("watch.digestFlags", "Include a Needs attention section", "The problems found by the checks further down.")}
-         ${own ? `<div class="srow"><button type="button" class="btn ghost sm" data-digestpreview>Preview today's email</button><span class="meta">Nothing is sent.</span></div>` : ""}`)}
-
-      ${mailBox("flags", "Problem flags", P.watch.urgent ? "Urgent: every 3 hours" : "Once a day", "Something in your pipeline looks off.",
-        "A card on your To-do, a section in the daily email and a bell notification. Urgent ones (a hot company left alone, a lead past its reply target) are checked every 3 hours and can add a HubSpot to-do. Each flag fires once and clears itself when fixed.",
-        `${chk("watch.urgent", "Check for urgent problems every 3 hours", "Everything else is checked once a day.")}
-         ${chk("watch.todoForUrgent", "Add a HubSpot to-do for urgent problems", "Only for companies already in HubSpot, at most 3 a run.")}
-         <p class="lbl" style="font-weight:600;font-size:13px;margin:12px 0 6px">What counts as a problem</p>
-         ${WATCH_ROWS.map(([k, before, unit, after]) => `<div class="field" style="margin-bottom:8px"><label class="toggle" style="margin:0"><input type="checkbox" data-chk="watch.checks.${k}.on" ${P.watch.checks[k].on ? "checked" : ""}><span>${esc(before)}${unit ? ` <input type="number" min="0" data-num="watch.checks.${k}.n" value="${esc(P.watch.checks[k].n)}" style="width:68px" aria-label="${esc(before)} ${esc(unit)}"> ${esc(unit)}` : ""}${after ? ` ${esc(after)}` : ""}</span></label></div>`).join("")}`)}
-
-      ${mailBox("auto", "Background actions", "Uses credits only inside your reserve", "Things done for you between emails.",
-        "Nothing is sent. These add people or companies to your lists and to HubSpot.",
-        `${chk("watch.autoFix", "Fix a running-dry list automatically", "When your To-do is about to run out, search the best 3 companies without a contact and list who was found in the email. Uses 3 to 6 credits when it happens. Off by default.")}
-         ${chk("watch.autoPush", "Add to HubSpot when I start working a company", "When you mark a company contacted, replied or meeting booked and it is not in HubSpot yet, the company and its best 2 revealed people are added first, so status updates have somewhere to go. Nothing is added just for looking, revealing or watching.")}`)}
-
-      <div class="mailfixed"><p class="lbl" style="font-weight:600;font-size:13px;margin:16px 0 6px">Always on, no settings${info("These only ever go to you, never to a prospect.")}</p>
-        <ul class="mlist"><li><b>Meeting brief</b> <span>when a new meeting with an outside guest is booked: who they are, what is new, questions to ask</span></li>
-          <li><b>How did it go?</b> <span>5 minutes after a briefed meeting ends, with four one-tap answers</span></li>
-          <li><b>Meeting cancelled or moved</b> <span>the account goes back to follow up and the debrief re-arms</span></li>
-          <li><b>New lead</b> <span>when someone fills in your form: who, why now and a reply target; plus one reminder if it goes unanswered</span></li>
-          <li><b>Why was it lost?</b> <span>once, when a deal we opened is closed lost without a reason</span></li></ul></div>
-    </article>
-
-    <article class="card"><p class="label">Finding new companies</p>
-      <label class="toggle" style="margin-bottom:12px"><input type="checkbox" data-disc ${P.discovery ? "checked" : ""}><span>Search for new companies every week<small>${esc(d.discovery.schedule)}. Reads Hacker News hiring and launch posts and searches the public web (recent funding, new sales leaders, sales hiring, launches), and keeps companies that match the profile above.</small></span></label>
-      <p class="meta" style="margin:0 0 12px">${d.discovery.last ? `Last run ${esc(ago(d.discovery.last))} · ` : ""}${esc(d.discovery.added_30d)} added in the last 30 days.</p>
-      <div class="actions" style="margin:0"><a class="btn ghost" href="#/discover">Open Discover to run it and see what was added and skipped</a></div>
-    </article>
-
-
-
-    <article class="card"><p class="label">Credits and costs</p>
-      <div class="tiles" style="margin:0 0 10px"><div class="tile"><b>${esc(d.ai.today_usd.toFixed(2))}</b><span>AI spend today (limit $${esc(d.ai.cap_usd.toFixed(2))})</span></div>
+        <select id="minfit" data-sel="minFit" aria-label="Lowest fit to show">${[["matches", "Fits only"], ["close", "Fits and partly fits"], ["unknown", "Also fit unknown (not checked yet)"], ["outside", "Everything"]].map(([v, t]) => `<option value="${v}"${P.minFit === v ? " selected" : ""}>${t}</option>`).join("")}</select>
+        <p class="help">Right now: ${esc(d.fit_counts.matches)} fit, ${esc(d.fit_counts.close)} partly fit, ${esc(d.fit_counts.unknown)} not checked, ${esc(d.fit_counts.outside)} outside range.</p></div>`)}
+    ${SC("fit", "How much must be happening", "A company counts as ready to work only when it shows this much activity (hiring, funding, news, tools).", `
+      <div class="field"><label for="minact">Activity needed</label>
+        <select id="minact" data-sel="minScore" aria-label="Activity needed">${[[0, "Anything: show every company that fits"], [30, "Some activity (recommended)"], [50, "A lot of activity: only the strongest"]].map(([v, t]) => `<option value="${v}"${(P.minScore >= 40 ? 50 : P.minScore >= 15 ? 30 : 0) === v ? " selected" : ""}>${t}</option>`).join("")}</select>
+        <p class="help">Lower it to see more companies, raise it to see fewer.</p></div>`)}
+    ${SC("fit", "AI fit read", "The AI reads each company's website and decides if it is the kind of company you sell to. It reads again after you change what you sell, your industries or your exclusions.", `
+      <div class="tiles" style="margin:0 0 10px"><div class="tile"><b>${esc(d.fit_ai.waiting)}</b><span>waiting to be read</span></div><div class="tile"><b>${esc(d.fit_ai.overrides.length)}</b><span>set by you</span></div></div>
+      ${own ? `<div class="actions" style="margin:0 0 10px"><button type="button" class="btn ghost sm" data-fitjudge ${d.fit_ai.waiting ? "" : "disabled"}>Read ${esc(Math.min(25, d.fit_ai.waiting))} now · about ${esc(Math.max(1, Math.round(Math.min(25, d.fit_ai.waiting) * 0.15)))} cent${Math.round(Math.min(25, d.fit_ai.waiting) * 0.15) > 1 ? "s" : ""}</button><span class="meta">The daily watch also reads 25 a day.</span></div>` : ""}
+      ${d.fit_ai.overrides.length ? `<p class="label" style="margin:12px 0 4px">Companies you decided</p>${d.fit_ai.overrides.map((o) => `<div class="wrow"><div class="wmain"><b>${esc(o.name)}</b> <span class="badge ${o.fit_override === "yes" ? "good" : "bad"}">${o.fit_override === "yes" ? "Always a fit" : "Never a fit"}</span>${o.fit_override_note ? ` <span class="meta">${esc(o.fit_override_note)}</span>` : ""}</div>${own ? `<div class="wside"><button type="button" class="btn link sm" data-fitclear="${esc(o.id)}">Let the AI decide</button></div>` : ""}</div>`).join("")}` : ""}`)}
+    <details class="how" data-sec="fit"><summary>How scoring and signals work</summary><div id="icpbody"></div></details>
+    ${alertsHtml(d, own)}
+    ${SC("usage", "Credits and costs", "What the system has used.", `
+      <div class="tiles" style="margin:0 0 10px"><div class="tile"><b>$${esc(d.ai.today_usd.toFixed(2))}</b><span>AI spend today (limit $${esc(d.ai.cap_usd.toFixed(2))})</span></div>
+        <div class="tile"><b>${CREDITS ? esc(CREDITS.remaining ?? "") : "n/a"}</b><span>Hunter credits left this month</span></div>
         <div class="tile"><b>${esc(d.unknown_fit)}</b><span>companies with size and stage not checked</span></div></div>
       ${d.predictleads.configured ? `<p class="meta" style="margin:0 0 10px"><b>PredictLeads:</b> ${esc(d.predictleads.used)} of ${esc(d.predictleads.cap)} monthly calls used.</p>
       <label class="toggle" style="margin:0 0 12px"><input type="checkbox" data-chk="plAuto" ${P.plAuto ? "checked" : ""}><span>Let the daily watch check news for the best accounts<small>At most 2 calls a day, only for accounts that pass your fit bar and have not been checked for 2 weeks. It stops at 60% of the allowance, so the rest stays for meeting briefs and your own checks.</small></span></label>` : ""}
       ${d.unknown_fit ? `<p class="meta" style="margin:0">${esc(d.unknown_fit)} compan${d.unknown_fit === 1 ? "y has" : "ies have"} no size and stage yet (0.2 credit each). <a href="#/discover">Look them up on Discover</a>, or one at a time on a company card.</p>` : ""}
-    </article>
-
-    ${own ? `<article class="card"><p class="label">HubSpot columns</p>
+    `)}
+    ${own ? `<article class="card scard" data-sec="conn"><p class="label">HubSpot columns</p>
       <p class="meta" style="margin:0 0 10px">Fills company and contact columns in HubSpot (size, city, funding, latest signal, status, owner) from what we already know. Facts are only written where HubSpot is blank, and nothing is deleted. They also update on every push and every action you record.</p>
       <div class="actions" style="margin:0"><button class="btn ghost" data-hsrefresh>Update HubSpot columns</button></div><div id="hsout"></div></article>` : ""}
-
-    <article class="card"><p class="label">Name and logo</p>
+    <article class="card scard" data-sec="conn"><p class="label">Name and logo</p>
       <p class="help" style="margin:0 0 10px">Make the page yours. The name, tagline and logo show at the top and in the browser tab. Emails keep the standard name for now.</p>
       <div class="logoprev"><div class="lp" id="logoprev">${BRAND_DRAFT.logo ? `<img src="${esc(BRAND_DRAFT.logo)}" alt="Your logo">` : "No logo"}</div>
         <div><input type="file" id="logofile" accept="image/png,image/jpeg,image/webp,image/svg+xml" ${own ? "" : "disabled"} aria-label="Upload a logo">${BRAND_DRAFT.logo ? ` <button type="button" class="btn ghost sm" data-logorm>Remove logo</button>` : ""}<p class="help" style="margin:6px 0 0">PNG, JPG, WebP or SVG. It is shrunk to fit.</p></div></div>
       <div class="field"><label for="bname">Name</label><input id="bname" type="text" class="tin" maxlength="40" value="${esc(BRAND_DRAFT.name)}" data-brand="name"></div>
       <div class="field"><label for="btag">Tagline</label><input id="btag" type="text" class="tin" style="max-width:520px" maxlength="80" value="${esc(BRAND_DRAFT.tagline)}" data-brand="tagline"></div>
     </article>
+    ${own ? `<article class="card scard" data-sec="conn" id="healthcard"><p class="label">Health</p><p class="meta" style="margin:0">Loading…</p></article>
+    <article class="card scard" data-sec="usage" id="usagecard"><p class="label">Search history</p><p class="help" style="margin:0 0 8px">Every search that used credits, so you can see what was spent and where.</p><div class="actions" style="margin:0"><button type="button" class="btn ghost" data-usage>Show the last 25 searches</button></div><div id="usageout"></div></article>` : ""}
 
-    ${own ? `<article class="card" id="healthcard"><p class="label">Health</p><p class="meta" style="margin:0">Loading…</p></article>
-    <article class="card" id="suppcard"><p class="label">Never contact list</p><p class="meta" style="margin:0">Loading…</p></article>
-    <article class="card" id="usagecard"><p class="label">Search history</p><p class="help" style="margin:0 0 8px">Every search that used credits, so you can see what was spent and where.</p><div class="actions" style="margin:0"><button type="button" class="btn ghost" data-usage>Show the last 25 searches</button></div><div id="usageout"></div></article>` : ""}
-
-    <details class="how"><summary>How scoring and signals work</summary><div id="icpbody"></div></details>
-    <div class="savebar" data-sec="save">${lockBtn(own, "data-save", "primary", "Save changes", "Unlock to save changes")}<span class="meta">${own ? "Saving recalculates every company's fit. No credits are used." : ""}</span></div>
+    
+    <div class="savebar" data-sec="save">${own ? `<button type="button" class="btn primary" data-save>Save changes</button><span class="meta">Saving recalculates every company's fit. No credits are used.</span>` : `<button type="button" class="btn primary" data-save>Save in this browser</button><span class="meta">Demo: kept in this browser only.</span>`}</div>
     <div class="savebar" data-sec="conn">${lockBtn(own, "data-brandsave", "primary", "Save name and logo", "Unlock to change")}<span class="meta">${own ? "Applies right away." : ""}</span></div>`;
   msDrawAll();
   applySetupSection();
-  loadSkipped();
   loadInsights();
-  loadSuppressed();
 }
 async function loadSuppressed() {
   const el = $("suppcard"); if (!el) return;
@@ -2072,7 +2138,7 @@ $("setupbody").addEventListener("click", async (e) => {
     return;
   }
   const ap = e.target.closest("[data-icpapply]");
-  if (ap) { const s = JSON.parse($("icpcard").dataset.s || "[]")[Number(ap.dataset.icpapply)]; if (s?.apply) { P.employeesMin = s.apply.employeesMin; P.employeesMax = s.apply.employeesMax; drawSetup(); say("Range filled in. Press Save to keep it."); } return; }
+  if (ap) { const s = JSON.parse($("icpcard").dataset.s || "[]")[Number(ap.dataset.icpapply)]; if (s?.apply) { P.employeesMin = s.apply.employeesMin; P.employeesMax = s.apply.employeesMax; P.sizeBuckets = []; drawSetup(); say("Range filled in. Press Save to keep it."); } return; }
   const u = e.target.closest("[data-usage]");
   if (u) {
     u.disabled = true;
@@ -2104,7 +2170,7 @@ async function loadHealth() {
 
 async function loadSetup() {
   $("setupbody").innerHTML = skeleton(5);
-  try { SETUP = await api("queue", { action: "setup" }); P = JSON.parse(JSON.stringify(SETUP.profile)); P.excludeWords = [...P.excludeWords, ...P.excludeDomains]; P.excludeDomains = []; if (BRAND) BRAND_DRAFT = { ...BRAND }; drawSetup(); loadHealth(); }
+  try { SETUP = await api("queue", { action: "setup" }); P = JSON.parse(JSON.stringify(SETUP.profile)); P.excludeWords = [...P.excludeWords, ...P.excludeDomains]; P.excludeDomains = []; demoOverlay(); if (BRAND) BRAND_DRAFT = { ...BRAND }; drawSetup(); loadHealth(); }
   catch (e) { $("setupbody").innerHTML = `<div class="card err">${esc(e.message)}</div>`; }
 }
 
@@ -2198,6 +2264,34 @@ async function loadSetup() {
     const tg = e.target.closest("[data-toggle]");
     if (tg) { const l = P[tg.dataset.toggle], v = tg.dataset.val; P[tg.dataset.toggle] = l.includes(v) ? l.filter((x) => x !== v) : [...l, v]; drawSetup(); return; }
     const btn = e.target.closest("button"); if (!btn) return;
+    if (btn.matches("[data-demoreset]")) { try { localStorage.removeItem("cp_demo_profile"); } catch { /* ignore */ } say("Demo changes cleared."); loadSetup(); return; }
+    if (btn.matches("[data-schedset]")) {
+      const [kind, how] = btn.dataset.schedset.split(":"), max = { hot: 10, watchlist: 10, daily: 1, flags: 8 }[kind], cur = Math.max(1, ...P.watch.sched[kind], kind === "daily" ? 1 : 0);
+      P.watch.sched[kind] = P.watch.sched[kind].map((_, i) => (how === "off" ? 0 : how === "week" ? (i < 5 ? Math.min(max, cur) : 0) : Math.min(max, cur)));
+      drawSetup(); return;
+    }
+    if (btn.matches("[data-mailprev]")) {
+      btn.disabled = true;
+      try { const r = await api("queue", { action: "mail_preview", kind: btn.dataset.mailprev }); showMailPreview(r.subject, r.html); }
+      catch (err) { say(err.message); }
+      btn.disabled = false; return;
+    }
+    if (btn.matches("[data-fitjudge]")) {
+      btn.disabled = true; say("Reading companies…");
+      try { const r = await api("queue", { action: "fit_judge", dry: false }); if (r.mode === "dry_run") { say(r.message); } else { say(`Read ${r.judged} companies; ${r.left} still waiting.`); await loadSetup(); } }
+      catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
+    if (btn.matches("[data-fitclear]")) {
+      btn.disabled = true;
+      try { const r = await api("queue", { action: "fit_override", account_id: btn.dataset.fitclear, value: null }); if (r.mode === "dry_run") { say(r.message); btn.disabled = false; return; } say("The AI decides again."); await loadSetup(); }
+      catch (err) { say(err.message); btn.disabled = false; }
+      return;
+    }
+    if (btn.matches("[data-save]") && !(SETUP && SETUP.admin)) {
+      try { localStorage.setItem("cp_demo_profile", JSON.stringify(P)); say("Saved in this browser. This is a demo, so the real settings were not changed."); } catch { say("This browser would not keep the change."); }
+      return;
+    }
     if (btn.matches("[data-save]")) {
       btn.disabled = true; say("Saving…");
       try {
@@ -2724,7 +2818,7 @@ function drawDiscover() {
   const src = Object.entries(d.sources || {}).sort((a, b) => b[1].added - a[1].added);
   const sources = `<details class="card ddet"><summary><span class="label" style="margin:0">Where companies come from</span></summary><p class="help" style="margin:8px 0">Every source is public or free. Totals since the start.</p>
     ${src.length ? src.map(([k, v]) => `<div class="wrow"><div class="wmain"><b>${esc(SRC[k] || k)}</b> <span class="meta">${esc(v.added)} added · ${esc(v.skipped)} skipped</span></div></div>`).join("") : `<p class="meta" style="margin:0">No companies yet.</p>`}
-    <p class="meta" style="margin:10px 0 0">Search for new companies every week is <b>${d.enabled ? "on" : "off"}</b>${d.web ? "" : ", web search is off"}. Change it, and your industries, size and places, in <a href="#/setup/find">Setup</a>.</p></details>`;
+    <p class="meta" style="margin:10px 0 0">Search for new companies every week is <b>${d.enabled ? "on" : "off"}</b>${d.web ? "" : ", web search is off"}. Change it, and your industries, size and places, in <a href="#/setup/look">Setup</a>.</p></details>`;
   const people = `<details class="card ddet"><summary><span class="label" style="margin:0">Skipped people${ps ? ` (${esc(ps.items.length)})` : ""}</span></summary><p class="help" style="margin:8px 0">People the free list showed at your companies but who do not match your contact filters, so they are not kept. Change the filters in <a href="#/setup/contact">Setup</a>. <b>Remove</b> clears one from here.</p>
     ${ps?.items?.length ? ps.items.slice(0, 40).map((x) => `<div class="wrow" data-pkey="${esc(x.key || "")}"><div class="wmain"><b>${esc(x.name)}</b> <span class="meta">${esc(x.title)} at ${esc(x.company)}</span> <span class="badge ${x.label === "Too junior" ? "" : "warn"}">${esc(x.label || "Skipped")}</span>
       <div class="meta" style="margin-top:4px">${esc(x.reason)}${x.department ? ` · team: ${esc(x.department)}` : ""}${x.level ? ` · level: ${esc(LEVEL[x.level] || x.level)}` : ""}</div></div>${own && x.key ? `<div class="wside"><button class="btn link sm" data-hidepeople>Remove</button></div>` : ""}</div>`).join("") : `<p class="meta" style="margin:0">Nobody skipped in the last listing.</p>`}</details>`;

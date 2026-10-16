@@ -1,3 +1,4 @@
+import { dayOn } from "./schedule.ts";
 import { sb } from "./db.ts";
 import { log } from "./log.ts";
 import { notify } from "./notify.ts";
@@ -238,7 +239,7 @@ export function eventLine(e: { kind: EventKind; title: string; detected_at: stri
 /** Emails the big movements that have not been sent, as one grouped message. At most 3 such emails a day; the rest wait for the daily email. */
 import { mailOn } from "./switches.ts";
 export async function sendMovementEmail(): Promise<number> {
-  if (!mailOn("watchlist") || icp.watch.watchlistAlerts === false) return 0; // switched off in Setup
+  if (!mailOn("watchlist") || icp.watch.watchlistAlerts === false || !dayOn("watchlist")) return 0; // switched off in Setup
   if (!googleConfigured()) return 0;
   const day = new Date().toISOString().slice(0, 10);
   const { data: cnt } = await sb.from("cp_state").select("value").eq("key", `move_mail:${day}`).maybeSingle();

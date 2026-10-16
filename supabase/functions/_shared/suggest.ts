@@ -45,6 +45,7 @@ Return JSON with these keys:
     ...current,
     industries: r.industries?.length ? r.industries : current.industries,
     keywords: r.keywords?.length ? r.keywords : current.keywords,
+    sizeBuckets: r.employeesMin != null || r.employeesMax != null ? [] : current.sizeBuckets, // new numbers win over the old size picks
     employeesMin: r.employeesMin ?? current.employeesMin,
     employeesMax: r.employeesMax ?? current.employeesMax,
     stages: r.stages?.length ? r.stages : current.stages,

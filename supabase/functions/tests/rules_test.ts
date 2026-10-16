@@ -692,7 +692,7 @@ Deno.test("watchlist: a followed company is never hidden by the fit bar, and its
 });
 
 Deno.test("alert and email settings are clamped and reach the shared config", () => {
-  const w = clean({ watch: { alertsPerDay: 99, todayCap: 1, watchlistAlerts: false, digestFlags: false } }).watch;
+  const w = clean({ watch: { alertsPerDay: 99, todayCap: 1, mail: { watchlist: false }, digestFlags: false } }).watch;
   assertEquals([w.alertsPerDay, w.todayCap, w.watchlistAlerts, w.digestFlags], [10, 3, false, false]);
   assertEquals(clean({ watch: { alertsPerDay: 0 } }).watch.alertsPerDay, 0); // 0 turns instant alerts off
   const d = clean({}).watch;
@@ -1151,4 +1151,21 @@ Deno.test("contact filters: legacy buyer types become filters, titles and levels
   icp.contactRules = { excludeTitles: [], decisionOnly: true };
   assertEquals(rank("Sales Manager", null, "Sales").relevance, 0); // below decision-maker level
   assertEquals(rank("Director of Sales", null, "Sales").persona, "Sales");
+});
+
+Deno.test("weekday schedule: clean numbers, Monday first, IST day, and old settings fill the gaps", async () => {
+  const { cleanSched, istDay } = await import("../_shared/schedule.ts");
+  const old = cleanSched(undefined, { hot: 3, watchlist: 5, flags: true });
+  assertEquals(old.hot, [3, 3, 3, 3, 3, 3, 3]);
+  assertEquals(old.daily, [1, 1, 1, 1, 1, 1, 1]);
+  const own = cleanSched({ hot: [0, 99, -4, "x", 2], daily: [1, 5] }, { hot: 3, watchlist: 5, flags: true });
+  assertEquals(own.hot, [0, 10, 0, 3, 2, 3, 3]); // clamped to 0-10; a missing day takes the old number
+  assertEquals(own.daily[1], 1); // the daily email is once a day at most
+  assertEquals(istDay(Date.parse("2026-10-18T20:00:00Z")), 0); // Sunday 20:00 UTC is already Monday in IST
+  assertEquals(istDay(Date.parse("2026-10-18T10:00:00Z")), 6); // Sunday
+  const { clean: c } = await import("../_shared/profile.ts");
+  assertEquals(c({ sizeBuckets: ["11-50", "51-100"] }).employeesMax, 100);
+  assertEquals(c({ sizeBuckets: ["11-50", "51-100"] }).employeesMin, 11);
+  assertEquals(c({ ageBuckets: ["3-5 years", "5-10 years"] }).companyAge, { min: 3, max: 10 });
+  assertEquals(c({ ageBuckets: ["20+ years"] }).companyAge, { min: 20, max: null });
 });

@@ -16,7 +16,7 @@ export const WATCH_LIMITS: Record<string, [number, number]> = {
   dealStuck: [3, 180], thinPipeline: [1, 50], mismatch: [0, 0], drift: [1, 90], system: [0, 0],
 };
 export type WatchCheck = { on: boolean; n: number };
-export type Watch = { mail: Record<string, boolean>; urgent: boolean; todoForUrgent: boolean; alertsPerDay: number; alertSearches: number; alertReserve: number; autoFix: boolean; titleCheck: boolean; autoPush: boolean; activityPerDay: number; watchlistAlerts: boolean; todayCap: number; digestFlags: boolean; checks: Record<string, WatchCheck> };
+export type Watch = { mail: Record<string, boolean>; urgent: boolean; todoForUrgent: boolean; alertsPerDay: number; alertSearches: number; alertReserve: number; autoFix: boolean; titleCheck: boolean; autoPush: boolean; activityPerDay: number; watchlistAlerts: boolean; todayCap: number; digestFlags: boolean; sched: Sched; checks: Record<string, WatchCheck> };
 
 /**
  * One kind of buyer. The list order is the priority (first = the person we most want), which sets `weight` (100 down to 60).
@@ -36,6 +36,18 @@ export const PRODUCT_MAX = 1500;
 /** Who to contact, as separate filters that combine: a person must be in one of the departments, at one of the levels, and (when words are given) have one of the title words. */
 export type ContactRules = { departments: string[]; seniority: string[]; titleWords: string[]; excludeTitles: string[]; maxPerCompany: number; verifiedOnly: boolean; decisionOnly: boolean };
 export type CompanyAge = { min: number | null; max: number | null };
+/** Company size choices (people) and age choices (years), as shown in Setup. Each has a low and a high end. */
+export const SIZE_BUCKETS: [string, number, number][] = [["0-10", 0, 10], ["11-50", 11, 50], ["51-100", 51, 100], ["101-200", 101, 200], ["201-500", 201, 500], ["501-1000", 501, 1000], ["1001-5000", 1001, 5000], ["5001-10000", 5001, 10000], ["10001+", 10001, 100000]];
+export const AGE_BUCKETS: [string, number, number | null][] = [["Under 1 year", 0, 1], ["1-3 years", 1, 3], ["3-5 years", 3, 5], ["5-10 years", 5, 10], ["10-20 years", 10, 20], ["20+ years", 20, null]];
+/** Pure: the low and high ends covered by a set of chosen buckets, or null when none are chosen. */
+export function bucketSpan<T extends [string, number, number | null]>(all: T[], chosen: string[]): { lo: number; hi: number | null } | null {
+  const hit = all.filter((b) => chosen.includes(b[0]));
+  if (!hit.length) return null;
+  return { lo: Math.min(...hit.map((b) => b[1])), hi: hit.some((b) => b[2] === null) ? null : Math.max(...hit.map((b) => b[2] as number)) };
+}
+/** Pure: the buckets that overlap a numeric range (for an older profile that only has numbers). */
+export const bucketsFor = <T extends [string, number, number | null]>(all: T[], lo: number | null, hi: number | null): string[] =>
+  all.filter((b) => (hi == null || b[1] <= hi) && (lo == null || b[2] == null || b[2] >= lo)).map((b) => b[0]);
 
 /** A signal the owner added: what kind, what to look for, and whether it is on. Weights are automatic by kind. */
 export type SignalRule = { id: string; type: string; words: string[]; on: boolean };
@@ -51,6 +63,8 @@ export type Profile = {
   keywords: string[];                       // words that describe the companies you want (Hunter's keyword filter), for example crm, sales enablement
   employeesMin: number;
   employeesMax: number;
+  sizeBuckets: string[];                    // the size choices (people) picked in Setup; employeesMin and employeesMax are worked out from them
+  ageBuckets: string[];                     // the age choices (years since founded); companyAge is worked out from them
   stages: string[];
   regions: string[];
   hiringRoles: string[];                    // job titles that count as a sales or RevOps hiring signal
@@ -89,6 +103,8 @@ const DEFAULT: Profile = {
   keywords: [...((icp.company as { keywords?: string[] }).keywords ?? [])],
   employeesMin: icp.company.employeesMin,
   employeesMax: icp.company.employeesMax,
+  sizeBuckets: bucketsFor(SIZE_BUCKETS, icp.company.employeesMin, icp.company.employeesMax),
+  ageBuckets: [],
   stages: [...icp.company.stages],
   regions: [...icp.company.regions],
   strictFit: icp.company.strictFit,
@@ -172,6 +188,7 @@ export function autoWeights(p: Pick<Profile, "industries" | "toolsGood" | "tools
 }
 
 import { MAIL_KEYS } from "./switches.ts";
+import { cleanSched, type Sched, todayCount } from "./schedule.ts";
 function cleanMail(raw: unknown): Record<string, boolean> {
   const m = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   return Object.fromEntries(MAIL_KEYS.map((k) => [k, m[k] !== false]));
@@ -187,8 +204,9 @@ function cleanWatch(raw: unknown): Watch {
   }
   return {
     mail: cleanMail(w.mail), urgent: w.urgent !== false, todoForUrgent: w.todoForUrgent !== false, checks,
-    alertsPerDay: num(w.alertsPerDay, DEFAULT.watch.alertsPerDay, 0, 10), alertSearches: num(w.alertSearches, DEFAULT.watch.alertSearches, 0, 10), alertReserve: num(w.alertReserve, DEFAULT.watch.alertReserve, 0, 45), autoFix: w.autoFix === true, titleCheck: w.titleCheck === true, autoPush: w.autoPush !== false, activityPerDay: num(w.activityPerDay, DEFAULT.watch.activityPerDay, 0, 6), watchlistAlerts: w.watchlistAlerts !== false,
+    alertsPerDay: num(w.alertsPerDay, DEFAULT.watch.alertsPerDay, 0, 10), alertSearches: num(w.alertSearches, DEFAULT.watch.alertSearches, 0, 10), alertReserve: num(w.alertReserve, DEFAULT.watch.alertReserve, 0, 45), autoFix: w.autoFix === true, titleCheck: w.titleCheck === true, autoPush: w.autoPush !== false, activityPerDay: num(w.activityPerDay, DEFAULT.watch.activityPerDay, 0, 6), watchlistAlerts: cleanMail(w.mail).watchlist,
     todayCap: num(w.todayCap, DEFAULT.watch.todayCap, 3, 15), digestFlags: w.digestFlags !== false,
+    sched: cleanSched(w.sched, { hot: num(w.alertsPerDay, DEFAULT.watch.alertsPerDay, 0, 10), watchlist: w.watchlistAlerts === false ? 0 : 5, flags: w.urgent !== false }),
   };
 }
 
@@ -223,13 +241,20 @@ export function personasFromContact(c: ContactRules, previous: Persona[] = []): 
 /** Validates anything coming from the page. Unknown or invalid values fall back to the defaults. */
 export function clean(input: unknown): Profile {
   const i = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
-  const min = num(i.employeesMin, DEFAULT.employeesMin, 1, 100000);
-  const max = Math.max(min, num(i.employeesMax, DEFAULT.employeesMax, 1, 100000));
+  const chosenSizes = (Array.isArray(i.sizeBuckets) ? i.sizeBuckets : []).map(String).filter((b) => SIZE_BUCKETS.some((x) => x[0] === b));
+  const span = bucketSpan(SIZE_BUCKETS, chosenSizes);
+  const min = span ? Math.max(1, span.lo) : num(i.employeesMin, DEFAULT.employeesMin, 1, 100000);
+  const max = span ? (span.hi ?? 100000) : Math.max(min, num(i.employeesMax, DEFAULT.employeesMax, 1, 100000));
+  const sizeBuckets = chosenSizes.length ? chosenSizes : bucketsFor(SIZE_BUCKETS, min, max);
   const sig = (i.signals ?? {}) as Record<string, unknown>;
   const news = sig.news !== false, community = sig.community !== false;
   const hiring = sig.hiring !== false || (!news && !community); // at least one signal has to count
   const stages = (Array.isArray(i.stages) ? i.stages : []).map(String).filter((s) => STAGES.includes(s));
   const regions = (Array.isArray(i.regions) ? i.regions : []).map(String).map((s) => (/^city:/i.test(s) ? `city:${s.slice(5).trim().slice(0, 50)}` : s)).filter((s) => REGIONS.includes(s) || /^city:.{2,50}$/.test(s)).slice(0, 25);
+  const chosenAges = (Array.isArray(i.ageBuckets) ? i.ageBuckets : []).map(String).filter((b) => AGE_BUCKETS.some((x) => x[0] === b));
+  const ageSpan = bucketSpan(AGE_BUCKETS, chosenAges);
+  const companyAge: CompanyAge = ageSpan ? { min: ageSpan.lo || null, max: ageSpan.hi } : (() => { const a = i.companyAge as Record<string, unknown> | undefined; const mn = optYears(a?.min), mx = optYears(a?.max); return { min: mn, max: mx != null && mn != null ? Math.max(mn, mx) : mx }; })();
+  const ageBuckets = chosenAges.length ? chosenAges : companyAge.min == null && companyAge.max == null ? [] : bucketsFor(AGE_BUCKETS, companyAge.min, companyAge.max);
   const contact = cleanContact(i.contact, i.personas);
   const personas = personasFromContact(contact, Array.isArray(i.personas) ? cleanPersonas(i.personas) : []);
   const industries = (Array.isArray(i.industries) ? i.industries : []).map(String);
@@ -247,6 +272,8 @@ export function clean(input: unknown): Profile {
     keywords: list(i.keywords, [], 10, true),
     employeesMin: min,
     employeesMax: max,
+    sizeBuckets,
+    ageBuckets,
     stages: stages.length ? stages : DEFAULT.stages,
     regions: regions.length ? regions : DEFAULT.regions,
     hiringRoles: list(i.hiringRoles, DEFAULT.hiringRoles, 30),
@@ -255,7 +282,7 @@ export function clean(input: unknown): Profile {
     contact,
     excludeIndustries: migrateIndustries(Array.isArray(i.excludeIndustries) ? i.excludeIndustries.map(String) : []).slice(0, 25),
     excludeRegions: (Array.isArray(i.excludeRegions) ? i.excludeRegions : []).map(String).filter((x) => REGIONS.includes(x)),
-    companyAge: (() => { const a = i.companyAge as Record<string, unknown> | undefined; const mn = optYears(a?.min), mx = optYears(a?.max); return { min: mn, max: mx != null && mn != null ? Math.max(mn, mx) : mx }; })(),
+    companyAge,
     businessModel: (["any", "b2b", "b2c"] as const).find((m) => m === i.businessModel) ?? "any",
     companyType: (["any", "private", "public"] as const).find((m) => m === i.companyType) ?? "any",
     discovery: i.discovery !== false,
@@ -300,7 +327,7 @@ export function apply(p: Profile) {
   icp.fit.minFit = p.minFit;
   icp.fit.minScore = p.minScore;
   Object.assign(icp.watch, JSON.parse(JSON.stringify(p.watch)));
-  icp.alerts.maxPerDay = p.watch.alertsPerDay; // the same number the alert emails and the daily limit read
+  icp.alerts.maxPerDay = todayCount("hot"); // how many hot alerts may go out today (the weekday schedule in Setup)
   icp.today.cap = p.watch.todayCap;
   icp.predictleads.auto = p.plAuto;
   Object.assign(icp.fitWeights, p.fitWeights);

@@ -402,10 +402,13 @@ export function hiringTrend(rows: { detail?: Record<string, unknown> | null; det
 
 export async function collectSignals(name: string, domain: string, segment = "") {
   const site = await fetchSite(domain);
+  // A signal type switched off in Setup is not collected at all (no requests, no AI), not just scored at zero.
+  const w = icp.signals.weights;
+  const noHiring = { signals: [] as Signal[], verified: false, unknown: false, sample: [] as string[] };
   const [hiring, news, hn] = await Promise.all([
-    hiringSignals(name, domain, site?.html ?? ""),
-    newsSignals(name, segment),
-    hnSignals(name, domain),
+    w.hiring > 0 ? hiringSignals(name, domain, site?.html ?? "") : Promise.resolve(noHiring as Awaited<ReturnType<typeof hiringSignals>>),
+    w.news > 0 ? newsSignals(name, segment) : Promise.resolve([] as Awaited<ReturnType<typeof newsSignals>>),
+    w.tech > 0 ? hnSignals(name, domain) : Promise.resolve([] as Awaited<ReturnType<typeof hnSignals>>),
   ]);
 
   // Boards found via the company's own site are trusted; guessed boards must pass the check.
@@ -425,7 +428,7 @@ export async function collectSignals(name: string, domain: string, segment = "")
 
   // A company we discovered because it posted sales roles on Hacker News keeps that as a hiring signal while the post is recent.
   const { data: found } = await sb.from("cp_discovered").select("snippet,source_url,found_at").eq("domain", domain).eq("status", "added").maybeSingle();
-  if (found && Date.now() - Date.parse(found.found_at) < icp.discovery.maxAgeDays * 86_400_000) {
+  if (w.hiring > 0 && found && Date.now() - Date.parse(found.found_at) < icp.discovery.maxAgeDays * 86_400_000) {
     const roles = rolesFromSnippet(found.snippet ?? "");
     // Only a post that actually names a sales or go-to-market role counts as a hiring signal; engineering or content roles do not.
     if (roles) signals.push({ kind: "hiring", title: `Hiring: ${roles} (Hacker News Who is hiring)`, url: found.source_url ?? undefined, detail: { source: "hn_hiring", published: found.found_at } });
