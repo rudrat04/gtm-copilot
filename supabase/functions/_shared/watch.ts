@@ -19,6 +19,8 @@ import { industryCheckMany, needIndustry } from "./industry.ts";
 import { fitState } from "./score.ts";
 import { autoRefreshPredictLeads, storedPlSignals } from "./predictleads.ts";
 import icp from "./icp.json" with { type: "json" };
+import { mailOn } from "./switches.ts";
+
 
 const BATCH = 5;
 const WATCHLIST_ALERTS_PER_DAY = 5; // instant alerts a day for followed companies, on top of icp.alerts.maxPerDay for the rest
@@ -100,7 +102,7 @@ export async function lightCheck(admin: boolean) {
   // Instant alerts, best first, capped per day, never repeated for the same signals.
   let alerted = 0;
   const alertedIds: string[] = [];
-  if (candidates.length && googleConfigured()) {
+  if (candidates.length && googleConfigured() && mailOn("hot")) { // switched off in Setup: no searches, no AI judging, no email
     const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
     // Followed companies have an allowance of their own, so a busy day on the watchlist cannot crowd out the rest (or the other way round).
     const { data: sentToday } = await sb.from("cp_alerts").select("account_id").eq("deferred", false).gte("sent_at", dayStart.toISOString());

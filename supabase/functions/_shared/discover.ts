@@ -22,6 +22,7 @@ import icp from "./icp.json" with { type: "json" };
 
 /** Pure: a plain-language category for why a company was skipped. */
 export function skipCategory(reason: string): string {
+  if (/^Outside your places/i.test(reason)) return "Outside your places";
   if (/^Below the fit bar/i.test(reason)) return "Outside your size or stage";
   if (/did not load/i.test(reason)) return "Website did not load";
   if (/(agency|consult|staffing|systems integrator|service provider|services firm|custom software for clients|builds software for clients|reseller)/i.test(reason)) return "Services or agency";
@@ -138,6 +139,7 @@ async function qualify(c: Candidate): Promise<Verdict | null> {
       system: "You screen companies for a B2B sales team. Return a single JSON object and nothing else.",
       user: `Seller: ${icp.seller.name}, ${icp.seller.pitch}
 Target: ${icp.company.industries.join(", ")}; ${icp.company.employeesMin}-${icp.company.employeesMax} employees.
+Places: ${icp.company.regions.map((r: string) => r.replace(/^city:/, "")).join(", ")}
 
 Company: ${c.name} (${c.domain})
 ${c.source === "launch_hn" ? "Launch post" : c.source === "web" ? "Found on the web" : c.source === "hunter" ? "Matches the seller's filters in a company database" : c.source === "yc" ? "Y Combinator company that is hiring" : "Job post"}: ${c.snippet}
@@ -146,6 +148,7 @@ Website description: ${site.description.slice(0, 250)}
 Website text: ${site.text.slice(0, 600)}
 
 Is this a company that SELLS B2B software, developer tools or infrastructure to other businesses, with a sales team that could use the seller's product? Say false for consumer apps, agencies, consultancies, staffing, universities, non-profits, hardware, big public companies or anything unclear.
+Also say false if the company is clearly based and operating only outside the Places above, or clearly belongs to a different industry than the Target (when unsure, say true).
 JSON: {"fit": true|false, "name": "proper company name", "segment": "2-4 word description, e.g. API monitoring platform", "reason": "one short plain-English sentence"}`,
     });
     return parseJson<Verdict>(raw);
@@ -223,9 +226,10 @@ export async function runDiscovery(opts: { dry?: boolean; firmo?: boolean; web?:
       if (firmo) {
         const f = fitBreakdown({ employees: firmo.employees, stage: firmo.stage, country: firmo.country, firmo_at: "now" });
         if (f.known && !meetsFit(fitState({ employees: firmo.employees, stage: firmo.stage, country: firmo.country, firmo_at: "now" }))) {
-          await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason: `Below the fit bar (${firmo.employees ?? "?"} people, ${firmo.stage ?? "unknown stage"})`, category: "Outside your size or stage" }, { onConflict: "domain" });
+          const why = f.placeMiss ? `Outside your places (${firmo.country})` : `Below the fit bar (${firmo.employees ?? "?"} people, ${firmo.stage ?? "unknown stage"})`;
+          await sb.from("cp_discovered").upsert({ ...row, status: "rejected", reason: why, category: skipCategory(why) }, { onConflict: "domain" });
           summary.rejected++;
-          skipped.push({ name: row.name, reason: `Below the fit bar (${firmo.employees ?? "?"} people, ${firmo.stage ?? "unknown stage"})` });
+          skipped.push({ name: row.name, reason: why });
           continue;
         }
       }

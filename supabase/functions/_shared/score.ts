@@ -127,6 +127,7 @@ export type Heat = "hot" | "warm" | "watching";
 export function fitState(a: FitRow): FitState {
   const f = fitBreakdown(a);
   if (f.excluded) return "outside"; // a competitor, an agency, an existing customer: never a prospect, whatever its size
+  if (f.placeMiss || f.industryMiss) return "outside"; // a known country or industry outside what the owner chose (the strict-fit switch in Setup)
   if (!f.known) return "unknown";
   if (f.size === 0 || f.stage === 0) return "outside";
   return f.matches ? "matches" : "close";

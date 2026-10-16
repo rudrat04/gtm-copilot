@@ -1778,7 +1778,7 @@ function msDraw(el) {
 }
 const msDrawAll = () => document.querySelectorAll("[data-ms]").forEach(msDraw);
 const numIn = (path, min, max, aria, w = 64) => `<input type="number" min="${min}" max="${max}" data-num="${path}" value="${esc(getPath(P, path))}" aria-label="${esc(aria)}" style="width:${w}px">`;
-const chk = (path, title, hint) => `<label class="toggle" style="margin:0 0 8px"><input type="checkbox" data-chk="${path}" ${getPath(P, path) ? "checked" : ""}><span>${esc(title)}${hint ? info(hint) : ""}</span></label>`;
+const chk = (path, title, hint) => `<label class="toggle" style="margin:0 0 8px"><input type="checkbox" data-chk="${path}" ${(getPath(P, path) === undefined && path.startsWith("watch.mail.") ? true : !!getPath(P, path)) ? "checked" : ""}><span>${esc(title)}${hint ? info(hint) : ""}</span></label>`;
 const MAIL_OPEN = new Set();
 /** One kind of message: its name, when it arrives, what is in it, and its own settings, closed until you open it. */
 const mailBox = (key, name, when, trigger, contents, settings) => `<details class="mail" data-mk="${key}"${MAIL_OPEN.has(key) ? " open" : ""}><summary><span class="mn">${esc(name)}</span><span class="mw">${esc(when)}</span></summary>
@@ -1864,6 +1864,7 @@ function drawSetup() {
       ${tagField("keywords", "Words that describe them", "What these companies make or do, for example crm, sales enablement, revenue operations. They narrow the company search.")}
       <div class="field"><span class="lbl">Company size (people)</span><div class="numrow"><input type="number" min="1" data-num="employeesMin" value="${esc(P.employeesMin)}" aria-label="Minimum people"> to <input type="number" min="1" data-num="employeesMax" value="${esc(P.employeesMax)}" aria-label="Maximum people"></div></div>
       ${msField("stages", "Funding stage", d.options.stages, "Pick every stage you would sell to.")}
+      ${chk("strictFit", "Only show companies inside these places and industries", "On: a company whose country or industry is known and outside your choices is treated as outside your range, hidden, and never alerted or searched. A company whose country is not known yet is never held against it. Off: places and industries only change the score.")}
       ${msField("regions", "Where they are based", d.options.regions, "Pick a region or country, or type a city name to add it. Companies elsewhere show as Outside range.", d.options.region_groups)}
     </article>
     <article class="card" id="icpcard"><p class="label">What your customers look like</p><p class="meta" style="margin:0">${own ? "Loading…" : "Unlock to read your HubSpot customers."}</p></article>
@@ -1904,6 +1905,18 @@ function drawSetup() {
     </article>
     <article class="card"><p class="label">Alerts, daily email and flags</p>
       <p class="help" style="margin:0 0 10px">Every message you can get, when it arrives and what is in it. Open one to change its settings. Times are IST.</p>
+      <div class="sgroup" style="margin:0 0 12px"><div class="sgh"><b>On and off</b>${info("Turn a message off and it is not built or sent at all: no searches, no AI and no credits are used for it. Nothing else changes, and you can turn it back on any time.")}</div>
+        <div class="toggles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:2px 24px;margin-top:6px">
+          ${chk("watch.mail.hot", "Hot alerts", "Instant emails when a company shows a new buying signal.")}
+          ${chk("watch.mail.watchlist", "Watchlist alerts", "Emails when something moves at a company or person you follow.")}
+          ${chk("watch.mail.daily", "Daily email", "The morning summary. Off also stops its automatic people searches and HubSpot summary to-do.")}
+          ${chk("watch.mail.flags", "Problem flags", "The checks for things slipping, the flags on your to-do, and their HubSpot to-dos.")}
+          ${chk("watch.mail.briefs", "Meeting briefs", "The private brief emailed when a meeting with an outside guest is booked.")}
+          ${chk("watch.mail.debrief", "How did it go? emails", "The email after a briefed meeting ends.")}
+          ${chk("watch.mail.calendar", "Meeting cancelled or moved", "The notice when a briefed meeting changes.")}
+          ${chk("watch.mail.leads", "New lead alerts and reminders", "The alert when someone fills in your form, and the reminder if it goes unanswered. The lead is still saved.")}
+          ${chk("watch.mail.loss", "Why was it lost? emails", "The one-time question when a deal is closed lost.")}
+        </div></div>
       <div class="chips" style="margin:0 0 4px;align-items:center"><span class="meta">Style</span>${[["quiet", "Quiet", "Few emails, only big problems"], ["normal", "Normal", "The defaults"], ["busy", "Busy", "More alerts, quicker nudges"]].map(([k, l, t]) => `<button type="button" class="chip" data-preset="${k}" title="${esc(t)}">${l}</button>`).join("")}${info("A style only fills in the numbers below. Nothing changes until you press Save.")}</div>
 
       ${mailBox("hot", "Hot alert", P.watch.alertsPerDay ? `Instant · up to ${P.watch.alertsPerDay} a day` : "Off", "A company in your queue shows a new buying signal.",

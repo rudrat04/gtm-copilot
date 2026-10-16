@@ -17,6 +17,8 @@ async function state(key: string) {
   return data?.value ?? null;
 }
 
+import { mailOn } from "../_shared/switches.ts";
+
 serve("daily-digest", async (req) => {
   const admin = await isAdmin(req);
   if (!admin && !(await isCron(req))) return json({ error: "Not allowed" }, 401);
@@ -30,14 +32,18 @@ serve("daily-digest", async (req) => {
   const last = await state("digest_last");
   if (!admin && last && Date.now() - Date.parse(last) < 20 * 3_600_000) return idle({ skipped: "ran recently" });
   if (!googleConfigured()) return idle({ error: "Google is not connected" });
+  if (!mailOn("daily") && !(admin && opts.dry === true)) { // switched off in Setup: no email, no automatic searches, no HubSpot summary to-do
+    if (mailOn("flags")) await runWatch("daily").catch(() => {}); // the problem checks still run if they are on
+    return idle({ skipped: "daily email is off" });
+  }
 
   // The list leads with people: a strong account with none gets one automatic search (limited per day).
   const preview = admin && opts.dry === true; // a preview spends no credits and sends nothing
   const today = await buildToday(true, { autoFind: !preview }); // owner view: full names, and writes any missing "Why today" lines
 
   // The full pipeline watch runs just before the email, so the email carries what needs attention.
-  if (!preview) await runWatch("daily").catch(async (e) => { await log("error", "watch_failed", { message: (e as Error).message }); });
-  const attention = icp.watch.digestFlags === false ? { items: [], total: 0 } : await activeFlags(6); // the owner can leave the "needs attention" section out of the email
+  if (!preview && mailOn("flags")) await runWatch("daily").catch(async (e) => { await log("error", "watch_failed", { message: (e as Error).message }); });
+  const attention = icp.watch.digestFlags === false || !mailOn("flags") ? { items: [], total: 0 } : await activeFlags(6); // the owner can leave the "needs attention" section out of the email
 
   if (!preview) await sb.from("cp_state").upsert({ key: "digest_last", value: new Date().toISOString(), updated_at: new Date().toISOString() });
   // What changed since the last email (at most 36 hours back), and who is waiting for a contact.

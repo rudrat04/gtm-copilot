@@ -16,7 +16,7 @@ export const WATCH_LIMITS: Record<string, [number, number]> = {
   dealStuck: [3, 180], thinPipeline: [1, 50], mismatch: [0, 0], drift: [1, 90], system: [0, 0],
 };
 export type WatchCheck = { on: boolean; n: number };
-export type Watch = { urgent: boolean; todoForUrgent: boolean; alertsPerDay: number; alertSearches: number; alertReserve: number; autoFix: boolean; titleCheck: boolean; autoPush: boolean; activityPerDay: number; watchlistAlerts: boolean; todayCap: number; digestFlags: boolean; checks: Record<string, WatchCheck> };
+export type Watch = { mail: Record<string, boolean>; urgent: boolean; todoForUrgent: boolean; alertsPerDay: number; alertSearches: number; alertReserve: number; autoFix: boolean; titleCheck: boolean; autoPush: boolean; activityPerDay: number; watchlistAlerts: boolean; todayCap: number; digestFlags: boolean; checks: Record<string, WatchCheck> };
 
 /**
  * One kind of buyer. The list order is the priority (first = the person we most want), which sets `weight` (100 down to 60).
@@ -53,6 +53,7 @@ export type Profile = {
   signals: { hiring: boolean; news: boolean; community: boolean };
   personas: Persona[];                      // the kinds of buyer we look for, fully editable
   discovery: boolean;                       // weekly auto-discovery on or off
+  strictFit: boolean;                       // places and industries are hard filters: a known mismatch is "outside", hidden and never alerted
   minFit: MinFit;                           // the fit bar: companies below it are hidden everywhere
   minScore: number;                         // the score needed to count as ready
   watch: Watch;                             // pipeline watch: which checks run and their limits
@@ -80,6 +81,7 @@ const DEFAULT: Profile = {
   employeesMax: icp.company.employeesMax,
   stages: [...icp.company.stages],
   regions: [...icp.company.regions],
+  strictFit: icp.company.strictFit,
   hiringRoles: [...icp.signals.hiringRoles],
   signals: { hiring: true, news: true, community: true },
   personas: icp.personas.map((p, i) => ({ title: p.title, match: [...p.match], weight: Math.max(60, 100 - 5 * i), hubspot: p.hubspot, onlyBelow: null, department: "", seniority: [] })),
@@ -157,6 +159,12 @@ export function autoWeights(p: Pick<Profile, "industries" | "toolsGood" | "tools
   return { size: 10, stage: 10, region: 5, industry: ownIndustries ? 4 : 0, tools: p.toolsGood.length + p.toolsAvoid.length ? 5 : 0, motion: p.motion !== "any" ? 4 : 0 };
 }
 
+import { MAIL_KEYS } from "./switches.ts";
+function cleanMail(raw: unknown): Record<string, boolean> {
+  const m = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return Object.fromEntries(MAIL_KEYS.map((k) => [k, m[k] !== false]));
+}
+
 function cleanWatch(raw: unknown): Watch {
   const w = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const given = (w.checks && typeof w.checks === "object" ? w.checks : {}) as Record<string, { on?: unknown; n?: unknown }>;
@@ -166,7 +174,7 @@ function cleanWatch(raw: unknown): Watch {
     checks[k] = { on: given[k] ? given[k].on !== false : base.on, n: lo === hi ? base.n : num(given[k]?.n, base.n, lo, hi) };
   }
   return {
-    urgent: w.urgent !== false, todoForUrgent: w.todoForUrgent !== false, checks,
+    mail: cleanMail(w.mail), urgent: w.urgent !== false, todoForUrgent: w.todoForUrgent !== false, checks,
     alertsPerDay: num(w.alertsPerDay, DEFAULT.watch.alertsPerDay, 0, 10), alertSearches: num(w.alertSearches, DEFAULT.watch.alertSearches, 0, 10), alertReserve: num(w.alertReserve, DEFAULT.watch.alertReserve, 0, 45), autoFix: w.autoFix === true, titleCheck: w.titleCheck === true, autoPush: w.autoPush !== false, activityPerDay: num(w.activityPerDay, DEFAULT.watch.activityPerDay, 0, 6), watchlistAlerts: w.watchlistAlerts !== false,
     todayCap: num(w.todayCap, DEFAULT.watch.todayCap, 3, 15), digestFlags: w.digestFlags !== false,
   };
@@ -204,6 +212,7 @@ export function clean(input: unknown): Profile {
     signals: { hiring, news, community },
     personas,
     discovery: i.discovery !== false,
+    strictFit: i.strictFit !== false,
     minFit: MIN_FITS.find((m) => m === i.minFit) ?? DEFAULT.minFit,
     minScore: num(i.minScore, DEFAULT.minScore, 0, 90),
     watch: cleanWatch(i.watch),
@@ -226,6 +235,7 @@ export function apply(p: Profile) {
   icp.company.employeesMax = p.employeesMax;
   icp.company.stages = p.stages;
   icp.company.regions = p.regions;
+  icp.company.strictFit = p.strictFit;
   icp.seller.name = p.product.name || BASE_SELLER.name; // what you sell (Setup) is what the dossiers, drafts and screening are written for
   icp.seller.pitch = p.product.description || BASE_SELLER.pitch;
   icp.signals.hiringRoles = p.hiringRoles;

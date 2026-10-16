@@ -203,6 +203,7 @@ export async function processLead(l: LeadInput): Promise<{ id: string; label: La
   return { id, label, timeline };
 }
 
+import { mailOn } from "./switches.ts";
 async function alertOwner(l: LeadInput, c: { label: Label; why: string; companyName: string; facts: string; fit: string; signalLines: string[]; accountId: string | null }) {
   const fitText = c.fit === "matches" ? "Fits your profile" : c.fit === "close" ? "Partly fits your profile" : c.fit === "unknown" ? "Fit unknown" : "";
   const subject = `${c.label === "hot" ? "Hot lead" : "New lead"}: ${shortName(l.name)}${c.companyName ? ` at ${c.companyName}` : ""} · ${INTENT_TEXT[l.intent]}`;
@@ -230,11 +231,12 @@ async function alertOwner(l: LeadInput, c: { label: Label; why: string; companyN
      ${button(`mailto:${l.email}`, `Reply to ${l.name.split(" ")[0]}`)} ${muted(`Target: within ${icp.inbound.slaMinutes} minutes.`)}`,
     `F1rstword · ${link(PAGE, "Open the Inbound tab")} · nothing is sent to ${esc(l.name)}`,
   );
-  await sendMail(ownerEmail(), subject, text, html);
+  if (mailOn("leads")) await sendMail(ownerEmail(), subject, text, html); // the lead is still stored and routed; only the alert email stops
 }
 
 /** One reminder per lead that nobody has answered within the target time. Runs from the every-minute job. */
 export async function nudgeOverdueLeads(): Promise<number> {
+  if (!mailOn("leads")) return 0;
   const cutoff = new Date(Date.now() - icp.inbound.slaMinutes * 60_000).toISOString();
   const { data } = await sb.from("cp_leads").select("id,name,company,intent,email,alerted_at")
     .eq("status", "new").is("sla_nudged_at", null).in("label", ["hot", "warm", "review"]).not("alerted_at", "is", null)

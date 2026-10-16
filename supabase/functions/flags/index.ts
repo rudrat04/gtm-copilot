@@ -3,11 +3,13 @@ import { isAdmin, jobAllowed } from "../_shared/auth.ts";
 import { serve } from "../_shared/log.ts";
 import { runWatch } from "../_shared/flags.ts";
 import icp from "../_shared/icp.json" with { type: "json" };
+import { mailOn } from "../_shared/switches.ts";
 
 // Pipeline watch. Cron calls it every 3 hours with {"mode":"urgent"}; the daily digest runs the full pass itself.
 // The owner can call it with {"mode":"daily","dry":true} to see what it would flag without storing anything.
 serve("flags", async (req) => {
   if (!(await jobAllowed(req))) return json({ error: "Not allowed" }, 401);
+  if (!mailOn("flags") && !(await req.clone().json().catch(() => ({}))).dry) return json({ skipped: "problem flags are off" });
   const body = (await req.json().catch(() => null)) ?? {};
   const mode = body.mode === "daily" ? "daily" : "urgent";
   const dry = body.dry === true && (await isAdmin(req));

@@ -19,7 +19,9 @@ export const isLossReason = (r: unknown): r is LossReason => (LOSS_REASONS as re
 export const verifyLoss = (accountId: string, reason: string, sig: string) => verify(accountId, reason, sig, NS);
 
 /** Lost deals of ours with no reason yet and no email sent: ask once. At most 3 a run. */
+import { mailOn } from "./switches.ts";
 export async function askLossReasons(): Promise<number> {
+  if (!mailOn("loss")) return 0;
   const { data: rows } = await sb.from("cp_accounts").select("id,name,domain,lost_at")
     .not("hubspot_deal_id", "is", null).eq("deal_stage", "closedlost").is("lost_reason", null).is("loss_asked_at", null)
     .gt("lost_at", new Date(Date.now() - 14 * DAY).toISOString()).limit(3);

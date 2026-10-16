@@ -67,6 +67,8 @@ async function research(domain: string) {
   return await res.json();
 }
 
+import { mailOn } from "../_shared/switches.ts";
+
 async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry" | "cancelled" | "moved"> {
   if (ev.status === "cancelled") return (await handleCancelled(ev.id)) ? "cancelled" : "skipped";
   const startIso = ev.start?.dateTime ?? ev.start?.date;
@@ -74,6 +76,7 @@ async function handle(ev: CalEvent): Promise<"briefed" | "skipped" | "retry" | "
 
   const ext = externalAttendees(ev);
   const { data: existing } = await sb.from("cp_meetings").select("id,calendar_event_id,title,starts_at,ends_at,attendee_name,attendee_email,attendee_domain,account_id,status,outcome,reschedule_count,attempts").eq("calendar_event_id", ev.id).maybeSingle();
+  if (!mailOn("briefs") && existing?.status !== "briefed") return "skipped"; // switched off in Setup: no research, no AI, no brief email for a new meeting
 
   if (existing?.status === "briefed") {
     // Already briefed: the only things that matter now are the outside guests leaving, or the time changing.

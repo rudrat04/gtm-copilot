@@ -117,7 +117,9 @@ export async function applyDebrief(meetingId: string, outcome: Outcome, notes?: 
 
 // ---- The email that asks "how did it go?" ----
 
+import { mailOn } from "./switches.ts";
 export async function sendDueDebriefs(): Promise<number> {
+  if (!mailOn("debrief")) return 0; // switched off in Setup
   const since = new Date(Date.now() - 3 * DAY).toISOString();
   const { data: rows } = await sb.from("cp_meetings").select("*")
     .eq("status", "briefed").is("outcome", null).is("debrief_sent_at", null).gt("starts_at", since).lt("starts_at", new Date().toISOString());

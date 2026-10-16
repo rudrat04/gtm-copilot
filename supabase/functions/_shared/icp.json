@@ -24,6 +24,7 @@
     "toolsGood": [],
     "toolsAvoid": [],
     "motion": "any",
+    "strictFit": true,
     "excludeWords": [],
     "excludeDomains": []
   },
@@ -189,6 +190,7 @@
     "allPerDay": 100
   },
   "watch": {
+    "mail": { "hot": true, "watchlist": true, "daily": true, "flags": true, "briefs": true, "debrief": true, "leads": true, "loss": true, "calendar": true },
     "alertsPerDay": 3,
     "alertSearches": 2,
     "alertReserve": 15,

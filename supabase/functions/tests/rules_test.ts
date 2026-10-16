@@ -1091,3 +1091,24 @@ Deno.test("a buyer match explains itself", async () => {
   assertEquals(/the title has/i.test(explainRank("VP of Sales", null)), true);
   assertEquals(/none of the title words/i.test(explainRank("Senior Gardener", null)), true);
 });
+
+Deno.test("strict fit: a known country outside the chosen places is outside; an unknown country is never held against a company", async () => {
+  const { default: cfg } = await import("../_shared/icp.json", { with: { type: "json" } });
+  const saved = [...cfg.company.regions];
+  cfg.company.regions = ["India"];
+  try {
+    assertEquals(fitState(facts({ country: "IN" })), "matches");
+    assertEquals(fitState(facts({ country: "US" })), "outside");
+    assertEquals(fitState(facts({ country: null })), "matches"); // country unknown: not a mismatch
+    cfg.company.strictFit = false;
+    assertEquals(fitState(facts({ country: "US" })), "matches"); // the switch is off: only a lower score
+  } finally { cfg.company.regions = saved; cfg.company.strictFit = true; }
+});
+
+Deno.test("message switches: off means off, everything else stays on", async () => {
+  const { default: cfg } = await import("../_shared/icp.json", { with: { type: "json" } });
+  const { mailOn } = await import("../_shared/switches.ts");
+  assert(mailOn("daily"));
+  (cfg.watch as { mail: Record<string, boolean> }).mail.daily = false;
+  try { assertFalse(mailOn("daily")); assert(mailOn("hot")); } finally { (cfg.watch as { mail: Record<string, boolean> }).mail.daily = true; }
+});

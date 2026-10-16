@@ -6,7 +6,7 @@ import { codesFor, STAGE_OPTIONS } from "./lists.ts";
 // Company facts from Hunter's Company Enrichment (about 0.2 credit per company). Saved once, refreshed rarely.
 
 /** A location choice is a country or group, or a city saved as "city:Austin". */
-const inRegions = (cc: string, city?: string | null) => icp.company.regions.some((r) => {
+export const inRegions = (cc: string, city?: string | null) => icp.company.regions.some((r) => {
   if (r.startsWith("city:")) return !!city && city.toLowerCase().includes(r.slice(5).trim().toLowerCase());
   return codesFor(r).includes(cc);
 });
@@ -178,11 +178,16 @@ export const hasLightFacts = (a: FitRow) => !a.firmo_at && !!a.light_source && (
 
 export type FitParts = { size: number; stage: number; region: number; industry: number; tools: number; motion: number };
 
-export function fitBreakdown(a: FitRow): { points: number; known: boolean; size: number; stage: number; region: number; matches: boolean; excluded: string | null; parts: FitParts } {
+export function fitBreakdown(a: FitRow): { points: number; known: boolean; size: number; stage: number; region: number; matches: boolean; excluded: string | null; placeMiss: boolean; industryMiss: boolean; parts: FitParts } {
   const excluded = exclusion(a);
+  // Places and industries are hard filters once a company's country or industry is actually known (an unknown one is never held against it).
+  const strict = (icp.company as { strictFit?: boolean }).strictFit !== false;
+  const cc0 = (a.country ?? "").toUpperCase();
+  const placeMiss = strict && !!cc0 && icp.company.regions.length > 0 && !inRegions(cc0, a.hq_city);
+  const industryMiss = strict && (icp.fitWeights as { industry: number }).industry > 0 && !!(a.industry_ai || textOf(a).trim()) && industryScore(a) === 0;
   const none: FitParts = { size: 0.5, stage: 0.5, region: 0.5, industry: 0.5, tools: 0.5, motion: 0.5 };
   const light = hasLightFacts(a);
-  if (!a.firmo_at && !light) return { points: icp.signals.weights.fit * 0.6, known: false, size: 0, stage: 0, region: 0, matches: false, excluded, parts: none }; // neutral baseline, 15
+  if (!a.firmo_at && !light) return { points: icp.signals.weights.fit * 0.6, known: false, size: 0, stage: 0, region: 0, matches: false, excluded, placeMiss, industryMiss, parts: none }; // neutral baseline, 15
   const c = icp.company;
 
   const n = a.employees;
@@ -206,7 +211,7 @@ export function fitBreakdown(a: FitRow): { points: number; known: boolean; size:
   const w = icp.fitWeights as Record<keyof FitParts, number>;
   const total = (Object.keys(parts) as (keyof FitParts)[]).reduce((t, k) => t + w[k], 0) || 1;
   const points = icp.signals.weights.fit * (Object.keys(parts) as (keyof FitParts)[]).reduce((t, k) => t + w[k] * parts[k], 0) / total;
-  return { points, known: true, size, stage, region, matches: size === 10 && (stage === 10 || (light && stage === 5)), excluded, parts };
+  return { points, known: true, size, stage, region, matches: size === 10 && (stage === 10 || (light && stage === 5)), excluded, placeMiss, industryMiss, parts };
 }
 
 /** The fit slice of the priority score. */
